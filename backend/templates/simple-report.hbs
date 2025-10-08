@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>세대 점검 종합보고서</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #fff;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            border-bottom: 3px solid #1a73e8;
+            padding-bottom: 20px;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            color: #1a73e8;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+        
+        .header .subtitle {
+            font-size: 16px;
+            color: #666;
+            font-weight: 400;
+        }
+        
+        .meta-info {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            border-left: 4px solid #1a73e8;
+        }
+        
+        .meta-info h2 {
+            font-size: 18px;
+            color: #1a73e8;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+        
+        .meta-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        
+        .meta-item {
+            display: flex;
+            align-items: center;
+        }
+        
+        .meta-label {
+            font-weight: 600;
+            color: #555;
+            min-width: 80px;
+            margin-right: 10px;
+        }
+        
+        .meta-value {
+            color: #333;
+        }
+        
+        .defects-section {
+            margin-bottom: 30px;
+        }
+        
+        .defects-section h2 {
+            font-size: 20px;
+            color: #1a73e8;
+            margin-bottom: 20px;
+            font-weight: 600;
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 10px;
+        }
+        
+        .defects-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+            background: #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .defects-table th {
+            background: #1a73e8;
+            color: white;
+            padding: 15px 12px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        .defects-table td {
+            padding: 12px;
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 13px;
+            vertical-align: top;
+        }
+        
+        .defects-table tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+        
+        .defects-table tr:hover {
+            background: #e3f2fd;
+        }
+        
+        .defect-number {
+            text-align: center;
+            font-weight: 600;
+            color: #1a73e8;
+            width: 50px;
+        }
+        
+        .defect-location {
+            font-weight: 600;
+            color: #555;
+            min-width: 80px;
+        }
+        
+        .defect-trade {
+            color: #666;
+            min-width: 100px;
+        }
+        
+        .defect-content {
+            color: #333;
+            line-height: 1.5;
+        }
+        
+        .defect-memo {
+            color: #666;
+            font-style: italic;
+            font-size: 12px;
+        }
+        
+        .summary {
+            background: #e8f5e8;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            border-left: 4px solid #10b981;
+        }
+        
+        .summary h3 {
+            color: #10b981;
+            margin-bottom: 10px;
+            font-size: 16px;
+            font-weight: 600;
+        }
+        
+        .summary p {
+            color: #333;
+            margin-bottom: 5px;
+        }
+        
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #e5e7eb;
+            text-align: center;
+            color: #666;
+            font-size: 12px;
+        }
+        
+        .footer .generated {
+            margin-bottom: 10px;
+        }
+        
+        .footer .note {
+            font-style: italic;
+            color: #888;
+        }
+        
+        @media print {
+            .container {
+                padding: 20px;
+            }
+            
+            .header h1 {
+                font-size: 24px;
+            }
+            
+            .defects-table {
+                font-size: 11px;
+            }
+            
+            .defects-table th,
+            .defects-table td {
+                padding: 8px 6px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>세대 점검 종합보고서</h1>
+            <div class="subtitle">InsightI Pre/Post Inspection Report</div>
+        </div>
+        
+        <div class="meta-info">
+            <h2>점검 정보</h2>
+            <div class="meta-grid">
+                <div class="meta-item">
+                    <span class="meta-label">단지명:</span>
+                    <span class="meta-value">{{complex}}</span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label">동-호:</span>
+                    <span class="meta-value">{{dong}}-{{ho}}</span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label">세대주:</span>
+                    <span class="meta-value">{{name}}</span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label">점검일:</span>
+                    <span class="meta-value">{{formatDate created_at}}</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="summary">
+            <h3>점검 요약</h3>
+            <p><strong>총 하자 건수:</strong> {{total_defects}}건</p>
+            <p><strong>보고서 생성일:</strong> {{formatDate generated_at}}</p>
+        </div>
+        
+        <div class="defects-section">
+            <h2>하자 목록</h2>
+            {{#if defects}}
+            <table class="defects-table">
+                <thead>
+                    <tr>
+                        <th class="defect-number">#</th>
+                        <th class="defect-location">위치</th>
+                        <th class="defect-trade">세부공정</th>
+                        <th class="defect-content">하자 내용</th>
+                        <th class="defect-memo">메모</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{#each defects}}
+                    <tr>
+                        <td class="defect-number">{{index}}</td>
+                        <td class="defect-location">{{location}}</td>
+                        <td class="defect-trade">{{trade}}</td>
+                        <td class="defect-content">{{content}}</td>
+                        <td class="defect-memo">{{#if memo}}{{memo}}{{else}}-{{/if}}</td>
+                    </tr>
+                    {{/each}}
+                </tbody>
+            </table>
+            {{else}}
+            <div style="text-align: center; padding: 40px; color: #666; font-style: italic;">
+                등록된 하자가 없습니다.
+            </div>
+            {{/if}}
+        </div>
+        
+        <div class="footer">
+            <div class="generated">
+                보고서 생성일: {{formatDate generated_at}}
+            </div>
+            <div class="note">
+                ※ 본 문서는 InsightI 앱을 통해 자동 생성된 보고서입니다.<br>
+                실제 현장 사진과 측정값은 별도로 관리됩니다.
+            </div>
+        </div>
+    </div>
+</body>
+</html>

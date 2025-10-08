@@ -1,0 +1,174 @@
+
+openapi: 3.0.3
+info:
+  title: InsightI Pre/Post Inspection API (Draft v1)
+  version: "0.1.0"
+servers:
+  - url: https://api.example.com
+paths:
+  /auth/session:
+    post:
+      summary: Create session by household info (3-day token)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                complex:
+                  type: string
+                dong:
+                  type: string
+                ho:
+                  type: string
+                name:
+                  type: string
+                phone:
+                  type: string
+              required: [complex, dong, ho, name, phone]
+      responses:
+        "200":
+          description: created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+                  purpose: { type: string, enum: [precheck, postcheck] }
+                  expires_at: { type: string, format: date-time }
+  /cases:
+    get:
+      summary: List cases for current household
+      parameters:
+        - in: query
+          name: type
+          schema: { type: string, enum: [하자접수, 추가접수] }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Case"
+    post:
+      summary: Create a new case
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CaseCreate"
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Case" }
+  /defects:
+    post:
+      summary: Create defect item
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DefectCreate"
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Defect" }
+  /upload-url:
+    post:
+      summary: Get signed URL for photo upload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum: [near, far]
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url: { type: string }
+                  expires_at: { type: string, format: date-time }
+  /reports/preview:
+    get:
+      summary: Render report preview (HTML or JSON data)
+      responses:
+        "200":
+          description: ok
+          content:
+            text/html: {}
+            application/json:
+              schema:
+                type: object
+                properties:
+                  html: { type: string }
+  /reports/send:
+    post:
+      summary: Generate PDF and send SMS with link
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                case_id: { type: string }
+      responses:
+        "200":
+          description: sent
+components:
+  schemas:
+    Case:
+      type: object
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [하자접수, 추가접수] }
+        created_at: { type: string }
+        defects:
+          type: array
+          items: { $ref: "#/components/schemas/Defect" }
+    CaseCreate:
+      type: object
+      properties:
+        type: { type: string, enum: [하자접수, 추가접수] }
+    Defect:
+      type: object
+      properties:
+        id: { type: string }
+        location: { type: string }
+        trade: { type: string }
+        content: { type: string }
+        memo: { type: string }
+        photos:
+          type: object
+          properties:
+            near: { type: string, nullable: true }
+            far: { type: string, nullable: true }
+    DefectCreate:
+      type: object
+      properties:
+        case_id: { type: string }
+        location: { type: string }
+        trade: { type: string }
+        content: { type: string }
+        memo: { type: string }
+        photo_near_key: { type: string, nullable: true }
+        photo_far_key: { type: string, nullable: true }
+      required: [case_id, location, trade, content]

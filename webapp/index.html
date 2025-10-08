@@ -1,0 +1,115 @@
+
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>사전/사후 점검 – 데모</title>
+  <meta name="theme-color" content="#1e88e5" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="title">인싸이트아이 점검</div>
+    <div id="badge-user" class="badge">게스트</div>
+  </div>
+
+  <div class="content">
+    <!-- LOGIN -->
+    <div id="login" class="screen">
+      <div class="card">
+        <div class="label">아파트(단지)</div>
+        <input id="login-complex" class="input" placeholder="예: 서울 인싸이트자이" />
+        <div class="row" style="margin-top:8px;">
+          <div class="col">
+            <div class="label">동</div>
+            <input id="login-dong" class="input" placeholder="101" />
+          </div>
+          <div class="col">
+            <div class="label">호</div>
+            <input id="login-ho" class="input" placeholder="1203" />
+          </div>
+        </div>
+        <div class="row" style="margin-top:8px;">
+          <div class="col">
+            <div class="label">성명</div>
+            <input id="login-name" class="input" placeholder="홍길동" />
+          </div>
+          <div class="col">
+            <div class="label">전화번호</div>
+            <input id="login-phone" class="input" placeholder="010-0000-0000" />
+          </div>
+        </div>
+        <div class="hr"></div>
+        <button class="button" onclick="onLogin()">로그인(3일 사용권)</button>
+      </div>
+    </div>
+
+    <!-- LIST -->
+    <div id="list" class="screen hidden">
+      <div id="case-list"></div>
+      <button class="button" onclick="onPreviewReport()">보고서 미리보기</button>
+    </div>
+
+    <!-- NEW DEFECT -->
+    <div id="newdefect" class="screen hidden">
+      <div class="card">
+        <div class="row">
+          <div class="col">
+            <div class="label">위치</div>
+            <select id="def-location" class="input"></select>
+          </div>
+          <div class="col">
+            <div class="label">세부공정</div>
+            <select id="def-trade" class="input"></select>
+          </div>
+        </div>
+        <div class="label" style="margin-top:8px;">하자 내용</div>
+        <textarea id="def-content" class="input" placeholder="예: 마루판 들뜸"></textarea>
+        <div class="label" style="margin-top:8px;">메모(선택)</div>
+        <textarea id="def-memo" class="input" placeholder="현장 특이사항 등"></textarea>
+
+        <div class="label" style="margin-top:8px;">사진</div>
+        <div class="gallery">
+          <div id="photo-near" class="thumb">근거리</div>
+          <div id="photo-far" class="thumb">원거리</div>
+        </div>
+        <input id="input-near" type="file" accept="image/*" class="hidden" />
+        <input id="input-far" type="file" accept="image/*" class="hidden" />
+
+        <div class="hr"></div>
+        <button class="button success" onclick="onSaveDefect()">저장</button>
+      </div>
+    </div>
+
+    <!-- REPORT -->
+    <div id="report" class="screen hidden">
+      <div id="report-preview"></div>
+      <button class="button" onclick="onSendMock()">문자 발송(모의)</button>
+    </div>
+  </div>
+
+  <div class="tabbar">
+    <button id="tab-list" onclick="route('list')">목록</button>
+    <button id="tab-add" onclick="route('newdefect')">하자등록</button>
+    <button id="tab-report" onclick="onPreviewReport()">보고서</button>
+  </div>
+
+  <div class="toast"></div>
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function(){
+      navigator.serviceWorker.register('/sw.js');
+    });
+  }
+</script>
+</body>
+</html>

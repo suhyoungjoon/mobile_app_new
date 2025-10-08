@@ -1,0 +1,110 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: insighti-postgres
+    environment:
+      POSTGRES_DB: insighti_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-insighti123}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - insighti-network
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: insighti-backend
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: insighti_db
+      DB_USER: postgres
+      DB_PASSWORD: ${DB_PASSWORD:-insighti123}
+      JWT_SECRET: ${JWT_SECRET:-insighti-super-secret-jwt-key-2024}
+      JWT_EXPIRES_IN: 3d
+      UPLOAD_DIR: /app/uploads
+      MAX_FILE_SIZE: 10485760
+      SMS_SERVICE_ID: ${SMS_SERVICE_ID:-your-service-id}
+      SMS_ACCESS_KEY: ${SMS_ACCESS_KEY:-your-access-key}
+      SMS_SECRET_KEY: ${SMS_SECRET_KEY:-your-secret-key}
+      SMS_FROM_NUMBER: ${SMS_FROM_NUMBER:-01012345678}
+    volumes:
+      - backend_uploads:/app/uploads
+      - backend_reports:/app/reports
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - insighti-network
+
+  # Frontend Web App
+  frontend:
+    build:
+      context: ./webapp
+      dockerfile: Dockerfile
+    container_name: insighti-frontend
+    ports:
+      - "8080:8080"
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - insighti-network
+
+  # Redis (for session storage and caching)
+  redis:
+    image: redis:7-alpine
+    container_name: insighti-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - insighti-network
+
+volumes:
+  postgres_data:
+    driver: local
+  backend_uploads:
+    driver: local
+  backend_reports:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  insighti-network:
+    driver: bridge

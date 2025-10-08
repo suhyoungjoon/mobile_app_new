@@ -1,0 +1,42 @@
+{
+  "name": "insighti-backend",
+  "version": "1.0.0",
+  "description": "InsightI Pre/Post Inspection API Server",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "setup-db": "bash scripts/setup-db.sh",
+    "test-db": "node scripts/test-db.js",
+    "test-upload": "node scripts/test-upload.js",
+    "test-pdf": "node scripts/test-pdf.js",
+    "test-sms": "node scripts/test-sms.js",
+    "test-full": "node ../scripts/test-full-system.js",
+    "test-docker": "node ../scripts/test-docker.js",
+    "migrate": "node scripts/migrate.js",
+    "docker:build": "docker build -t insighti-backend .",
+    "docker:run": "docker run -p 3000:3000 insighti-backend"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0",
+    "morgan": "^1.10.0",
+    "dotenv": "^16.3.1",
+    "pg": "^8.11.3",
+    "multer": "^1.4.5-lts.1",
+    "jsonwebtoken": "^9.0.2",
+    "bcryptjs": "^2.4.3",
+    "sharp": "^0.32.6",
+    "uuid": "^9.0.1",
+    "form-data": "^4.0.0",
+    "node-fetch": "^2.7.0",
+    "puppeteer": "^21.5.2",
+    "handlebars": "^4.7.8",
+    "crypto": "^1.0.1",
+    "axios": "^1.6.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}

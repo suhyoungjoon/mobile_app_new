@@ -1,0 +1,14 @@
+node_modules/
+npm-debug.log*
+package-lock.json
+__pycache__/
+.DS_Store
+backend/uploads/
+backend/reports/
+webapp/.cache/
+dist/
+build/
+.env
+.env.*
+backend/config.js
+azure/azure-resources.json

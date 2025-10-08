@@ -1,0 +1,43 @@
+
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <title>세대 점검 종합보고서 (샘플)</title>
+  <style>
+    body { font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Noto Sans KR',sans-serif; margin: 24px; }
+    h1 { font-size: 20px; }
+    h2 { font-size: 16px; margin-top: 24px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+    th, td { border: 1px solid #ccc; padding: 6px; font-size: 12px; }
+    .photos { display: flex; gap: 8px; margin-top: 6px; }
+    .ph { width: 140px; height: 100px; border: 1px solid #ddd; display: inline-block; text-align:center; line-height:100px; color:#888; }
+    .meta { color:#666; font-size:12px; }
+  </style>
+</head>
+<body>
+  <h1>세대 점검 종합보고서 (샘플)</h1>
+  <div class="meta">단지: {{complex}} / 동-호: {{dong}}-{{ho}} / 성명: {{name}} / 생성일: {{created_at}}</div>
+
+  <h2>하자 목록</h2>
+  <table>
+    <thead>
+      <tr><th>#</th><th>위치</th><th>세부공정</th><th>내용</th><th>근거리</th><th>원거리</th></tr>
+    </thead>
+    <tbody>
+      <!-- 서버에서 defects 루프 렌더링 -->
+      <tr>
+        <td>1</td>
+        <td>거실</td>
+        <td>바닥재</td>
+        <td>마루판 들뜸</td>
+        <td><div class="ph">근</div></td>
+        <td><div class="ph">원</div></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>비고</h2>
+  <p>※ 본 문서는 앱 입력값을 기반으로 자동 생성된 샘플입니다. 실제 현장 사진과 측정값은 본문/부록에 첨부됩니다.</p>
+</body>
+</html>

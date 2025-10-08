@@ -1,0 +1,14 @@
+{
+  "name": "인싸이트아이 점검",
+  "short_name": "점검앱",
+  "lang": "ko-KR",
+  "start_url": "/index.html",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1e88e5",
+  "description": "사전/사후 공사하자 보수 점검 앱",
+  "icons": []
+}
+
+
