@@ -1,0 +1,13 @@
+{
+  "name": "insighti-frontend",
+  "version": "1.0.0",
+  "description": "인싸이트아이 점검 앱 프론트엔드",
+  "scripts": {
+    "dev": "python3 -m http.server 8080",
+    "build": "echo 'Static build completed'",
+    "start": "python3 -m http.server 8080"
+  },
+  "keywords": ["pwa", "mobile", "construction", "defect"],
+  "author": "Insighti Team",
+  "license": "MIT"
+}
