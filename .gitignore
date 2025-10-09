@@ -12,3 +12,4 @@ build/
 .env.*
 backend/config.js
 azure/azure-resources.json
+.vercel

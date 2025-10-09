@@ -6,14 +6,14 @@
       "use": "@vercel/static"
     }
   ],
-  "routes": [
+  "rewrites": [
     {
-      "src": "/",
-      "dest": "/webapp/index.html"
+      "source": "/",
+      "destination": "/webapp/index.html"
     },
     {
-      "src": "/(.*)",
-      "dest": "/webapp/$1"
+      "source": "/(.*)",
+      "destination": "/webapp/$1"
     }
   ],
   "headers": [
