@@ -7,6 +7,7 @@ class APIClient {
       ? 'http://localhost:3000/api'
       : 'https://insighti-backend.onrender.com/api';
     this.token = localStorage.getItem('insighti_token');
+    console.log('API Base URL:', this.baseURL);
   }
 
   // Set authentication token
