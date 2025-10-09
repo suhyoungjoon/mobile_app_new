@@ -2,7 +2,7 @@
 const express = require('express');
 const pool = require('../database');
 const { authenticateToken } = require('../middleware/auth');
-const pdfGenerator = require('../utils/pdfGenerator');
+// const pdfGenerator = require('../utils/pdfGenerator'); // PDF 기능 임시 비활성화
 const smsService = require('../utils/smsService');
 
 const router = express.Router();

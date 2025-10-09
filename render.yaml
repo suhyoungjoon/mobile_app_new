@@ -1,39 +1,17 @@
 services:
   - type: web
     name: insighti-backend
-    env: node
-    buildCommand: cd backend && npm install
-    startCommand: cd backend && npm start
+    runtime: node
+    region: singapore
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
         value: 10000
       - key: JWT_SECRET
-        generateValue: true
-      - key: DB_HOST
-        fromDatabase:
-          name: insighti-db
-          property: host
-      - key: DB_PORT
-        fromDatabase:
-          name: insighti-db
-          property: port
-      - key: DB_NAME
-        fromDatabase:
-          name: insighti-db
-          property: database
-      - key: DB_USER
-        fromDatabase:
-          name: insighti-db
-          property: user
-      - key: DB_PASSWORD
-        fromDatabase:
-          name: insighti-db
-          property: password
-
-databases:
-  - name: insighti-db
-    databaseName: insighti_db
-    user: insighti_user
-    plan: free
+        value: insighti-super-secret-key-2024
+      - key: JWT_EXPIRES_IN
+        value: 3d
