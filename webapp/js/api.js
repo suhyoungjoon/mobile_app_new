@@ -5,7 +5,7 @@ class APIClient {
     const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     this.baseURL = isDevelopment 
       ? 'http://localhost:3000/api'
-      : 'https://insighti-backend.onrender.com/api';
+      : 'https://insighti-backend-v2.onrender.com/api';
     this.token = localStorage.getItem('insighti_token');
     console.log('API Base URL:', this.baseURL);
   }

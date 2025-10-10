@@ -26,6 +26,7 @@ app.use(cors({
     'http://localhost:8080', 
     'http://127.0.0.1:8080',
     'https://insightiprecheckmockupv1-qeaedv2yv-suh-young-joons-projects.vercel.app',
+    'https://insightiprecheckv2enhanced-pvo85m0vg-suh-young-joons-projects.vercel.app',
     'file://'
   ],
   credentials: true,
