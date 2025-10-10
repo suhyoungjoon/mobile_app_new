@@ -114,8 +114,8 @@
           <div id="photo-near" class="thumb" onclick="triggerPhotoInput('near')">전체사진</div>
           <div id="photo-far" class="thumb" onclick="triggerPhotoInput('far')">근접사진</div>
         </div>
-        <input id="input-near" type="file" accept="image/*" class="hidden" onchange="handlePhotoUpload('near', this)" />
-        <input id="input-far" type="file" accept="image/*" class="hidden" onchange="handlePhotoUpload('far', this)" />
+        <input id="input-near" type="file" accept="image/*" capture="environment" class="hidden" onchange="handlePhotoUpload('near', this)" />
+        <input id="input-far" type="file" accept="image/*" capture="environment" class="hidden" onchange="handlePhotoUpload('far', this)" />
         
         <!-- AI 감지 결과 표시 영역 -->
         <div id="ai-analysis-results" class="ai-analysis-section hidden">

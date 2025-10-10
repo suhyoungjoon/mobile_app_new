@@ -573,24 +573,65 @@ function triggerPhotoInput(type) {
 
 // 사진 업로드 처리 및 AI 감지
 async function handlePhotoUpload(type, inputElement) {
+  console.log('📸 handlePhotoUpload 호출됨:', type);
+  
   const file = inputElement.files[0];
-  if (!file) return;
+  if (!file) {
+    console.warn('⚠️ 파일이 선택되지 않았습니다');
+    return;
+  }
+  
+  console.log('✅ 파일 선택됨:', file.name, file.type, file.size, 'bytes');
+  
+  // 이미지 파일 검증
+  if (!file.type.startsWith('image/')) {
+    toast('이미지 파일만 업로드 가능합니다', 'error');
+    return;
+  }
+  
+  // 파일 크기 검증 (10MB)
+  if (file.size > 10 * 1024 * 1024) {
+    toast('파일 크기는 10MB 이하여야 합니다', 'error');
+    return;
+  }
   
   try {
+    toast(`${type === 'near' ? '전체' : '근접'}사진 처리 중...`, 'info');
+    
     // 파일 미리보기 설정
     const reader = new FileReader();
+    
+    reader.onerror = (error) => {
+      console.error('❌ FileReader 오류:', error);
+      toast('파일 읽기 실패', 'error');
+    };
+    
     reader.onload = async (e) => {
+      console.log('✅ 파일 읽기 완료');
+      
       const thumbElement = $(`#photo-${type}`);
+      if (!thumbElement) {
+        console.error('❌ 썸네일 요소를 찾을 수 없습니다:', `#photo-${type}`);
+        return;
+      }
+      
       thumbElement.style.backgroundImage = `url(${e.target.result})`;
       thumbElement.classList.add('has-image');
+      toast(`${type === 'near' ? '전체' : '근접'}사진 업로드 완료!`, 'success');
       
       // AI 감지 시작
-      await analyzePhotoWithAI(file, type);
+      try {
+        await analyzePhotoWithAI(file, type);
+      } catch (aiError) {
+        console.error('❌ AI 분석 오류:', aiError);
+        // AI 오류는 무시하고 계속 진행
+      }
     };
+    
     reader.readAsDataURL(file);
     
   } catch (error) {
-    console.error('사진 업로드 실패:', error);
+    console.error('❌ 사진 업로드 실패:', error);
     toast('사진 업로드 중 오류가 발생했습니다', 'error');
   }
 }
@@ -598,6 +639,14 @@ async function handlePhotoUpload(type, inputElement) {
 // AI로 사진 분석
 async function analyzePhotoWithAI(file, photoType) {
   try {
+    console.log('🔍 사진 분석 시작:', file.name, file.size, 'bytes');
+    
+    // AI 감지기 확인
+    if (!window.defectDetector && !window.hybridDetector) {
+      console.warn('⚠️ AI 감지기가 로드되지 않았습니다. AI 분석을 건너뜁니다.');
+      return; // AI 없이 계속 진행
+    }
+    
     // AI 분석 결과 영역 표시
     const aiResultsDiv = $('#ai-analysis-results');
     aiResultsDiv.innerHTML = `
@@ -610,9 +659,12 @@ async function analyzePhotoWithAI(file, photoType) {
     
     // 이미지 요소 생성
     const imageElement = await createImageElement(file);
+    console.log('✅ 이미지 요소 생성 완료');
     
-    // AI 감지 실행
-    const detectedDefects = await hybridDetector.detectDefects(imageElement);
+    // AI 감지 실행 (defectDetector 또는 hybridDetector 사용)
+    const detector = window.defectDetector || window.hybridDetector;
+    const detectedDefects = await detector.detectDefects(imageElement);
+    console.log('✅ AI 감지 완료:', detectedDefects.length, '개');
     
     // 결과 표시
     displayAIDetectionResults(detectedDefects, photoType);
