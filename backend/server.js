@@ -20,15 +20,24 @@ const app = express();
 
 // CORS configuration - must be before helmet
 app.use(cors({
-  origin: [
-    'http://localhost:3000', 
-    'http://127.0.0.1:3000', 
-    'http://localhost:8080', 
-    'http://127.0.0.1:8080',
-    'https://insightiprecheckmockupv1-qeaedv2yv-suh-young-joons-projects.vercel.app',
-    'https://insightiprecheckv2enhanced-pvo85m0vg-suh-young-joons-projects.vercel.app',
-    'file://'
-  ],
+  origin: (origin, callback) => {
+    const allowedOrigins = [
+      'http://localhost:3000', 
+      'http://127.0.0.1:3000', 
+      'http://localhost:8080', 
+      'http://127.0.0.1:8080',
+      'file://'
+    ];
+    
+    // Allow all Vercel deployment URLs
+    const isVercelApp = origin && origin.includes('.vercel.app');
+    
+    if (!origin || allowedOrigins.includes(origin) || isVercelApp) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
