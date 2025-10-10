@@ -1,9 +1,10 @@
-const CACHE_NAME = 'insighti-v2';
+const CACHE_NAME = 'insighti-v2.1';
 const ASSETS = [
   '/index.html',
   '/css/style.css',
   '/js/data.js',
   '/js/api.js',
+  '/js/ai-detector.js',
   '/js/app.js'
 ];
 
@@ -25,32 +26,17 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
+  
+  // Only handle same-origin requests
+  if (url.origin !== self.location.origin) {
+    // Let external API requests (Render backend) pass through without caching
+    return;
+  }
+  
   // Same-origin static assets: cache-first
-  if (url.origin === self.location.origin) {
-    event.respondWith(
-      caches.match(request).then((cached) => cached || fetch(request))
-    );
-    return;
-  }
-  // API GET: stale-while-revalidate (best-effort cache)
-  if (url.pathname.startsWith('/api/')) {
-    event.respondWith((async () => {
-      const cache = await caches.open(CACHE_NAME);
-      const cached = await cache.match(request);
-      const fetchPromise = fetch(request).then((resp) => {
-        if (resp && resp.status === 200) cache.put(request, resp.clone());
-        return resp;
-      }).catch(() => cached);
-      return cached || fetchPromise;
-    })());
-    return;
-  }
-  // Uploaded images: cache-first with network fallback
-  if (url.pathname.startsWith('/uploads/')) {
-    event.respondWith(
-      caches.match(request).then((cached) => cached || fetch(request))
-    );
-  }
+  event.respondWith(
+    caches.match(request).then((cached) => cached || fetch(request))
+  );
 });
 
 
