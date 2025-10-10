@@ -10,6 +10,8 @@ const config = require('./config');
 const authRoutes = require('./routes/auth');
 const casesRoutes = require('./routes/cases');
 const defectsRoutes = require('./routes/defects');
+const defectCategoriesRoutes = require('./routes/defect-categories');
+const aiLearningRoutes = require('./routes/ai-learning');
 const uploadRoutes = require('./routes/upload');
 const reportsRoutes = require('./routes/reports');
 const smsRoutes = require('./routes/sms');
@@ -53,6 +55,8 @@ app.use('/reports', express.static(path.join(__dirname, 'reports')));
 app.use('/api/auth', authRoutes);
 app.use('/api/cases', casesRoutes);
 app.use('/api/defects', defectsRoutes);
+app.use('/api/defect-categories', defectCategoriesRoutes);
+app.use('/api/ai-learning', aiLearningRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/sms', smsRoutes);
@@ -75,6 +79,8 @@ app.get('/api', (req, res) => {
       auth: '/api/auth',
       cases: '/api/cases',
       defects: '/api/defects',
+      defectCategories: '/api/defect-categories',
+      aiLearning: '/api/ai-learning',
       upload: '/api/upload',
       reports: '/api/reports',
       sms: '/api/sms'

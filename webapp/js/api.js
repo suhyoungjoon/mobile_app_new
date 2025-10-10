@@ -184,6 +184,81 @@ class APIClient {
       body: JSON.stringify({ phone })
     });
   }
+
+  // 하자 카테고리 관련 API 메서드들
+  
+  // 모든 하자 카테고리 목록 조회
+  async getDefectCategories() {
+    return await this.request('/defect-categories');
+  }
+
+  // 카테고리별 하자 목록 조회
+  async getDefectCategoriesByCategory(category) {
+    return await this.request(`/defect-categories/category/${category}`);
+  }
+
+  // 특정 하자 카테고리 상세 정보 조회 (동영상 포함)
+  async getDefectCategoryDetail(id) {
+    return await this.request(`/defect-categories/${id}`);
+  }
+
+  // 하자 카테고리 검색
+  async searchDefectCategories(keyword) {
+    return await this.request(`/defect-categories/search/${keyword}`);
+  }
+
+  // 하자 카테고리별 동영상 목록 조회
+  async getDefectVideos(categoryId) {
+    return await this.request(`/defect-categories/${categoryId}/videos`);
+  }
+
+  // AI 학습 관련 API 메서드들
+  
+  // AI 예측 결과 저장
+  async saveAIPrediction(imagePath, predictions, photoType) {
+    return await this.request('/ai-learning/predict', {
+      method: 'POST',
+      body: JSON.stringify({
+        imagePath,
+        predictions,
+        photoType
+      })
+    });
+  }
+
+  // 사용자 피드백 전송
+  async sendAIFeedback(feedbacks) {
+    return await this.request('/ai-learning/feedback', {
+      method: 'POST',
+      body: JSON.stringify({ feedbacks })
+    });
+  }
+
+  // AI 성능 통계 조회
+  async getAIPerformance() {
+    return await this.request('/ai-learning/performance');
+  }
+
+  // 하자별 AI 성능 분석
+  async getAIPerformanceByDefect() {
+    return await this.request('/ai-learning/performance-by-defect');
+  }
+
+  // 학습 데이터 조회
+  async getTrainingData(limit = 100, offset = 0) {
+    return await this.request(`/ai-learning/training-data?limit=${limit}&offset=${offset}`);
+  }
+
+  // 실시간 AI 감지
+  async detectDefectsWithAI(imageBase64, imageType = 'jpeg') {
+    return await this.request('/ai-learning/detect', {
+      method: 'POST',
+      body: JSON.stringify({
+        imageBase64,
+        imageType
+      })
+    });
+  }
 }
 
 // Global API client instance

@@ -64,3 +64,287 @@ html, body {
 .hidden { display: none !important; }
 .hr { border-top: 1px dashed var(--border); margin: 10px 0; }
 .small { font-size: 12px; color: var(--muted); }
+
+/* 기획서 요구사항을 위한 새로운 스타일 */
+.customer-info {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.customer-details {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--primary);
+  margin-top: 4px;
+}
+
+.description-area {
+  background: #f0f8ff;
+  border: 1px solid #b3d9ff;
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 12px;
+}
+
+.description-text {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.solution-text {
+  font-size: 13px;
+  color: var(--success);
+  font-weight: 500;
+  background: rgba(16, 185, 129, 0.1);
+  padding: 8px;
+  border-radius: 6px;
+  border-left: 3px solid var(--success);
+}
+
+.video-section {
+  margin-top: 16px;
+  padding: 12px;
+  background: #fafafa;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+}
+
+.youtube-player {
+  margin: 12px 0;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.youtube-player iframe {
+  border-radius: 8px;
+}
+
+.video-controls {
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
+}
+
+.button.small {
+  padding: 8px 12px;
+  font-size: 12px;
+  border-radius: 6px;
+}
+
+.button-group {
+  display: flex;
+  gap: 12px;
+}
+
+.button-group .button {
+  flex: 1;
+}
+
+/* 하자명 선택 드롭다운 스타일 */
+#defect-category {
+  background: white;
+  border: 2px solid var(--border);
+  transition: border-color 0.2s;
+}
+
+#defect-category:focus {
+  border-color: var(--primary);
+}
+
+#defect-category option {
+  padding: 8px;
+}
+
+/* AI 분석 결과 스타일 */
+.ai-analysis-section {
+  margin-top: 16px;
+  padding: 16px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+  color: white;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
+.ai-analysis-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.ai-analysis-header h4 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.ai-detected-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ai-defect-item {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 12px;
+  backdrop-filter: blur(10px);
+}
+
+.ai-defect-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.ai-defect-type {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.ai-confidence {
+  background: rgba(255, 255, 255, 0.2);
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.ai-severity {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.ai-severity.심각 {
+  background: rgba(255, 99, 99, 0.8);
+}
+
+.ai-severity.보통 {
+  background: rgba(255, 193, 7, 0.8);
+}
+
+.ai-severity.경미 {
+  background: rgba(40, 167, 69, 0.8);
+}
+
+.ai-defect-description {
+  font-size: 13px;
+  line-height: 1.4;
+  margin-bottom: 8px;
+  opacity: 0.9;
+}
+
+.ai-defect-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.ai-defect-actions .button {
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: white;
+}
+
+.ai-defect-actions .button:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.ai-defect-actions .button.success {
+  background: rgba(40, 167, 69, 0.8);
+  border-color: rgba(40, 167, 69, 0.8);
+}
+
+/* AI 감지 중 로딩 애니메이션 */
+.ai-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  color: white;
+}
+
+.ai-loading-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top: 2px solid white;
+  border-radius: 50%;
+  animation: ai-spin 1s linear infinite;
+  margin-right: 10px;
+}
+
+@keyframes ai-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* 사진 촬영 버튼 개선 */
+.thumb {
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.thumb:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.thumb.has-image {
+  background-size: cover;
+  background-position: center;
+  color: transparent;
+}
+
+.thumb.has-image::after {
+  content: '📷';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+/* 반응형 동영상 플레이어 */
+@media (max-width: 480px) {
+  .youtube-player iframe {
+    height: 180px;
+  }
+  
+  .video-controls {
+    flex-direction: column;
+  }
+  
+  .button-group {
+    flex-direction: column;
+  }
+  
+  .ai-analysis-header {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+  }
+  
+  .ai-defect-actions {
+    flex-direction: column;
+  }
+}

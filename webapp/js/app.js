@@ -429,4 +429,371 @@ document.addEventListener('DOMContentLoaded', ()=>{
       saveSession();
     }
   });
+
+  // 하자 카테고리 데이터 로드
+  loadDefectCategories();
 });
+
+// 기획서 요구사항 구현 함수들
+
+// 하자 카테고리 목록 로드
+async function loadDefectCategories() {
+  try {
+    const categories = await api.getDefectCategories();
+    const select = $('#defect-category');
+    
+    // 기존 옵션 제거 (첫 번째 옵션 제외)
+    while (select.children.length > 1) {
+      select.removeChild(select.lastChild);
+    }
+    
+    // 카테고리별로 그룹화
+    const grouped = categories.reduce((acc, category) => {
+      if (!acc[category.category]) {
+        acc[category.category] = [];
+      }
+      acc[category.category].push(category);
+      return acc;
+    }, {});
+    
+    // 카테고리별로 옵션 추가
+    Object.keys(grouped).forEach(categoryName => {
+      const optgroup = document.createElement('optgroup');
+      optgroup.label = categoryName;
+      
+      grouped[categoryName].forEach(category => {
+        const option = document.createElement('option');
+        option.value = category.id;
+        option.textContent = category.name;
+        optgroup.appendChild(option);
+      });
+      
+      select.appendChild(optgroup);
+    });
+  } catch (error) {
+    console.error('하자 카테고리 로드 실패:', error);
+    toast('하자 카테고리를 불러올 수 없습니다', 'error');
+  }
+}
+
+// 하자명 선택 시 자동 설명 표시 (기획서 요구사항)
+async function loadDefectDescription() {
+  const categoryId = $('#defect-category').value;
+  const descriptionArea = $('#defect-description');
+  const videoSection = $('#video-section');
+  
+  if (!categoryId) {
+    descriptionArea.classList.add('hidden');
+    videoSection.classList.add('hidden');
+    return;
+  }
+  
+  try {
+    setLoading(true);
+    const categoryDetail = await api.getDefectCategoryDetail(categoryId);
+    
+    // 설명 표시
+    $('#defect-description-text').textContent = categoryDetail.description;
+    $('#defect-solution').textContent = `해결방법: ${categoryDetail.solution}`;
+    descriptionArea.classList.remove('hidden');
+    
+    // 하자 내용 자동 입력
+    $('#def-content').value = categoryDetail.description;
+    
+    // 동영상 표시 (있는 경우)
+    if (categoryDetail.videos && categoryDetail.videos.length > 0) {
+      const primaryVideo = categoryDetail.videos.find(v => v.is_primary) || categoryDetail.videos[0];
+      loadYouTubeVideo(primaryVideo);
+      videoSection.classList.remove('hidden');
+    } else {
+      videoSection.classList.add('hidden');
+    }
+    
+  } catch (error) {
+    console.error('하자 설명 로드 실패:', error);
+    toast('하자 설명을 불러올 수 없습니다', 'error');
+  } finally {
+    setLoading(false);
+  }
+}
+
+// YouTube 동영상 로드
+function loadYouTubeVideo(videoInfo) {
+  const iframe = $('#youtube-iframe');
+  const videoUrl = `https://www.youtube.com/embed/${videoInfo.youtube_video_id}?start=${videoInfo.timestamp_start}&end=${videoInfo.timestamp_end}&autoplay=0&rel=0&modestbranding=1`;
+  iframe.src = videoUrl;
+}
+
+// 동영상에서 하자 위치 마킹 (기획서 요구사항)
+function markDefectInVideo() {
+  toast('하자 위치 마킹 기능은 향후 구현 예정입니다', 'info');
+  // TODO: 동영상 타임스탬프 마킹 기능 구현
+}
+
+// 재촬영 기능 (기획서 요구사항)
+function retakePhotos() {
+  $('#photo-near').textContent = '전체사진';
+  $('#photo-far').textContent = '근접사진';
+  $('#photo-near').style.backgroundImage = '';
+  $('#photo-far').style.backgroundImage = '';
+  $('#input-near').value = '';
+  $('#input-far').value = '';
+  toast('사진을 다시 촬영해주세요', 'info');
+}
+
+// 하자 등록 화면 진입 시 고객 정보 표시 (기획서 요구사항)
+function showCustomerInfo() {
+  if (AppState.session) {
+    const { complex, dong, ho, name } = AppState.session;
+    $('#customer-details').textContent = `${dong}동 ${ho}호 ${name}`;
+  }
+}
+
+// 하자 등록 화면 진입 시 호출되는 함수 수정
+const originalRoute = route;
+route = function(screen) {
+  originalRoute(screen);
+  
+  if (screen === 'newdefect') {
+    showCustomerInfo();
+    // 하자 카테고리가 로드되지 않았다면 다시 로드
+    if ($('#defect-category').children.length <= 1) {
+      loadDefectCategories();
+    }
+  }
+};
+
+// AI 기능 통합 함수들
+
+// 사진 입력 트리거
+function triggerPhotoInput(type) {
+  $(`#input-${type}`).click();
+}
+
+// 사진 업로드 처리 및 AI 감지
+async function handlePhotoUpload(type, inputElement) {
+  const file = inputElement.files[0];
+  if (!file) return;
+  
+  try {
+    // 파일 미리보기 설정
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const thumbElement = $(`#photo-${type}`);
+      thumbElement.style.backgroundImage = `url(${e.target.result})`;
+      thumbElement.classList.add('has-image');
+      
+      // AI 감지 시작
+      await analyzePhotoWithAI(file, type);
+    };
+    reader.readAsDataURL(file);
+    
+  } catch (error) {
+    console.error('사진 업로드 실패:', error);
+    toast('사진 업로드 중 오류가 발생했습니다', 'error');
+  }
+}
+
+// AI로 사진 분석
+async function analyzePhotoWithAI(file, photoType) {
+  try {
+    // AI 분석 결과 영역 표시
+    const aiResultsDiv = $('#ai-analysis-results');
+    aiResultsDiv.innerHTML = `
+      <div class="ai-loading">
+        <div class="ai-loading-spinner"></div>
+        <span>🤖 AI가 사진을 분석 중입니다...</span>
+      </div>
+    `;
+    aiResultsDiv.classList.remove('hidden');
+    
+    // 이미지 요소 생성
+    const imageElement = await createImageElement(file);
+    
+    // AI 감지 실행
+    const detectedDefects = await hybridDetector.detectDefects(imageElement);
+    
+    // 결과 표시
+    displayAIDetectionResults(detectedDefects, photoType);
+    
+    // AI 예측 결과를 서버에 저장
+    try {
+      await learningSystem.savePredictionResults(file.name, detectedDefects, photoType);
+    } catch (error) {
+      console.error('AI 예측 결과 저장 실패:', error);
+    }
+    
+  } catch (error) {
+    console.error('AI 분석 실패:', error);
+    
+    // 에러 상태 표시
+    const aiResultsDiv = $('#ai-analysis-results');
+    aiResultsDiv.innerHTML = `
+      <div class="ai-analysis-header">
+        <h4>⚠️ AI 분석 실패</h4>
+        <button class="button small" onclick="hideAIAnalysis()">닫기</button>
+      </div>
+      <p>AI 분석 중 오류가 발생했습니다. 수동으로 하자를 등록해주세요.</p>
+    `;
+  }
+}
+
+// 파일을 이미지 요소로 변환
+function createImageElement(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+// AI 감지 결과 표시
+function displayAIDetectionResults(defects, photoType) {
+  const aiResultsDiv = $('#ai-analysis-results');
+  const detectedListDiv = $('#ai-detected-defects');
+  
+  if (defects.length === 0) {
+    aiResultsDiv.innerHTML = `
+      <div class="ai-analysis-header">
+        <h4>✅ AI 분석 완료</h4>
+        <button class="button small" onclick="hideAIAnalysis()">닫기</button>
+      </div>
+      <p>이 사진에서는 하자가 감지되지 않았습니다.</p>
+    `;
+    return;
+  }
+  
+  // 감지된 하자들을 표시
+  let defectsHTML = '';
+  defects.forEach((defect, index) => {
+    defectsHTML += `
+      <div class="ai-defect-item" data-defect-index="${index}">
+        <div class="ai-defect-header">
+          <span class="ai-defect-type">${defect.type}</span>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <span class="ai-severity ${defect.severity}">${defect.severity}</span>
+            <span class="ai-confidence">${Math.round(defect.confidence * 100)}%</span>
+          </div>
+        </div>
+        <div class="ai-defect-description">${defect.description}</div>
+        <div class="ai-defect-actions">
+          <button class="button success" onclick="useAIDetection(${index}, '${photoType}')">
+            ✅ 이 결과 사용
+          </button>
+          <button class="button" onclick="rejectAIDetection(${index})">
+            ❌ 틀렸습니다
+          </button>
+        </div>
+      </div>
+    `;
+  });
+  
+  aiResultsDiv.innerHTML = `
+    <div class="ai-analysis-header">
+      <h4>🤖 AI 분석 완료 - ${defects.length}개 하자 감지</h4>
+      <button class="button small" onclick="hideAIAnalysis()">닫기</button>
+    </div>
+    <div class="ai-detected-list">
+      ${defectsHTML}
+    </div>
+  `;
+}
+
+// AI 감지 결과 사용
+function useAIDetection(defectIndex, photoType) {
+  // AI 감지 결과를 현재 하자 등록 폼에 적용
+  const aiResultsDiv = $('#ai-analysis-results');
+  const defectItem = aiResultsDiv.querySelector(`[data-defect-index="${defectIndex}"]`);
+  
+  if (!defectItem) return;
+  
+  // 감지된 하자 정보 추출
+  const defectType = defectItem.querySelector('.ai-defect-type').textContent;
+  const description = defectItem.querySelector('.ai-defect-description').textContent;
+  
+  // 하자명 드롭다운에서 해당 항목 선택
+  const categorySelect = $('#defect-category');
+  const options = Array.from(categorySelect.options);
+  const matchingOption = options.find(option => option.textContent === defectType);
+  
+  if (matchingOption) {
+    categorySelect.value = matchingOption.value;
+    loadDefectDescription(); // 자동 설명 로드
+  }
+  
+  // 하자 내용 자동 입력
+  $('#def-content').value = description;
+  
+  // 성공 피드백
+  defectItem.innerHTML = `
+    <div style="text-align: center; padding: 20px;">
+      <div style="font-size: 24px; margin-bottom: 8px;">✅</div>
+      <div>AI 감지 결과가 적용되었습니다!</div>
+    </div>
+  `;
+  
+  // 학습 데이터에 긍정적 피드백 추가
+  const predictionId = learningSystem.predictionCache.get(`defect-${defectIndex}`);
+  if (predictionId) {
+    const feedback = {
+      isCorrect: true,
+      feedback: '정확한 감지'
+    };
+    learningSystem.collectFeedback(predictionId, feedback);
+  }
+  
+  toast('AI 감지 결과가 적용되었습니다!', 'success');
+}
+
+// AI 감지 결과 거부
+function rejectAIDetection(defectIndex) {
+  const aiResultsDiv = $('#ai-analysis-results');
+  const defectItem = aiResultsDiv.querySelector(`[data-defect-index="${defectIndex}"]`);
+  
+  if (!defectItem) return;
+  
+  // 거부 피드백 표시
+  defectItem.innerHTML = `
+    <div style="text-align: center; padding: 20px;">
+      <div style="font-size: 24px; margin-bottom: 8px;">❌</div>
+      <div>피드백이 학습에 반영됩니다.</div>
+      <div style="font-size: 12px; opacity: 0.8; margin-top: 8px;">
+        올바른 하자를 수동으로 선택해주세요.
+      </div>
+    </div>
+  `;
+  
+  // 학습 데이터에 부정적 피드백 추가
+  const predictionId = learningSystem.predictionCache.get(`defect-${defectIndex}`);
+  if (predictionId) {
+    const feedback = {
+      isCorrect: false,
+      feedback: '부정확한 감지'
+    };
+    learningSystem.collectFeedback(predictionId, feedback);
+  }
+  
+  toast('피드백이 AI 학습에 반영됩니다', 'info');
+}
+
+// AI 분석 결과 숨기기
+function hideAIAnalysis() {
+  $('#ai-analysis-results').classList.add('hidden');
+}
+
+// 학습 데이터 저장
+function saveDetectionForLearning(defects, file, photoType) {
+  // 감지 결과를 메모리에 저장 (실제로는 서버에 전송)
+  if (!window.currentDetectionData) {
+    window.currentDetectionData = [];
+  }
+  
+  window.currentDetectionData.push({
+    photoType,
+    fileName: file.name,
+    fileSize: file.size,
+    detectedDefects: defects,
+    timestamp: new Date().toISOString()
+  });
+}
