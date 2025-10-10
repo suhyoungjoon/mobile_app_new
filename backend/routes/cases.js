@@ -50,14 +50,21 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Invalid case type' });
     }
 
+    // Generate case ID (CASE-YYXXX format)
+    const year = new Date().getFullYear().toString().slice(-2);
+    const countQuery = 'SELECT COUNT(*) as count FROM case_header';
+    const countResult = await pool.query(countQuery);
+    const count = parseInt(countResult.rows[0].count) + 1;
+    const caseId = `CASE-${year}${count.toString().padStart(3, '0')}`;
+
     // Insert new case into database
     const insertQuery = `
-      INSERT INTO case_header (household_id, type, created_at)
-      VALUES ($1, $2, NOW())
+      INSERT INTO case_header (id, household_id, type, created_at)
+      VALUES ($1, $2, $3, NOW())
       RETURNING id, household_id, type, created_at
     `;
 
-    const result = await pool.query(insertQuery, [householdId, type]);
+    const result = await pool.query(insertQuery, [caseId, householdId, type]);
     res.status(201).json(result.rows[0]);
 
   } catch (error) {

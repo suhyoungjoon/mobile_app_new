@@ -16,14 +16,20 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'case_id, location, trade, and content are required' });
     }
 
+    // Generate defect ID (DEF-XXX format)
+    const countQuery = 'SELECT COUNT(*) as count FROM defect WHERE case_id = $1';
+    const countResult = await pool.query(countQuery, [case_id]);
+    const count = parseInt(countResult.rows[0].count) + 1;
+    const defectId = `DEF-${count}`;
+
     // Insert defect into database
     const insertQuery = `
-      INSERT INTO defect (case_id, location, trade, content, memo, created_at)
-      VALUES ($1, $2, $3, $4, $5, NOW())
+      INSERT INTO defect (id, case_id, location, trade, content, memo, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, NOW())
       RETURNING id, case_id, location, trade, content, memo, created_at
     `;
 
-    const result = await pool.query(insertQuery, [case_id, location, trade, content, memo || '']);
+    const result = await pool.query(insertQuery, [defectId, case_id, location, trade, content, memo || '']);
     res.status(201).json(result.rows[0]);
 
   } catch (error) {

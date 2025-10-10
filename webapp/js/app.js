@@ -95,6 +95,12 @@ async function loadCases() {
   }
 }
 
+async function onShowList() {
+  if (!checkAuth()) return;
+  await loadCases();
+  route('list');
+}
+
 function renderCaseList(){
   const wrap = $('#case-list');
   wrap.innerHTML = '';
