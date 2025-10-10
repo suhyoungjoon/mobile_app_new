@@ -14,7 +14,24 @@
 <div class="container">
   <div class="header">
     <div class="title">인싸이트아이 점검</div>
-    <div id="badge-user" class="badge">게스트</div>
+    <div class="header-right">
+      <div id="badge-user" class="badge" onclick="toggleUserMenu()">게스트</div>
+      <div id="user-menu" class="user-menu hidden">
+        <div class="user-menu-item" onclick="showMyInfo()">
+          <span>👤</span> 내 정보
+        </div>
+        <div class="user-menu-item" onclick="showMyStats()">
+          <span>📊</span> 내 하자 현황
+        </div>
+        <div class="user-menu-item admin-only hidden" onclick="goToAdmin()">
+          <span>⚙️</span> 관리자 페이지
+        </div>
+        <div class="user-menu-divider"></div>
+        <div class="user-menu-item logout" onclick="onLogout()">
+          <span>🚪</span> 로그아웃
+        </div>
+      </div>
+    </div>
   </div>
 
   <div class="content">
@@ -56,6 +73,11 @@
 
     <!-- NEW DEFECT -->
     <div id="newdefect" class="screen hidden">
+      <div class="screen-header">
+        <button class="back-btn" onclick="goBack()">← 뒤로</button>
+        <h2>하자 등록</h2>
+        <div></div>
+      </div>
       <div class="card">
         <!-- 고객 정보 표시 (기획서 요구사항) -->
         <div id="customer-info" class="customer-info">

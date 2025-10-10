@@ -39,6 +39,119 @@ function route(screen){
   if(screen==='list') $('#tab-list').classList.add('active');
   if(screen==='newdefect') $('#tab-add').classList.add('active');
   if(screen==='report') $('#tab-report').classList.add('active');
+  
+  // 사용자 메뉴 닫기
+  closeUserMenu();
+}
+
+// 사용자 메뉴 토글
+function toggleUserMenu() {
+  const menu = $('#user-menu');
+  if (menu) {
+    menu.classList.toggle('hidden');
+  }
+}
+
+// 사용자 메뉴 닫기
+function closeUserMenu() {
+  const menu = $('#user-menu');
+  if (menu) {
+    menu.classList.add('hidden');
+  }
+}
+
+// 로그아웃
+function onLogout() {
+  if (confirm('로그아웃 하시겠습니까?')) {
+    // 토큰 및 세션 삭제
+    api.clearToken();
+    AppState.session = null;
+    
+    // UI 초기화
+    $('#badge-user').textContent = '게스트';
+    
+    // 로그인 화면으로 이동
+    route('login');
+    
+    toast('로그아웃 되었습니다', 'success');
+    console.log('✅ 로그아웃 완료');
+  }
+}
+
+// 내 정보 보기
+function showMyInfo() {
+  closeUserMenu();
+  
+  if (!AppState.session) {
+    toast('로그인이 필요합니다', 'error');
+    return;
+  }
+  
+  const info = `
+단지: ${AppState.session.complex}
+동: ${AppState.session.dong}
+호: ${AppState.session.ho}
+이름: ${AppState.session.name}
+전화번호: ${AppState.session.phone}
+  `.trim();
+  
+  alert(info);
+}
+
+// 내 하자 현황
+async function showMyStats() {
+  closeUserMenu();
+  
+  if (!checkAuth()) return;
+  
+  try {
+    const cases = await api.getCases();
+    const totalDefects = cases.reduce((sum, c) => sum + (c.defect_count || 0), 0);
+    
+    const stats = `
+총 케이스: ${cases.length}건
+총 하자: ${totalDefects}건
+    `.trim();
+    
+    alert(stats);
+  } catch (error) {
+    showError(error);
+  }
+}
+
+// Admin 페이지로 이동
+function goToAdmin() {
+  closeUserMenu();
+  route('admin');
+}
+
+// 뒤로가기 기능
+const navigationHistory = [];
+
+function goBack() {
+  if (navigationHistory.length > 0) {
+    const previousScreen = navigationHistory.pop();
+    route(previousScreen);
+  } else {
+    // 히스토리가 없으면 목록으로
+    route('list');
+  }
+}
+
+// route 함수 호출 시 히스토리 추가
+const originalRoute = route;
+function routeWithHistory(screen) {
+  const currentScreen = Array.from($$('.screen')).find(el => !el.classList.contains('hidden'))?.id;
+  
+  if (currentScreen && currentScreen !== screen) {
+    navigationHistory.push(currentScreen);
+    // 히스토리 최대 10개까지만 유지
+    if (navigationHistory.length > 10) {
+      navigationHistory.shift();
+    }
+  }
+  
+  originalRoute(screen);
 }
 
 async function onLogin(){
@@ -943,6 +1056,18 @@ function saveDetectionForLearning(defects, file, photoType) {
     timestamp: new Date().toISOString()
   });
 }
+
+// 메뉴 외부 클릭 시 닫기
+document.addEventListener('click', (e) => {
+  const userMenu = $('#user-menu');
+  const badgeUser = $('#badge-user');
+  
+  if (userMenu && !userMenu.classList.contains('hidden')) {
+    if (!userMenu.contains(e.target) && e.target !== badgeUser) {
+      closeUserMenu();
+    }
+  }
+});
 
 // 앱 초기화
 window.addEventListener('DOMContentLoaded', async () => {
