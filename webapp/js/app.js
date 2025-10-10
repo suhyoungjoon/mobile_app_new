@@ -689,11 +689,16 @@ function displayAIDetectionResults(defects, photoType) {
     `;
   });
   
+  const aiModeMessage = window.USE_AZURE_AI 
+    ? '<div class="ai-mode-badge azure">🌐 Azure OpenAI Vision</div>'
+    : '<div class="ai-mode-badge mock">🎭 모의(Mock) 모드 - 실제 AI 학습 시 정확도가 향상됩니다</div>';
+  
   aiResultsDiv.innerHTML = `
     <div class="ai-analysis-header">
       <h4>🤖 AI 분석 완료 - ${defects.length}개 하자 감지</h4>
       <button class="button small" onclick="hideAIAnalysis()">닫기</button>
     </div>
+    ${aiModeMessage}
     <div class="ai-detected-list">
       ${defectsHTML}
     </div>
@@ -801,6 +806,12 @@ function saveDetectionForLearning(defects, file, photoType) {
 // 앱 초기화
 window.addEventListener('DOMContentLoaded', async () => {
   console.log('🚀 앱 초기화 시작');
+  
+  // AI 모드 설정
+  // false = 모의 모드 (학습 없이 랜덤 예측)
+  // true = Azure OpenAI (실제 GPT-4 Vision 사용, API 키 필요)
+  window.USE_AZURE_AI = false;
+  console.log(`🤖 AI 모드: ${window.USE_AZURE_AI ? 'Azure OpenAI' : '모의(Mock) 모드'}`);
   
   // 하자 카테고리 미리 로드
   try {
