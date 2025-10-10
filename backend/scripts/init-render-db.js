@@ -3,9 +3,14 @@ const { Pool } = require('pg');
 const fs = require('fs');
 const path = require('path');
 
-// Render PostgreSQL connection
+// Render PostgreSQL connection - use DATABASE_URL from environment
+const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://insighti_db_user:XdLtT1B6TnbaZrUBRjxX6RjrUoTfCSWK@dpg-d3jle0ndiees73ckef60-a.singapore-postgres.render.com:5432/insighti_db';
+
+console.log('🔗 Connecting to database...');
+console.log('📍 URL:', DATABASE_URL.replace(/:[^:@]+@/, ':****@')); // Hide password in logs
+
 const pool = new Pool({
-  connectionString: 'postgresql://insighti_db_user:XdLtT1B6TnbaZrUBRjxX6RjrUoTfCSWK@dpg-d3jle0ndiees73ckef60-a.singapore-postgres.render.com:5432/insighti_db',
+  connectionString: DATABASE_URL,
   ssl: {
     rejectUnauthorized: false
   }
