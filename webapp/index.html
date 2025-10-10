@@ -111,11 +111,15 @@
 
         <div class="label" style="margin-top:8px;">사진</div>
         <div class="gallery">
-          <div id="photo-near" class="thumb" onclick="triggerPhotoInput('near')">전체사진</div>
-          <div id="photo-far" class="thumb" onclick="triggerPhotoInput('far')">근접사진</div>
+          <div id="photo-near" class="thumb" onclick="showPhotoOptions('near')">전체사진</div>
+          <div id="photo-far" class="thumb" onclick="showPhotoOptions('far')">근접사진</div>
         </div>
-        <input id="input-near" type="file" accept="image/*" capture="environment" class="hidden" onchange="handlePhotoUpload('near', this)" />
-        <input id="input-far" type="file" accept="image/*" capture="environment" class="hidden" onchange="handlePhotoUpload('far', this)" />
+        <!-- 카메라로 촬영 -->
+        <input id="input-near-camera" type="file" accept="image/*" capture="environment" class="hidden" onchange="handlePhotoUpload('near', this)" />
+        <input id="input-far-camera" type="file" accept="image/*" capture="environment" class="hidden" onchange="handlePhotoUpload('far', this)" />
+        <!-- 갤러리에서 선택 -->
+        <input id="input-near-gallery" type="file" accept="image/*" class="hidden" onchange="handlePhotoUpload('near', this)" />
+        <input id="input-far-gallery" type="file" accept="image/*" class="hidden" onchange="handlePhotoUpload('far', this)" />
         
         <!-- AI 감지 결과 표시 영역 -->
         <div id="ai-analysis-results" class="ai-analysis-section hidden">

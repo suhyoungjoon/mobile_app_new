@@ -566,9 +566,58 @@ route = function(screen) {
 
 // AI 기능 통합 함수들
 
-// 사진 입력 트리거
+// 사진 옵션 선택 다이얼로그 표시
+function showPhotoOptions(type) {
+  const photoTypeLabel = type === 'near' ? '전체사진' : '근접사진';
+  
+  // 커스텀 다이얼로그 생성
+  const dialog = document.createElement('div');
+  dialog.className = 'photo-options-dialog';
+  dialog.innerHTML = `
+    <div class="photo-options-overlay" onclick="closePhotoOptions()"></div>
+    <div class="photo-options-content">
+      <h3>${photoTypeLabel} 선택</h3>
+      <button class="photo-option-btn camera" onclick="selectPhotoSource('${type}', 'camera')">
+        📷 카메라로 촬영
+      </button>
+      <button class="photo-option-btn gallery" onclick="selectPhotoSource('${type}', 'gallery')">
+        🖼️ 갤러리에서 선택
+      </button>
+      <button class="photo-option-btn cancel" onclick="closePhotoOptions()">
+        취소
+      </button>
+    </div>
+  `;
+  
+  document.body.appendChild(dialog);
+}
+
+// 사진 소스 선택 처리
+function selectPhotoSource(type, source) {
+  closePhotoOptions();
+  
+  // 카메라 또는 갤러리 input 트리거
+  const inputId = `#input-${type}-${source}`;
+  const inputElement = $(inputId);
+  
+  if (inputElement) {
+    inputElement.click();
+  } else {
+    console.error('❌ Input 요소를 찾을 수 없습니다:', inputId);
+  }
+}
+
+// 사진 옵션 다이얼로그 닫기
+function closePhotoOptions() {
+  const dialog = document.querySelector('.photo-options-dialog');
+  if (dialog) {
+    dialog.remove();
+  }
+}
+
+// 사진 입력 트리거 (하위 호환성)
 function triggerPhotoInput(type) {
-  $(`#input-${type}`).click();
+  showPhotoOptions(type);
 }
 
 // 사진 업로드 처리 및 AI 감지
