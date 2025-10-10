@@ -1,9 +1,10 @@
 services:
   - type: web
-    name: insighti-backend
+    name: insighti-backend-v2
     runtime: node
     region: singapore
     plan: free
+    rootDir: backend
     buildCommand: npm install
     startCommand: npm start
     envVars:
