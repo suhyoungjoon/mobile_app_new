@@ -71,6 +71,16 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/sms', smsRoutes);
 
+// Root endpoint (for Render health checks)
+app.get('/', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    message: 'InsightI API Server is running',
+    timestamp: new Date().toISOString(),
+    version: '1.0.0'
+  });
+});
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ 
