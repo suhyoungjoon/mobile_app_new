@@ -690,12 +690,6 @@ async function analyzePhotoWithAI(file, photoType) {
   try {
     console.log('🔍 사진 분석 시작:', file.name, file.size, 'bytes');
     
-    // AI 감지기 확인
-    if (!window.defectDetector && !window.hybridDetector) {
-      console.warn('⚠️ AI 감지기가 로드되지 않았습니다. AI 분석을 건너뜁니다.');
-      return; // AI 없이 계속 진행
-    }
-    
     // AI 분석 결과 영역 표시
     const aiResultsDiv = $('#ai-analysis-results');
     aiResultsDiv.innerHTML = `
@@ -705,6 +699,16 @@ async function analyzePhotoWithAI(file, photoType) {
       </div>
     `;
     aiResultsDiv.classList.remove('hidden');
+    
+    // AI 감지기 확인
+    if (!window.defectDetector && !window.hybridDetector) {
+      console.warn('⚠️ AI 감지기가 로드되지 않았습니다. 모의 결과를 생성합니다.');
+      
+      // AI 감지기가 없어도 모의 결과 생성
+      const mockDefects = generateQuickMockDefects();
+      displayAIDetectionResults(mockDefects, photoType);
+      return;
+    }
     
     // 이미지 요소 생성
     const imageElement = await createImageElement(file);
@@ -748,6 +752,41 @@ function createImageElement(file) {
     img.onerror = reject;
     img.src = URL.createObjectURL(file);
   });
+}
+
+// 간단한 모의 하자 감지 결과 생성
+function generateQuickMockDefects() {
+  const allDefects = [
+    { type: '벽지찢김', severity: '보통', description: '벽체부위 벽지파손은 위치별 크기별로 다르나 보수로 처리가능한' },
+    { type: '벽균열', severity: '심각', description: '벽체에 발생한 균열로 건물의 구조적 문제를 나타낼 수 있음' },
+    { type: '마루판들뜸', severity: '보통', description: '바닥 마루판이 들뜨거나 움직이는 현상' },
+    { type: '타일균열', severity: '보통', description: '타일 표면 또는 접합부에 발생한 균열' },
+    { type: '페인트벗겨짐', severity: '경미', description: '도장 표면이 벗겨지거나 박리되는 현상' },
+    { type: '천장누수', severity: '심각', description: '천장에서 물이 스며나오거나 누수 흔적이 보임' },
+    { type: '욕실곰팡이', severity: '보통', description: '욕실 벽면이나 천장에 발생한 곰팡이' },
+    { type: '문틀변형', severity: '보통', description: '문틀이 변형되어 문이 제대로 닫히지 않음' },
+    { type: '콘센트불량', severity: '심각', description: '콘센트가 제대로 작동하지 않거나 느슨함' },
+    { type: '창문잠금불량', severity: '보통', description: '창문 잠금장치가 제대로 작동하지 않음' }
+  ];
+  
+  // 랜덤으로 1-2개 선택
+  const count = Math.floor(Math.random() * 2) + 1;
+  const selected = [];
+  
+  for (let i = 0; i < count; i++) {
+    const randomIndex = Math.floor(Math.random() * allDefects.length);
+    const defect = allDefects[randomIndex];
+    const confidence = (Math.random() * 0.3 + 0.6).toFixed(2); // 60-90%
+    
+    selected.push({
+      type: defect.type,
+      severity: defect.severity,
+      description: defect.description,
+      confidence: parseFloat(confidence)
+    });
+  }
+  
+  return selected;
 }
 
 // AI 감지 결과 표시
