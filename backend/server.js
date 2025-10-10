@@ -27,6 +27,9 @@ app.use(cors({
       'http://127.0.0.1:3000', 
       'http://localhost:8080', 
       'http://127.0.0.1:8080',
+      'https://insighti.com',           // 커스텀 도메인 (설정 후)
+      'https://www.insighti.com',       // www 버전
+      'https://app.insighti.com',       // 앱 서브도메인
       'file://'
     ];
     
