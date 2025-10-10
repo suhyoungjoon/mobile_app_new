@@ -79,16 +79,59 @@ class DefectDetector {
   // 이미지에서 하자 감지
   async detectDefects(imageElement) {
     try {
-      // 실제 모델이 로드되어 있으면 사용
+      // 1순위: Azure OpenAI Vision 사용
+      if (window.USE_AZURE_AI) {
+        return await this.detectWithAzureAI(imageElement);
+      }
+      
+      // 2순위: Teachable Machine 모델 사용
       if (this.model) {
         return await this.detectWithTeachableMachine(imageElement);
-      } else {
-        // 모의 모드: 랜덤 예측 생성
-        return await this.generateMockPredictions();
       }
+      
+      // 3순위: 모의 모드
+      return await this.generateMockPredictions();
+      
     } catch (error) {
       console.error('❌ 하자 감지 실패:', error);
       return [];
+    }
+  }
+  
+  // Azure OpenAI Vision으로 하자 감지
+  async detectWithAzureAI(imageElement) {
+    try {
+      console.log('🔍 Azure OpenAI로 하자 분석 시작...');
+      
+      // 이미지를 Base64로 변환
+      const canvas = document.createElement('canvas');
+      canvas.width = imageElement.width || imageElement.naturalWidth;
+      canvas.height = imageElement.height || imageElement.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(imageElement, 0, 0);
+      const imageBase64 = canvas.toDataURL('image/jpeg', 0.8);
+      
+      // Azure OpenAI API 호출
+      const result = await window.api.analyzeDefectWithAzureAI(imageBase64, 'near');
+      
+      if (result && result.analysis && result.analysis.detectedDefects) {
+        console.log('✅ Azure AI 분석 완료:', result.analysis.detectedDefects.length, '개 하자 감지');
+        
+        // 응답 형식 통일
+        return result.analysis.detectedDefects.map(defect => ({
+          type: defect.type,
+          confidence: parseFloat(defect.confidence),
+          severity: defect.severity,
+          description: defect.description + (defect.repairSuggestion ? `\n\n💡 보수방법: ${defect.repairSuggestion}` : '')
+        }));
+      }
+      
+      return [];
+      
+    } catch (error) {
+      console.error('❌ Azure AI 분석 실패:', error);
+      // Azure AI 실패 시 폴백
+      return await this.generateMockPredictions();
     }
   }
   

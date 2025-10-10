@@ -12,6 +12,7 @@ const casesRoutes = require('./routes/cases');
 const defectsRoutes = require('./routes/defects');
 const defectCategoriesRoutes = require('./routes/defect-categories');
 const aiLearningRoutes = require('./routes/ai-learning');
+const azureAIRoutes = require('./routes/azure-ai'); // NEW: Azure OpenAI
 const uploadRoutes = require('./routes/upload');
 const reportsRoutes = require('./routes/reports');
 const smsRoutes = require('./routes/sms');
@@ -67,6 +68,7 @@ app.use('/api/cases', casesRoutes);
 app.use('/api/defects', defectsRoutes);
 app.use('/api/defect-categories', defectCategoriesRoutes);
 app.use('/api/ai-learning', aiLearningRoutes);
+app.use('/api/azure-ai', azureAIRoutes); // NEW: Azure OpenAI
 app.use('/api/upload', uploadRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/sms', smsRoutes);

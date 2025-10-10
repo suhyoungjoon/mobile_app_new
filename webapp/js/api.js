@@ -259,6 +259,34 @@ class APIClient {
       })
     });
   }
+
+  // Azure OpenAI로 하자 이미지 분석
+  async analyzeDefectWithAzureAI(imageBase64, photoType = 'near') {
+    return await this.request('/azure-ai/analyze-defect', {
+      method: 'POST',
+      body: JSON.stringify({
+        imageBase64,
+        photoType
+      })
+    });
+  }
+
+  // Azure OpenAI 하자 상담
+  async consultDefect(question, defectType = null, context = null) {
+    return await this.request('/azure-ai/consult', {
+      method: 'POST',
+      body: JSON.stringify({
+        question,
+        defectType,
+        context
+      })
+    });
+  }
+
+  // Azure OpenAI 연결 상태 확인
+  async checkAzureAIStatus() {
+    return await this.request('/azure-ai/status');
+  }
 }
 
 // Global API client instance
