@@ -797,3 +797,35 @@ function saveDetectionForLearning(defects, file, photoType) {
     timestamp: new Date().toISOString()
   });
 }
+
+// 앱 초기화
+window.addEventListener('DOMContentLoaded', async () => {
+  console.log('🚀 앱 초기화 시작');
+  
+  // 하자 카테고리 미리 로드
+  try {
+    await loadDefectCategories();
+    console.log('✅ 하자 카테고리 로드 완료');
+  } catch (error) {
+    console.error('❌ 하자 카테고리 로드 실패:', error);
+    // 오류가 발생해도 앱은 계속 실행되도록 함
+  }
+  
+  // 세션 확인
+  if (AppState.token) {
+    try {
+      const sessionData = await api.getSession();
+      AppState.session = sessionData;
+      route('list');
+      await loadCases();
+    } catch (error) {
+      console.error('세션 복원 실패:', error);
+      api.clearToken();
+      route('login');
+    }
+  } else {
+    route('login');
+  }
+  
+  console.log('✅ 앱 초기화 완료');
+});
