@@ -40,8 +40,9 @@ class APIClient {
       config.headers['Authorization'] = `Bearer ${this.token}`;
     }
 
-    const timeoutMs = options.timeoutMs || 15000;
-    const retries = options.retries ?? 2;
+    // Render Free Tier Cold Start를 위해 타임아웃 증가
+    const timeoutMs = options.timeoutMs || 30000; // 30초 (Cold Start 대응)
+    const retries = options.retries ?? 3; // 재시도 3회
 
     const doFetch = async (attempt) => {
       const controller = new AbortController();

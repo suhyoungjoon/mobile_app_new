@@ -56,6 +56,7 @@ async function onLogin(){
   }
 
   setLoading(true);
+  toast('로그인 중... 처음 접속 시 최대 30초 소요될 수 있습니다', 'info');
   
   try {
     const response = await api.login({
