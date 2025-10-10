@@ -51,6 +51,22 @@ class APIClient {
         clearTimeout(id);
         if (!resp.ok) {
           const text = await resp.text().catch(() => '');
+          
+          // 401 또는 403 에러 시 토큰 만료로 간주
+          if (resp.status === 401 || resp.status === 403) {
+            console.warn('⚠️ 토큰이 만료되었습니다. 다시 로그인해주세요.');
+            this.clearToken();
+            
+            // 로그인 화면으로 리다이렉트
+            if (window.route) {
+              window.route('login');
+            }
+            
+            const err = new Error('세션이 만료되었습니다. 다시 로그인해주세요.');
+            err.status = resp.status;
+            throw err;
+          }
+          
           const err = new Error(`HTTP ${resp.status}: ${text}`);
           err.status = resp.status;
           throw err;
@@ -58,6 +74,12 @@ class APIClient {
         return await resp.json();
       } catch (err) {
         clearTimeout(id);
+        
+        // 401/403 에러는 재시도하지 않음
+        if (err.status === 401 || err.status === 403) {
+          throw err;
+        }
+        
         const isRetryable = (!err.status || err.status >= 500) && attempt < retries;
         if (isRetryable) {
           const backoff = 500 * Math.pow(2, attempt);
