@@ -50,12 +50,10 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Invalid case type' });
     }
 
-    // Generate case ID (CASE-YYXXX format)
+    // Generate case ID with timestamp to ensure uniqueness
     const year = new Date().getFullYear().toString().slice(-2);
-    const countQuery = 'SELECT COUNT(*) as count FROM case_header';
-    const countResult = await pool.query(countQuery);
-    const count = parseInt(countResult.rows[0].count) + 1;
-    const caseId = `CASE-${year}${count.toString().padStart(3, '0')}`;
+    const timestamp = Date.now().toString().slice(-6); // Last 6 digits
+    const caseId = `CASE-${year}${timestamp}`;
 
     // Insert new case into database
     const insertQuery = `

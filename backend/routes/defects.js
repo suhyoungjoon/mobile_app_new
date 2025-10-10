@@ -16,11 +16,10 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'case_id, location, trade, and content are required' });
     }
 
-    // Generate defect ID (DEF-XXX format)
-    const countQuery = 'SELECT COUNT(*) as count FROM defect WHERE case_id = $1';
-    const countResult = await pool.query(countQuery, [case_id]);
-    const count = parseInt(countResult.rows[0].count) + 1;
-    const defectId = `DEF-${count}`;
+    // Generate defect ID with timestamp to ensure uniqueness
+    const timestamp = Date.now();
+    const random = Math.floor(Math.random() * 1000);
+    const defectId = `DEF-${timestamp}-${random}`;
 
     // Insert defect into database
     const insertQuery = `
