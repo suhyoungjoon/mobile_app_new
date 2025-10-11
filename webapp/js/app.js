@@ -709,9 +709,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
     const opt = document.createElement('option'); opt.value=v; opt.textContent=v; tradeSel.appendChild(opt);
   });
   
-  bindPhotoPicker('#photo-near', '#input-near');
-  bindPhotoPicker('#photo-far', '#input-far');
-  
   // Add logout functionality to user badge
   $('#badge-user').addEventListener('click', () => {
     if (AppState.session) {
