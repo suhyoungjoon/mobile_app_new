@@ -1238,8 +1238,8 @@ window.addEventListener('DOMContentLoaded', async () => {
   // AI 모드 설정
   // false = 모의 모드 (학습 없이 랜덤 예측)
   // true = Azure OpenAI (실제 GPT-4 Vision 사용, API 키 필요)
-  window.USE_AZURE_AI = false;
-  console.log(`🤖 AI 모드: ${window.USE_AZURE_AI ? 'Azure OpenAI' : '모의(Mock) 모드'}`);
+  window.USE_AZURE_AI = true; // Azure OpenAI 활성화!
+  console.log(`🤖 AI 모드: ${window.USE_AZURE_AI ? 'Azure OpenAI Vision' : '모의(Mock) 모드'}`);
   
   // 하자 카테고리 미리 로드
   try {
