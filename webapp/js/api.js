@@ -336,4 +336,3 @@ class APIClient {
 
 // Global API client instance
 const api = new APIClient();
-/* Updated: Sat Oct 11 17:11:31 KST 2025 */
