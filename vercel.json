@@ -1,21 +1,4 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "webapp/**",
-      "use": "@vercel/static"
-    }
-  ],
-  "rewrites": [
-    {
-      "source": "/",
-      "destination": "/webapp/index.html"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/webapp/$1"
-    }
-  ],
   "headers": [
     {
       "source": "/sw.js",
@@ -36,6 +19,15 @@
         {
           "key": "Content-Type",
           "value": "application/manifest+json"
+        }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
         }
       ]
     }
