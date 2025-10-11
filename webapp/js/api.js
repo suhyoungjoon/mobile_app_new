@@ -183,6 +183,11 @@ class APIClient {
     return await response.json();
   }
 
+  // Alias for uploadPhoto (backward compatibility)
+  async uploadImage(file) {
+    return await this.uploadPhoto(file);
+  }
+
   // Reports
   async getReportPreview() {
     return await this.request('/reports/preview');
