@@ -977,12 +977,16 @@ async function handlePhotoUpload(type, inputElement) {
         
         toast(`${type === 'near' ? '전체' : '근접'}사진 업로드 완료!`, 'success');
         
-        // AI 감지 시작
-        try {
-          await analyzePhotoWithAI(file, type);
-        } catch (aiError) {
-          console.error('❌ AI 분석 오류:', aiError);
-          // AI 오류는 무시하고 계속 진행
+        // AI 감지 시작 (활성화된 경우에만)
+        if (window.ENABLE_AI_ANALYSIS) {
+          try {
+            await analyzePhotoWithAI(file, type);
+          } catch (aiError) {
+            console.error('❌ AI 분석 오류:', aiError);
+            // AI 오류는 무시하고 계속 진행
+          }
+        } else {
+          console.log('ℹ️ AI 분석이 비활성화되어 있습니다. 사진만 업로드됩니다.');
         }
       } catch (uploadError) {
         console.error('❌ 사진 업로드 실패:', uploadError);
@@ -1310,10 +1314,11 @@ window.addEventListener('DOMContentLoaded', async () => {
   console.log('🚀 앱 초기화 시작');
   
   // AI 모드 설정
-  // false = 모의 모드 (학습 없이 랜덤 예측)
+  // false = AI 분석 비활성화
   // true = Azure OpenAI (실제 GPT-4 Vision 사용, API 키 필요)
-  window.USE_AZURE_AI = true; // Azure OpenAI 활성화!
-  console.log(`🤖 AI 모드: ${window.USE_AZURE_AI ? 'Azure OpenAI Vision' : '모의(Mock) 모드'}`);
+  window.USE_AZURE_AI = false; // AI 분석 비활성화!
+  window.ENABLE_AI_ANALYSIS = false; // AI 기능 완전 비활성화
+  console.log(`🤖 AI 분석: ${window.ENABLE_AI_ANALYSIS ? '활성화' : '비활성화 ✓'}`);
   
   // 하자 카테고리 미리 로드
   try {
