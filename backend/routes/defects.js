@@ -5,6 +5,32 @@ const { authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
 
+// Get defects by case_id
+router.get('/', authenticateToken, async (req, res) => {
+  try {
+    const { case_id } = req.query;
+    
+    if (!case_id) {
+      return res.status(400).json({ error: 'case_id is required' });
+    }
+    
+    const query = `
+      SELECT d.id, d.case_id, d.location, d.trade, d.content, d.memo, 
+             d.created_at, d.updated_at
+      FROM defect d
+      WHERE d.case_id = $1
+      ORDER BY d.created_at DESC
+    `;
+    
+    const result = await pool.query(query, [case_id]);
+    res.json(result.rows);
+    
+  } catch (error) {
+    console.error('Get defects error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Create defect item
 router.post('/', authenticateToken, async (req, res) => {
   try {

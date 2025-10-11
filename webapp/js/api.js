@@ -120,6 +120,10 @@ class APIClient {
   }
 
   // Defects
+  async getDefects(caseId) {
+    return await this.request(`/defects?case_id=${caseId}`);
+  }
+
   async createDefect(defectData) {
     return await this.request('/defects', {
       method: 'POST',
