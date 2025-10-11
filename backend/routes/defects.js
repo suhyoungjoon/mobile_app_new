@@ -23,7 +23,20 @@ router.get('/', authenticateToken, async (req, res) => {
     `;
     
     const result = await pool.query(query, [case_id]);
-    res.json(result.rows);
+    const defects = result.rows;
+    
+    // Fetch photos for each defect
+    for (const defect of defects) {
+      const photoQuery = `
+        SELECT id, kind, url, thumb_url, taken_at
+        FROM photo
+        WHERE defect_id = $1
+      `;
+      const photoResult = await pool.query(photoQuery, [defect.id]);
+      defect.photos = photoResult.rows;
+    }
+    
+    res.json(defects);
     
   } catch (error) {
     console.error('Get defects error:', error);
@@ -55,7 +68,28 @@ router.post('/', authenticateToken, async (req, res) => {
     `;
 
     const result = await pool.query(insertQuery, [defectId, case_id, location, trade, content, memo || '']);
-    res.status(201).json(result.rows[0]);
+    const defect = result.rows[0];
+    
+    // Insert photos if provided
+    if (photo_near_key) {
+      const photoId = `PHOTO-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      await pool.query(
+        `INSERT INTO photo (id, defect_id, kind, url, taken_at) 
+         VALUES ($1, $2, 'near', $3, NOW())`,
+        [photoId, defectId, `/uploads/${photo_near_key}`]
+      );
+    }
+    
+    if (photo_far_key) {
+      const photoId = `PHOTO-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      await pool.query(
+        `INSERT INTO photo (id, defect_id, kind, url, taken_at) 
+         VALUES ($1, $2, 'far', $3, NOW())`,
+        [photoId, defectId, `/uploads/${photo_far_key}`]
+      );
+    }
+    
+    res.status(201).json(defect);
 
   } catch (error) {
     console.error('Create defect error:', error);

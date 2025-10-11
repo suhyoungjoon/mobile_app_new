@@ -368,29 +368,41 @@ async function viewCaseDefects(caseId) {
           <div style="color: #666;">등록된 하자가 없습니다.</div>
         </div>
       `;
-    } else {
-      container.innerHTML = defects.map(defect => `
-        <div class="card">
-          <div class="defect-header">
-            <strong>${defect.location} - ${defect.trade}</strong>
-            <span class="badge">${formatDate(defect.created_at)}</span>
-          </div>
-          <div class="defect-content">
-            <div class="label">내용:</div>
-            <p>${defect.content}</p>
-            ${defect.memo ? `
-              <div class="label" style="margin-top:8px;">메모:</div>
-              <p>${defect.memo}</p>
-            ` : ''}
-          </div>
-          <div class="hr"></div>
-          <div class="button-group">
-            <button class="button small" onclick="editDefect('${defect.id}')">✏️ 수정</button>
-            <button class="button small danger" onclick="deleteDefect('${defect.id}')">🗑️ 삭제</button>
-          </div>
-        </div>
-      `).join('');
-    }
+        } else {
+          container.innerHTML = defects.map(defect => `
+            <div class="card">
+              <div class="defect-header">
+                <strong>${defect.location} - ${defect.trade}</strong>
+                <span class="badge">${formatDate(defect.created_at)}</span>
+              </div>
+              <div class="defect-content">
+                <div class="label">내용:</div>
+                <p>${defect.content}</p>
+                ${defect.memo ? `
+                  <div class="label" style="margin-top:8px;">메모:</div>
+                  <p>${defect.memo}</p>
+                ` : ''}
+                ${defect.photos && defect.photos.length > 0 ? `
+                  <div class="label" style="margin-top:8px;">사진:</div>
+                  <div class="gallery" style="display:flex;gap:8px;margin-top:4px;">
+                    ${defect.photos.map(photo => `
+                      <div class="thumb has-image" 
+                           style="background-image:url('https://mobile-app-new.onrender.com${photo.url}');cursor:pointer;" 
+                           onclick="showImageModal('https://mobile-app-new.onrender.com${photo.url}')">
+                        ${photo.kind === 'near' ? '전체' : '근접'}
+                      </div>
+                    `).join('')}
+                  </div>
+                ` : ''}
+              </div>
+              <div class="hr"></div>
+              <div class="button-group">
+                <button class="button small" onclick="editDefect('${defect.id}')">✏️ 수정</button>
+                <button class="button small danger" onclick="deleteDefect('${defect.id}')">🗑️ 삭제</button>
+              </div>
+            </div>
+          `).join('');
+        }
     
     route('case-detail');
     
