@@ -81,12 +81,18 @@ function route(screen){
   // 사용자 메뉴 닫기
   closeUserMenu();
   
-  // 하자 등록 화면 진입 시 고객 정보 표시
+  // 하자 등록 화면 진입 시 고객 정보 표시 및 케이스 자동 생성
   if (screen === 'newdefect') {
     if (AppState.session) {
       const { complex, dong, ho, name } = AppState.session;
       $('#customer-details').textContent = `${dong}동 ${ho}호 ${name}`;
     }
+    
+    // currentCaseId가 없으면 자동으로 케이스 생성
+    if (!AppState.currentCaseId) {
+      ensureCaseExists();
+    }
+    
     // 하자 카테고리가 로드되지 않았다면 다시 로드
     if ($('#defect-category').children.length <= 1) {
       loadDefectCategories();
@@ -299,6 +305,46 @@ async function createNewCase() {
     showError(error);
   } finally {
     setLoading(false);
+  }
+}
+
+// 케이스가 없으면 자동 생성
+async function ensureCaseExists() {
+  if (!AppState.session) {
+    console.warn('⚠️ 세션이 없습니다');
+    return;
+  }
+  
+  // 이미 케이스가 있는지 확인
+  if (AppState.currentCaseId) {
+    return;
+  }
+  
+  try {
+    // 기존 케이스 목록 확인
+    if (!AppState.cases || AppState.cases.length === 0) {
+      await loadCases();
+    }
+    
+    // 최신 케이스 사용
+    if (AppState.cases && AppState.cases.length > 0) {
+      AppState.currentCaseId = AppState.cases[0].id;
+      console.log('✅ 기존 케이스 사용:', AppState.currentCaseId);
+      toast('기존 케이스를 사용합니다', 'info');
+      return;
+    }
+    
+    // 케이스가 없으면 새로 생성
+    console.log('📝 케이스가 없어서 자동 생성합니다');
+    const newCase = await api.createCase({ type: '하자접수' });
+    AppState.cases = [newCase];
+    AppState.currentCaseId = newCase.id;
+    console.log('✅ 새 케이스 생성:', AppState.currentCaseId);
+    toast('새 케이스가 생성되었습니다', 'success');
+    
+  } catch (error) {
+    console.error('❌ 케이스 생성 실패:', error);
+    toast('케이스 생성 중 오류가 발생했습니다', 'error');
   }
 }
 
