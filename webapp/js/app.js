@@ -657,26 +657,12 @@ function formatDate(dateString) {
 }
 
 function checkAuth() {
-  const token = localStorage.getItem('insighti_token');
-  if (token) {
-    api.setToken(token);
-    // Try to restore session from localStorage
-    const sessionData = localStorage.getItem('insighti_session');
-    if (sessionData) {
-      try {
-        AppState.session = JSON.parse(sessionData);
-        $('#badge-user').textContent = `${AppState.session.dong}-${AppState.session.ho} ${AppState.session.name}`;
-        loadCases();
-        route('list');
-        return true;
-      } catch (error) {
-        console.error('Session restore failed:', error);
-        localStorage.removeItem('insighti_session');
-        localStorage.removeItem('insighti_token');
-      }
-    }
+  if (!AppState.token) {
+    toast('로그인이 필요합니다', 'error');
+    route('login');
+    return false;
   }
-  return false;
+  return true;
 }
 
 function logout() {
