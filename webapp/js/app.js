@@ -975,7 +975,40 @@ async function analyzePhotoWithAI(file, photoType) {
     `;
     aiResultsDiv.classList.remove('hidden');
     
-    // AI 감지기 확인
+    // Azure OpenAI 사용 여부 확인
+    if (window.USE_AZURE_AI) {
+      console.log('🌐 Azure OpenAI Vision으로 분석 시작...');
+      
+      // 이미지를 Base64로 변환
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const imageBase64 = e.target.result;
+          
+          // Azure OpenAI API 호출
+          const result = await api.analyzeDefectWithAzureAI(imageBase64, photoType);
+          console.log('✅ Azure AI 분석 완료:', result);
+          
+          if (result && result.analysis && result.analysis.detectedDefects) {
+            const detectedDefects = result.analysis.detectedDefects;
+            console.log('✅ 감지된 하자:', detectedDefects.length, '개');
+            displayAIDetectionResults(detectedDefects, photoType);
+          } else {
+            console.warn('⚠️ 분석 결과가 없습니다');
+            displayAIDetectionResults([], photoType);
+          }
+        } catch (aiError) {
+          console.error('❌ Azure AI 분석 오류:', aiError);
+          toast('AI 분석 중 오류가 발생했습니다. 모의 모드로 전환합니다.', 'error');
+          const mockDefects = generateQuickMockDefects();
+          displayAIDetectionResults(mockDefects, photoType);
+        }
+      };
+      reader.readAsDataURL(file);
+      return;
+    }
+    
+    // Teachable Machine 또는 모의 모드
     if (!window.defectDetector && !window.hybridDetector) {
       console.warn('⚠️ AI 감지기가 로드되지 않았습니다. 모의 결과를 생성합니다.');
       
