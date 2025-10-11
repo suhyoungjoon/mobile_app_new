@@ -221,4 +221,4 @@ SMS_SERVICE_ID=your-service-id
 SMS_ACCESS_KEY=your-access-key
 SMS_SECRET_KEY=your-secret-key
 SMS_FROM_NUMBER=01012345678
-```
+```# Last updated: Sat Oct 11 16:16:17 KST 2025
