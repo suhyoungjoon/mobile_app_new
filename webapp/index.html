@@ -167,6 +167,52 @@
       <div id="report-preview"></div>
       <button class="button" onclick="onSendMock()">문자 발송(모의)</button>
     </div>
+
+    <!-- CASE DETAIL (하자 목록) -->
+    <div id="case-detail" class="screen hidden">
+      <div class="screen-header">
+        <button class="back-btn" onclick="goBack()">← 뒤로</button>
+        <h2 id="case-detail-title">케이스 상세</h2>
+        <div></div>
+      </div>
+      <div id="defect-list-container">
+        <!-- 하자 목록이 여기에 표시됩니다 -->
+      </div>
+      <button class="button" onclick="route('newdefect')" style="margin-top: 10px;">+ 하자 추가</button>
+    </div>
+
+    <!-- DEFECT EDIT -->
+    <div id="edit-defect" class="screen hidden">
+      <div class="screen-header">
+        <button class="back-btn" onclick="goBack()">← 뒤로</button>
+        <h2>하자 수정</h2>
+        <div></div>
+      </div>
+      <div class="card">
+        <div class="row">
+          <div class="col">
+            <div class="label">위치</div>
+            <input id="edit-location" class="input" placeholder="예: 거실, 주방" />
+          </div>
+          <div class="col">
+            <div class="label">세부공정</div>
+            <input id="edit-trade" class="input" placeholder="예: 바닥재, 타일" />
+          </div>
+        </div>
+        
+        <div class="label" style="margin-top:8px;">하자 내용</div>
+        <textarea id="edit-content" class="input" placeholder="하자 내용을 입력하세요"></textarea>
+        
+        <div class="label" style="margin-top:8px;">메모(선택)</div>
+        <textarea id="edit-memo" class="input" placeholder="현장 특이사항 등"></textarea>
+
+        <div class="hr"></div>
+        <div class="button-group">
+          <button class="button" onclick="cancelEdit()">취소</button>
+          <button class="button success" onclick="saveDefectEdit()">저장</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div class="tabbar">

@@ -41,8 +41,8 @@ class APIClient {
     }
 
     // Render Free Tier Cold Start를 위해 타임아웃 증가
-    const timeoutMs = options.timeoutMs || 30000; // 30초 (Cold Start 대응)
-    const retries = options.retries ?? 3; // 재시도 3회
+    const timeoutMs = options.timeoutMs || 60000; // 60초 (Cold Start 대응)
+    const retries = options.retries ?? 5; // 재시도 5회
 
     const doFetch = async (attempt) => {
       const controller = new AbortController();
@@ -95,13 +95,15 @@ class APIClient {
   }
 
   // Authentication
-  async login(loginData) {
+  async login(complex, dong, ho, name, phone) {
     const response = await this.request('/auth/session', {
       method: 'POST',
-      body: JSON.stringify(loginData)
+      body: JSON.stringify({ complex, dong, ho, name, phone })
     });
     
-    this.setToken(response.token);
+    if (response && response.token) {
+      this.setToken(response.token);
+    }
     return response;
   }
 
@@ -123,6 +125,17 @@ class APIClient {
       method: 'POST',
       body: JSON.stringify(defectData)
     });
+  }
+
+  async updateDefect(defectId, defectData) {
+    return await this.request(`/defects/${defectId}`, {
+      method: 'PUT',
+      body: JSON.stringify(defectData)
+    });
+  }
+
+  async getDefect(defectId) {
+    return await this.request(`/defects/${defectId}`);
   }
 
   // File upload

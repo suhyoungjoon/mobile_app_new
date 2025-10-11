@@ -3,6 +3,30 @@
 const $ = (q)=>document.querySelector(q);
 const $$ = (q)=>document.querySelectorAll(q);
 
+// AppState for global state management
+const AppState = {
+  _session: null,
+  currentCaseId: null,
+  photoNearKey: null,
+  photoFarKey: null,
+  get session() {
+    return this._session;
+  },
+  set session(newSession) {
+    this._session = newSession;
+    if (newSession && newSession.token) {
+      api.setToken(newSession.token);
+      localStorage.setItem('insighti_session', JSON.stringify(newSession));
+    } else {
+      api.clearToken();
+      localStorage.removeItem('insighti_session');
+    }
+  },
+  get token() {
+    return localStorage.getItem('insighti_token');
+  }
+};
+
 // Loading state management
 let isLoading = false;
 
@@ -31,7 +55,21 @@ function showError(error) {
   toast(`오류: ${error.message}`, 'error');
 }
 
+// 네비게이션 히스토리
+const navigationHistory = [];
+
 function route(screen){
+  // 히스토리 추가
+  const currentScreen = Array.from($$('.screen')).find(el => !el.classList.contains('hidden'))?.id;
+  
+  if (currentScreen && currentScreen !== screen && screen !== 'login') {
+    navigationHistory.push(currentScreen);
+    // 히스토리 최대 10개까지만 유지
+    if (navigationHistory.length > 10) {
+      navigationHistory.shift();
+    }
+  }
+  
   $$('.screen').forEach(el=>el.classList.add('hidden'));
   $(`#${screen}`).classList.remove('hidden');
   // tab highlight
@@ -42,6 +80,18 @@ function route(screen){
   
   // 사용자 메뉴 닫기
   closeUserMenu();
+  
+  // 하자 등록 화면 진입 시 고객 정보 표시
+  if (screen === 'newdefect') {
+    if (AppState.session) {
+      const { complex, dong, ho, name } = AppState.session;
+      $('#customer-details').textContent = `${dong}동 ${ho}호 ${name}`;
+    }
+    // 하자 카테고리가 로드되지 않았다면 다시 로드
+    if ($('#defect-category').children.length <= 1) {
+      loadDefectCategories();
+    }
+  }
 }
 
 // 사용자 메뉴 토글
@@ -126,8 +176,6 @@ function goToAdmin() {
 }
 
 // 뒤로가기 기능
-const navigationHistory = [];
-
 function goBack() {
   if (navigationHistory.length > 0) {
     const previousScreen = navigationHistory.pop();
@@ -136,22 +184,6 @@ function goBack() {
     // 히스토리가 없으면 목록으로
     route('list');
   }
-}
-
-// route 함수 호출 시 히스토리 추가
-const originalRoute = route;
-function routeWithHistory(screen) {
-  const currentScreen = Array.from($$('.screen')).find(el => !el.classList.contains('hidden'))?.id;
-  
-  if (currentScreen && currentScreen !== screen) {
-    navigationHistory.push(currentScreen);
-    // 히스토리 최대 10개까지만 유지
-    if (navigationHistory.length > 10) {
-      navigationHistory.shift();
-    }
-  }
-  
-  originalRoute(screen);
 }
 
 async function onLogin(){
@@ -168,13 +200,11 @@ async function onLogin(){
     return;
   }
 
-  setLoading(true);
-  toast('로그인 중... 처음 접속 시 최대 30초 소요될 수 있습니다', 'info');
+      setLoading(true);
+      toast('로그인 중... 처음 접속 시 최대 1-2분 소요될 수 있습니다 (무료 서버 시작 중)', 'info');
   
   try {
-    const response = await api.login({
-      complex, dong, ho, name, phone
-    });
+    const response = await api.login(complex, dong, ho, name, phone);
     
     // Store session data
     AppState.session = {
@@ -241,7 +271,10 @@ function renderCaseList(){
       </div>
       <div class="small">등록된 하자: ${cnt}건</div>
       <div class="hr"></div>
-      <button class="button ghost" onclick="route('newdefect')">하자 추가</button>
+      <div class="button-group">
+        <button class="button ghost" onclick="viewCaseDefects('${cs.id}')">상세보기</button>
+        <button class="button" onclick="addDefectToCase('${cs.id}')">하자 추가</button>
+      </div>
     `;
     wrap.appendChild(div);
   });
@@ -258,6 +291,7 @@ async function createNewCase() {
     });
     
     AppState.cases.unshift(newCase);
+    AppState.currentCaseId = newCase.id;
     renderCaseList();
     toast('새 케이스가 생성되었습니다', 'success');
     
@@ -268,11 +302,145 @@ async function createNewCase() {
   }
 }
 
+// 케이스별 하자 목록 보기
+async function viewCaseDefects(caseId) {
+  if (!checkAuth()) return;
+  
+  setLoading(true);
+  try {
+    AppState.currentCaseId = caseId;
+    const defects = await api.getDefects(caseId);
+    
+    const container = $('#defect-list-container');
+    const titleEl = $('#case-detail-title');
+    
+    if (titleEl) titleEl.textContent = `케이스 ${caseId} 상세`;
+    
+    if (!defects || defects.length === 0) {
+      container.innerHTML = `
+        <div class="card" style="text-align: center; padding: 40px;">
+          <div style="color: #666;">등록된 하자가 없습니다.</div>
+        </div>
+      `;
+    } else {
+      container.innerHTML = defects.map(defect => `
+        <div class="card">
+          <div class="defect-header">
+            <strong>${defect.location} - ${defect.trade}</strong>
+            <span class="badge">${formatDate(defect.created_at)}</span>
+          </div>
+          <div class="defect-content">
+            <div class="label">내용:</div>
+            <p>${defect.content}</p>
+            ${defect.memo ? `
+              <div class="label" style="margin-top:8px;">메모:</div>
+              <p>${defect.memo}</p>
+            ` : ''}
+          </div>
+          <div class="hr"></div>
+          <div class="button-group">
+            <button class="button small" onclick="editDefect('${defect.id}')">✏️ 수정</button>
+            <button class="button small danger" onclick="deleteDefect('${defect.id}')">🗑️ 삭제</button>
+          </div>
+        </div>
+      `).join('');
+    }
+    
+    route('case-detail');
+    
+  } catch (error) {
+    showError(error);
+  } finally {
+    setLoading(false);
+  }
+}
+
+// 케이스에 하자 추가 (currentCaseId 설정 후 하자 등록 화면으로)
+function addDefectToCase(caseId) {
+  AppState.currentCaseId = caseId;
+  route('newdefect');
+}
+
+// 하자 수정 화면으로 이동
+async function editDefect(defectId) {
+  if (!checkAuth()) return;
+  
+  setLoading(true);
+  try {
+    const defect = await api.getDefect(defectId);
+    AppState.editingDefectId = defectId;
+    
+    // 폼에 기존 데이터 채우기
+    $('#edit-location').value = defect.location || '';
+    $('#edit-trade').value = defect.trade || '';
+    $('#edit-content').value = defect.content || '';
+    $('#edit-memo').value = defect.memo || '';
+    
+    route('edit-defect');
+    
+  } catch (error) {
+    showError(error);
+  } finally {
+    setLoading(false);
+  }
+}
+
+// 하자 수정 저장
+async function saveDefectEdit() {
+  if (!checkAuth()) return;
+  if (isLoading) return;
+  
+  const location = $('#edit-location').value.trim();
+  const trade = $('#edit-trade').value.trim();
+  const content = $('#edit-content').value.trim();
+  const memo = $('#edit-memo').value.trim();
+  
+  if (!location || !trade || !content) {
+    toast('위치, 세부공정, 내용은 필수입니다', 'error');
+    return;
+  }
+  
+  setLoading(true);
+  try {
+    const defectData = {
+      location,
+      trade,
+      content,
+      memo
+    };
+    
+    await api.updateDefect(AppState.editingDefectId, defectData);
+    toast('하자가 수정되었습니다', 'success');
+    
+    // 케이스 상세 화면으로 돌아가기
+    await viewCaseDefects(AppState.currentCaseId);
+    
+  } catch (error) {
+    showError(error);
+  } finally {
+    setLoading(false);
+  }
+}
+
+// 하자 수정 취소
+function cancelEdit() {
+  if (AppState.currentCaseId) {
+    viewCaseDefects(AppState.currentCaseId);
+  } else {
+    route('list');
+  }
+}
+
+// 하자 삭제 (Phase 1-4에서 구현 예정)
+async function deleteDefect(defectId) {
+  toast('하자 삭제 기능은 다음 단계에서 구현됩니다', 'info');
+}
+
 async function onSaveDefect(){
   if (isLoading) return;
   
-  const location = $('#def-location').value;
-  const trade = $('#def-trade').value;
+  const location = $('#def-location').value.trim();
+  const trade = $('#def-trade').value.trim();
   const content = $('#def-content').value.trim();
   const memo = $('#def-memo').value.trim();
   
@@ -281,7 +449,8 @@ async function onSaveDefect(){
     return;
   }
 
-  if (!AppState.cases || AppState.cases.length === 0) {
+  const caseId = AppState.currentCaseId;
+  if (!caseId) {
     toast('먼저 케이스를 생성해 주세요', 'error');
     return;
   }
@@ -289,31 +458,13 @@ async function onSaveDefect(){
   setLoading(true);
   
   try {
-    const latestCase = AppState.cases[0];
-    
-    // Upload photos if available
-    let photoNearKey = null;
-    let photoFarKey = null;
-    
-    if ($('#photo-near').dataset.src) {
-      const nearFile = $('#input-near').files[0];
-      if (nearFile) {
-        const nearUpload = await api.uploadPhoto(nearFile, 'near');
-        photoNearKey = nearUpload.key;
-      }
-    }
-    
-    if ($('#photo-far').dataset.src) {
-      const farFile = $('#input-far').files[0];
-      if (farFile) {
-        const farUpload = await api.uploadPhoto(farFile, 'far');
-        photoFarKey = farUpload.key;
-      }
-    }
+    // Use photo keys from AppState (already uploaded during photo selection)
+    const photoNearKey = AppState.photoNearKey || '';
+    const photoFarKey = AppState.photoFarKey || '';
     
     // Create defect
     const defectData = {
-      case_id: latestCase.id,
+      case_id: caseId,
       location,
       trade,
       content,
@@ -324,25 +475,43 @@ async function onSaveDefect(){
     
     const newDefect = await api.createDefect(defectData);
     
-    // Update local state
-    if (!latestCase.defects) {
-      latestCase.defects = [];
-    }
-    latestCase.defects.push(newDefect);
-    
     // Clear form
+    $('#def-location').value = '';
+    $('#def-trade').value = '';
     $('#def-content').value = '';
     $('#def-memo').value = '';
-    $('#photo-near').dataset.src = '';
-    $('#photo-near').textContent = '근거리';
-    $('#photo-far').dataset.src = '';
-    $('#photo-far').textContent = '원거리';
-    $('#input-near').value = '';
-    $('#input-far').value = '';
+    $('#defect-category').value = '';
+    
+    // Clear photos
+    const photoNear = $('#photo-near');
+    const photoFar = $('#photo-far');
+    if (photoNear) {
+      photoNear.style.backgroundImage = '';
+      photoNear.classList.remove('has-image');
+    }
+    if (photoFar) {
+      photoFar.style.backgroundImage = '';
+      photoFar.classList.remove('has-image');
+    }
+    
+    // Clear photo inputs
+    const inputNearCamera = $('#input-near-camera');
+    const inputNearGallery = $('#input-near-gallery');
+    const inputFarCamera = $('#input-far-camera');
+    const inputFarGallery = $('#input-far-gallery');
+    if (inputNearCamera) inputNearCamera.value = '';
+    if (inputNearGallery) inputNearGallery.value = '';
+    if (inputFarCamera) inputFarCamera.value = '';
+    if (inputFarGallery) inputFarGallery.value = '';
+    
+    // Clear AppState
+    AppState.photoNearKey = null;
+    AppState.photoFarKey = null;
     
     toast('하자가 저장되었습니다', 'success');
-    route('list');
-    renderCaseList();
+    
+    // Reload cases
+    await loadCases();
     
   } catch (error) {
     showError(error);
@@ -398,58 +567,34 @@ async function onPreviewReport(){
   }
 }
 
-function bindPhotoPicker(id, inputId){
-  const box = $(id);
-  const input = $(inputId);
-  box.addEventListener('click', ()=> input.click());
-  input.addEventListener('change', ()=>{
-    const file = input.files[0];
-    if(!file) return;
-    const reader = new FileReader();
-    reader.onload = (e)=>{
-      box.dataset.src = e.target.result;
-      box.innerHTML = '<img src="'+e.target.result+'" style="width:100%;height:100%;object-fit:cover;border-radius:8px;" />';
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
-async function onSendMock(){
-  if (isLoading) return;
+// SMS로 보고서 보내기
+async function sendReportAsSMS() {
+  if (!checkAuth()) return;
   
-  if (!AppState.cases || AppState.cases.length === 0) {
-    toast('먼저 케이스를 생성해 주세요', 'error');
+  const caseId = AppState.currentCaseId;
+  if (!caseId) {
+    toast('케이스를 먼저 선택해주세요', 'error');
     return;
   }
-
-  setLoading(true);
   
+  const phoneNumber = prompt('보고서를 받을 전화번호를 입력하세요 (예: 010-0000-0000)');
+  if (!phoneNumber) return;
+  
+  setLoading(true);
   try {
-    const latestCase = AppState.cases[0];
-    const result = await api.sendReport(latestCase.id);
-    
-    toast(`보고서가 발송되었습니다. PDF: ${result.filename}`, 'success');
-    
-    // Show PDF link
-    if (result.pdf_url) {
-      const link = document.createElement('a');
-      link.href = `http://localhost:3000${result.pdf_url}`;
-      link.target = '_blank';
-      link.textContent = 'PDF 보고서 보기';
-      link.style.display = 'block';
-      link.style.marginTop = '10px';
-      link.style.color = '#1a73e8';
-      link.style.textDecoration = 'underline';
-      
-      const reportContainer = $('#report-preview');
-      reportContainer.appendChild(link);
-    }
-    
+    await api.sendSMSReport(caseId, phoneNumber);
+    toast('SMS로 보고서가 발송되었습니다', 'success');
   } catch (error) {
     showError(error);
   } finally {
     setLoading(false);
   }
+}
+
+// PDF 다운로드
+function downloadReportAsPdf() {
+  toast('PDF 다운로드 기능은 향후 구현 예정입니다', 'info');
+  // TODO: PDF 생성 및 다운로드 기능 구현
 }
 
 // Utility functions
@@ -646,36 +791,32 @@ function markDefectInVideo() {
 
 // 재촬영 기능 (기획서 요구사항)
 function retakePhotos() {
-  $('#photo-near').textContent = '전체사진';
-  $('#photo-far').textContent = '근접사진';
   $('#photo-near').style.backgroundImage = '';
+  $('#photo-near').classList.remove('has-image');
   $('#photo-far').style.backgroundImage = '';
-  $('#input-near').value = '';
-  $('#input-far').value = '';
+  $('#photo-far').classList.remove('has-image');
+  AppState.photoNearKey = null;
+  AppState.photoFarKey = null;
   toast('사진을 다시 촬영해주세요', 'info');
 }
 
-// 하자 등록 화면 진입 시 고객 정보 표시 (기획서 요구사항)
-function showCustomerInfo() {
-  if (AppState.session) {
-    const { complex, dong, ho, name } = AppState.session;
-    $('#customer-details').textContent = `${dong}동 ${ho}호 ${name}`;
+// 이미지 모달 관련 함수
+function showImageModal(imageUrl) {
+  const modal = $('#image-modal');
+  const modalImg = $('#modal-image');
+  if (modal && modalImg) {
+    modalImg.src = imageUrl;
+    modal.classList.remove('hidden');
   }
 }
 
-// 하자 등록 화면 진입 시 호출되는 함수 수정
-const originalRoute = route;
-route = function(screen) {
-  originalRoute(screen);
-  
-  if (screen === 'newdefect') {
-    showCustomerInfo();
-    // 하자 카테고리가 로드되지 않았다면 다시 로드
-    if ($('#defect-category').children.length <= 1) {
-      loadDefectCategories();
-    }
+function closeImageModal() {
+  const modal = $('#image-modal');
+  if (modal) {
+    modal.classList.add('hidden');
   }
-};
+}
+
 
 // AI 기능 통합 함수들
 
@@ -779,14 +920,35 @@ async function handlePhotoUpload(type, inputElement) {
       
       thumbElement.style.backgroundImage = `url(${e.target.result})`;
       thumbElement.classList.add('has-image');
-      toast(`${type === 'near' ? '전체' : '근접'}사진 업로드 완료!`, 'success');
       
-      // AI 감지 시작
+      // 서버에 사진 업로드
       try {
-        await analyzePhotoWithAI(file, type);
-      } catch (aiError) {
-        console.error('❌ AI 분석 오류:', aiError);
-        // AI 오류는 무시하고 계속 진행
+        console.log('📤 서버에 사진 업로드 시작:', type);
+        const uploadResult = await api.uploadImage(file);
+        console.log('✅ 서버 업로드 완료:', uploadResult);
+        
+        // AppState에 photo key 저장
+        if (type === 'near') {
+          AppState.photoNearKey = uploadResult.filename;
+        } else {
+          AppState.photoFarKey = uploadResult.filename;
+        }
+        
+        toast(`${type === 'near' ? '전체' : '근접'}사진 업로드 완료!`, 'success');
+        
+        // AI 감지 시작
+        try {
+          await analyzePhotoWithAI(file, type);
+        } catch (aiError) {
+          console.error('❌ AI 분석 오류:', aiError);
+          // AI 오류는 무시하고 계속 진행
+        }
+      } catch (uploadError) {
+        console.error('❌ 사진 업로드 실패:', uploadError);
+        toast('사진 업로드 실패. 다시 시도해주세요.', 'error');
+        // 업로드 실패 시 썸네일도 제거
+        thumbElement.style.backgroundImage = '';
+        thumbElement.classList.remove('has-image');
       }
     };
     
@@ -1085,6 +1247,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     console.log('✅ 하자 카테고리 로드 완료');
   } catch (error) {
     console.error('❌ 하자 카테고리 로드 실패:', error);
+    toast('하자 카테고리 로드 중... 서버가 시작 중입니다 (최대 1-2분 소요)', 'info');
     // 오류가 발생해도 앱은 계속 실행되도록 함
   }
   

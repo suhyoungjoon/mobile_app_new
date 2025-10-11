@@ -37,4 +37,64 @@ router.post('/', authenticateToken, async (req, res) => {
   }
 });
 
+// Update defect item
+router.put('/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { location, trade, content, memo, photo_near_key, photo_far_key } = req.body;
+    const { householdId } = req.user;
+
+    // Validate required fields
+    if (!location || !trade || !content) {
+      return res.status(400).json({ error: 'location, trade, and content are required' });
+    }
+
+    // Update defect in database
+    const updateQuery = `
+      UPDATE defect 
+      SET location = $1, trade = $2, content = $3, memo = $4, updated_at = NOW()
+      WHERE id = $5
+      RETURNING id, case_id, location, trade, content, memo, created_at, updated_at
+    `;
+
+    const result = await pool.query(updateQuery, [location, trade, content, memo || '', id]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Defect not found' });
+    }
+    
+    res.json(result.rows[0]);
+
+  } catch (error) {
+    console.error('Update defect error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get defect by ID
+router.get('/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const query = `
+      SELECT d.id, d.case_id, d.location, d.trade, d.content, d.memo, 
+             d.created_at, d.updated_at
+      FROM defect d
+      WHERE d.id = $1
+    `;
+    
+    const result = await pool.query(query, [id]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Defect not found' });
+    }
+    
+    res.json(result.rows[0]);
+    
+  } catch (error) {
+    console.error('Get defect error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 module.exports = router;
