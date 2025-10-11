@@ -40,22 +40,25 @@ router.post('/analyze-defect', authenticateToken, async (req, res) => {
     
     console.log('🔍 Azure OpenAI로 하자 이미지 분석 시작...');
     
-    // GPT-4 Vision에게 이미지 분석 요청
-    const prompt = `당신은 건설 하자 전문가입니다. 제공된 이미지를 분석하여 다음 중 가장 적합한 하자 유형을 찾아주세요:
+    // GPT-4 Vision에게 이미지 분석 요청 (자유 분석 + 카테고리 매핑)
+    const prompt = `당신은 건설 현장의 하자 전문가입니다. 제공된 ${photoType === 'near' ? '전체' : '근접'} 사진을 분석하여 건축 하자를 감지하고 분석해주세요.
 
-하자 유형 목록:
-${DEFECT_TYPES.map((type, index) => `${index + 1}. ${type}`).join('\n')}
+**분석 절차:**
+1. 먼저 이미지에서 발견되는 모든 하자를 자유롭게 감지하고 설명하세요
+2. 감지된 하자를 다음 카테고리 중 가장 유사한 것으로 분류하세요:
+   ${DEFECT_TYPES.map((type, index) => `${index + 1}. ${type}`).join(', ')}
+3. 만약 위 카테고리에 정확히 맞지 않는 하자라면, 가장 가까운 카테고리를 선택하세요
 
-다음 JSON 형식으로 응답해주세요:
+**응답 형식 (JSON):**
 {
   "detectedDefects": [
     {
-      "type": "하자유형명",
-      "confidence": 0.95,
+      "type": "카테고리명 (위 10가지 중 선택)",
+      "actualDefect": "실제 감지된 하자명 (자유롭게)",
+      "confidence": 0.85,
       "severity": "심각|보통|경미",
-      "description": "구체적인 하자 설명 (한글로)",
-      "location": "예상 위치",
-      "repairSuggestion": "보수 방법 제안"
+      "description": "하자에 대한 구체적인 설명 (위치, 크기, 상태 등)",
+      "repairSuggestion": "보수 방법 및 예상 비용/난이도"
     }
   ],
   "overallAssessment": "전체적인 평가 (한글로)"
