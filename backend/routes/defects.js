@@ -16,7 +16,7 @@ router.get('/', authenticateToken, async (req, res) => {
     
     const query = `
       SELECT d.id, d.case_id, d.location, d.trade, d.content, d.memo, 
-             d.created_at, d.updated_at
+             d.created_at
       FROM defect d
       WHERE d.case_id = $1
       ORDER BY d.created_at DESC
@@ -78,9 +78,9 @@ router.put('/:id', authenticateToken, async (req, res) => {
     // Update defect in database
     const updateQuery = `
       UPDATE defect 
-      SET location = $1, trade = $2, content = $3, memo = $4, updated_at = NOW()
+      SET location = $1, trade = $2, content = $3, memo = $4
       WHERE id = $5
-      RETURNING id, case_id, location, trade, content, memo, created_at, updated_at
+      RETURNING id, case_id, location, trade, content, memo, created_at
     `;
 
     const result = await pool.query(updateQuery, [location, trade, content, memo || '', id]);
@@ -104,7 +104,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
     
     const query = `
       SELECT d.id, d.case_id, d.location, d.trade, d.content, d.memo, 
-             d.created_at, d.updated_at
+             d.created_at
       FROM defect d
       WHERE d.id = $1
     `;
