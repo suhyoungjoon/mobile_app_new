@@ -1313,11 +1313,11 @@ document.addEventListener('click', (e) => {
 window.addEventListener('DOMContentLoaded', async () => {
   console.log('🚀 앱 초기화 시작');
   
-  // AI 모드 설정
-  // false = AI 분석 비활성화
-  // true = Azure OpenAI (실제 GPT-4 Vision 사용, API 키 필요)
-  window.USE_AZURE_AI = false; // AI 분석 비활성화!
-  window.ENABLE_AI_ANALYSIS = false; // AI 기능 완전 비활성화
+  // AI 모드 설정 (localStorage에서 로드)
+  const savedAISetting = localStorage.getItem('ENABLE_AI_ANALYSIS');
+  const aiEnabled = savedAISetting === 'true';
+  window.USE_AZURE_AI = aiEnabled;
+  window.ENABLE_AI_ANALYSIS = aiEnabled;
   console.log(`🤖 AI 분석: ${window.ENABLE_AI_ANALYSIS ? '활성화' : '비활성화 ✓'}`);
   
   // 하자 카테고리 미리 로드

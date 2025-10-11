@@ -23,8 +23,11 @@
         <div class="user-menu-item" onclick="showMyStats()">
           <span>📊</span> 내 하자 현황
         </div>
+        <div class="user-menu-item" onclick="showSettings()">
+          <span>⚙️</span> 설정
+        </div>
         <div class="user-menu-item admin-only hidden" onclick="goToAdmin()">
-          <span>⚙️</span> 관리자 페이지
+          <span>👨‍💼</span> 관리자 페이지
         </div>
         <div class="user-menu-divider"></div>
         <div class="user-menu-item logout" onclick="onLogout()">
@@ -69,6 +72,67 @@
     <div id="list" class="screen hidden">
       <div id="case-list"></div>
       <button class="button" onclick="onPreviewReport()">보고서 미리보기</button>
+    </div>
+
+    <!-- SETTINGS -->
+    <div id="settings" class="screen hidden">
+      <div class="screen-header">
+        <button class="back-btn" onclick="goBack()">← 뒤로</button>
+        <h2>설정</h2>
+        <div></div>
+      </div>
+      
+      <div class="card">
+        <div class="settings-section">
+          <div class="settings-header">
+            <h3>🤖 AI 기능</h3>
+          </div>
+          
+          <div class="settings-item">
+            <div class="settings-item-content">
+              <div class="settings-item-title">AI 하자 분석</div>
+              <div class="settings-item-description">
+                사진 선택 시 Azure OpenAI로 자동 하자 감지
+              </div>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="ai-analysis-toggle" onchange="toggleAIAnalysis(this.checked)">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          
+          <div id="ai-status" class="settings-status">
+            <span class="status-indicator offline"></span>
+            <span class="status-text">비활성화됨</span>
+          </div>
+          
+          <div class="settings-note">
+            <strong>💡 참고:</strong><br>
+            • AI 분석 활성화 시 추가 비용이 발생할 수 있습니다<br>
+            • Free 티어: 월 5,000건 무료<br>
+            • 비활성화 시에도 사진 업로드 및 저장은 정상 작동합니다
+          </div>
+        </div>
+      </div>
+      
+      <div class="card" style="margin-top: 16px;">
+        <div class="settings-section">
+          <div class="settings-header">
+            <h3>ℹ️ 앱 정보</h3>
+          </div>
+          
+          <div class="settings-info">
+            <div class="info-row">
+              <span class="info-label">버전</span>
+              <span class="info-value">2.0.0</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">빌드</span>
+              <span class="info-value" id="build-date">2025-10-12</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- NEW DEFECT -->
