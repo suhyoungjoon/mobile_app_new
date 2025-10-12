@@ -1025,31 +1025,54 @@ async function analyzePhotoWithAI(file, photoType) {
     `;
     aiResultsDiv.classList.remove('hidden');
     
-    // Azure OpenAI 사용 여부 확인
+    // 하이브리드 디텍터 사용
+    if (window.hybridDetector) {
+      console.log('🎯 하이브리드 AI 분석 시작...');
+      
+      const result = await window.hybridDetector.analyze(file);
+      console.log('✅ 하이브리드 분석 완료:', result);
+      
+      // 결과를 배열 형식으로 변환 (기존 UI 호환)
+      const detectedDefects = [{
+        defectType: result.defectType,
+        confidence: result.confidence,
+        location: result.location,
+        severity: result.severity,
+        description: result.description,
+        source: result.source,
+        cost: result.cost || 0
+      }];
+      
+      displayAIDetectionResults(detectedDefects, photoType);
+      
+      // 학습 데이터 저장
+      try {
+        await saveLearningData(file.name, result, photoType);
+      } catch (error) {
+        console.error('학습 데이터 저장 실패:', error);
+      }
+      
+      return;
+    }
+    
+    // Legacy: Azure OpenAI 사용
     if (window.USE_AZURE_AI) {
       console.log('🌐 Azure OpenAI Vision으로 분석 시작...');
       
-      // 이미지를 Base64로 변환
       const reader = new FileReader();
       reader.onload = async (e) => {
         try {
           const imageBase64 = e.target.result;
-          
-          // Azure OpenAI API 호출
           const result = await api.analyzeDefectWithAzureAI(imageBase64, photoType);
           console.log('✅ Azure AI 분석 완료:', result);
           
           if (result && result.analysis && result.analysis.detectedDefects) {
-            const detectedDefects = result.analysis.detectedDefects;
-            console.log('✅ 감지된 하자:', detectedDefects.length, '개');
-            displayAIDetectionResults(detectedDefects, photoType);
+            displayAIDetectionResults(result.analysis.detectedDefects, photoType);
           } else {
-            console.warn('⚠️ 분석 결과가 없습니다');
             displayAIDetectionResults([], photoType);
           }
         } catch (aiError) {
           console.error('❌ Azure AI 분석 오류:', aiError);
-          toast('AI 분석 중 오류가 발생했습니다. 모의 모드로 전환합니다.', 'error');
           const mockDefects = generateQuickMockDefects();
           displayAIDetectionResults(mockDefects, photoType);
         }
@@ -1058,39 +1081,14 @@ async function analyzePhotoWithAI(file, photoType) {
       return;
     }
     
-    // Teachable Machine 또는 모의 모드
-    if (!window.defectDetector && !window.hybridDetector) {
-      console.warn('⚠️ AI 감지기가 로드되지 않았습니다. 모의 결과를 생성합니다.');
-      
-      // AI 감지기가 없어도 모의 결과 생성
-      const mockDefects = generateQuickMockDefects();
-      displayAIDetectionResults(mockDefects, photoType);
-      return;
-    }
-    
-    // 이미지 요소 생성
-    const imageElement = await createImageElement(file);
-    console.log('✅ 이미지 요소 생성 완료');
-    
-    // AI 감지 실행 (defectDetector 또는 hybridDetector 사용)
-    const detector = window.defectDetector || window.hybridDetector;
-    const detectedDefects = await detector.detectDefects(imageElement);
-    console.log('✅ AI 감지 완료:', detectedDefects.length, '개');
-    
-    // 결과 표시
-    displayAIDetectionResults(detectedDefects, photoType);
-    
-    // AI 예측 결과를 서버에 저장
-    try {
-      await learningSystem.savePredictionResults(file.name, detectedDefects, photoType);
-    } catch (error) {
-      console.error('AI 예측 결과 저장 실패:', error);
-    }
+    // Fallback: 모의 결과
+    console.warn('⚠️ AI 감지기가 로드되지 않았습니다. 모의 결과를 생성합니다.');
+    const mockDefects = generateQuickMockDefects();
+    displayAIDetectionResults(mockDefects, photoType);
     
   } catch (error) {
     console.error('AI 분석 실패:', error);
     
-    // 에러 상태 표시
     const aiResultsDiv = $('#ai-analysis-results');
     aiResultsDiv.innerHTML = `
       <div class="ai-analysis-header">
@@ -1321,9 +1319,21 @@ window.addEventListener('DOMContentLoaded', async () => {
   // AI 모드 설정 (localStorage에서 로드)
   const savedAISetting = localStorage.getItem('ENABLE_AI_ANALYSIS');
   const aiEnabled = savedAISetting === 'true';
-  window.USE_AZURE_AI = aiEnabled;
   window.ENABLE_AI_ANALYSIS = aiEnabled;
   console.log(`🤖 AI 분석: ${window.ENABLE_AI_ANALYSIS ? '활성화' : '비활성화 ✓'}`);
+  
+  // 하이브리드 AI 디텍터 초기화
+  if (window.ENABLE_AI_ANALYSIS) {
+    try {
+      window.hybridDetector = new HybridDetector();
+      await window.hybridDetector.initialize();
+      console.log('✅ 하이브리드 AI 시스템 준비 완료');
+    } catch (error) {
+      console.error('❌ 하이브리드 AI 초기화 실패:', error);
+      console.warn('⚠️ Legacy AI 모드로 폴백');
+      window.USE_AZURE_AI = aiEnabled; // Legacy 모드 유지
+    }
+  }
   
   // 하자 카테고리 미리 로드
   try {
@@ -1353,3 +1363,329 @@ window.addEventListener('DOMContentLoaded', async () => {
   
   console.log('✅ 앱 초기화 완료');
 });
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Learning Data Functions
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/**
+ * 학습 데이터 저장 (추후 모델 개선용)
+ */
+async function saveLearningData(filename, analysisResult, photoType) {
+  try {
+    // 간단한 해시 생성 (이미지 중복 체크용)
+    const imageHash = await generateSimpleHash(filename);
+    
+    const learningData = {
+      image_hash: imageHash,
+      filename: filename,
+      photo_type: photoType,
+      local_prediction: analysisResult.source.includes('local') ? analysisResult.defectType : null,
+      local_confidence: analysisResult.source.includes('local') ? analysisResult.confidence : null,
+      cloud_prediction: analysisResult.source.includes('cloud') ? analysisResult.defectType : null,
+      cloud_confidence: analysisResult.source.includes('cloud') ? analysisResult.confidence : null,
+      final_label: null, // 사용자가 저장할 때 업데이트
+      processing_time: analysisResult.processingTime,
+      cost: analysisResult.cost || 0,
+      created_at: new Date().toISOString()
+    };
+    
+    // localStorage에 임시 저장 (서버 API 추가 전까지)
+    const savedData = JSON.parse(localStorage.getItem('learning_data') || '[]');
+    savedData.push(learningData);
+    
+    // 최대 100개까지만 저장
+    if (savedData.length > 100) {
+      savedData.shift();
+    }
+    
+    localStorage.setItem('learning_data', JSON.stringify(savedData));
+    
+    console.log('💾 학습 데이터 저장 완료 (로컬)');
+    
+  } catch (error) {
+    console.error('학습 데이터 저장 실패:', error);
+  }
+}
+
+/**
+ * 간단한 해시 생성
+ */
+async function generateSimpleHash(str) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(str + Date.now());
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 16);
+}
+
+
+/**
+ * 로컬 모델 전환
+ */
+async function switchLocalModel(mode) {
+  console.log('🔄 로컬 모델 전환:', mode);
+  
+  if (!window.hybridDetector) {
+    toast('AI 분석을 먼저 활성화해주세요', 'warning');
+    return;
+  }
+  
+  try {
+    await window.hybridDetector.switchLocalMode(mode);
+    
+    const modeNames = {
+      mock: 'Mock 모드',
+      clip: 'CLIP 모델',
+      mobilenet: 'MobileNet'
+    };
+    
+    toast(`로컬 모델 변경: ${modeNames[mode]}`, 'success');
+    localStorage.setItem('local_model_mode', mode);
+    
+  } catch (error) {
+    console.error('모델 전환 실패:', error);
+    toast('모델 전환에 실패했습니다', 'error');
+  }
+}
+
+/**
+ * 클라우드 프로바이더 전환
+ */
+function switchCloudProvider(provider) {
+  console.log('🔄 클라우드 프로바이더 전환:', provider);
+  
+  if (!window.hybridDetector) {
+    toast('AI 분석을 먼저 활성화해주세요', 'warning');
+    return;
+  }
+  
+  try {
+    window.hybridDetector.switchCloudProvider(provider);
+    
+    const providerNames = {
+      gpt4o: 'GPT-4o',
+      gemini: 'Gemini Pro Vision',
+      claude: 'Claude 3.5 Sonnet'
+    };
+    
+    toast(`클라우드 AI 변경: ${providerNames[provider]}`, 'success');
+    localStorage.setItem('cloud_provider', provider);
+    
+  } catch (error) {
+    console.error('프로바이더 전환 실패:', error);
+    toast('프로바이더 전환에 실패했습니다', 'error');
+  }
+}
+
+/**
+ * 신뢰도 임계값 표시 업데이트
+ */
+function updateThresholdDisplay(value) {
+  const displayValue = Math.round(value * 100);
+  $('#threshold-value').textContent = `${displayValue}%`;
+}
+
+/**
+ * 신뢰도 임계값 설정
+ */
+function setConfidenceThreshold(value) {
+  console.log('🔧 신뢰도 임계값 설정:', value);
+  
+  if (!window.hybridDetector) {
+    return;
+  }
+  
+  try {
+    window.hybridDetector.setConfidenceThreshold(parseFloat(value));
+    toast(`임계값 설정: ${Math.round(value * 100)}%`, 'success');
+  } catch (error) {
+    console.error('임계값 설정 실패:', error);
+  }
+}
+
+
+/**
+ * AI 통계 새로고침
+ */
+function refreshAIStats() {
+  if (!window.hybridDetector) {
+    console.log('ℹ️ AI가 비활성화되어 있습니다');
+    return;
+  }
+  
+  const stats = window.hybridDetector.getStats();
+  
+  $('#stat-total').textContent = `${stats.totalAnalyses}건`;
+  $('#stat-local').textContent = `${stats.localOnly}건 (${stats.localPercentage}%)`;
+  $('#stat-cloud').textContent = `${stats.cloudCalls}건 (${stats.cloudPercentage}%)`;
+  $('#stat-cost').textContent = `$${stats.totalCost.toFixed(4)}`;
+  $('#stat-saved').textContent = `$${stats.savedCost.toFixed(4)}`;
+  
+  console.log('📊 AI 통계 업데이트:', stats);
+}
+
+/**
+ * AI 통계 초기화
+ */
+function resetAIStats() {
+  if (!confirm('AI 사용 통계를 초기화하시겠습니까?')) {
+    return;
+  }
+  
+  if (window.hybridDetector) {
+    window.hybridDetector.resetStats();
+    refreshAIStats();
+    toast('통계가 초기화되었습니다', 'success');
+  }
+}
+
+
+/**
+ * 모델 설정 로드
+ */
+function loadModelSettings() {
+  // 로컬 모델 설정 로드
+  const savedLocalMode = localStorage.getItem('local_model_mode') || 'mock';
+  const localSelect = $('#local-model-select');
+  if (localSelect) {
+    localSelect.value = savedLocalMode;
+  }
+  
+  // 클라우드 프로바이더 설정 로드
+  const savedProvider = localStorage.getItem('cloud_provider') || 'gpt4o';
+  const providerSelect = $('#cloud-provider-select');
+  if (providerSelect) {
+    providerSelect.value = savedProvider;
+  }
+  
+  // 신뢰도 임계값 로드
+  const savedThreshold = localStorage.getItem('ai_confidence_threshold') || '0.80';
+  const thresholdInput = $('#confidence-threshold');
+  if (thresholdInput) {
+    thresholdInput.value = savedThreshold;
+    updateThresholdDisplay(savedThreshold);
+  }
+}
+
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Settings Screen Functions
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+function showSettings() {
+  console.log('⚙️ 설정 화면 표시');
+  route('settings');
+  
+  // AI 설정 상태 로드
+  loadAISettings();
+  
+  // 모델 설정 로드
+  loadModelSettings();
+  
+  // AI 통계 새로고침
+  refreshAIStats();
+  
+  // 사용자 메뉴 닫기
+  const userMenu = $('#user-menu');
+  if (userMenu) {
+    userMenu.classList.add('hidden');
+  }
+}
+
+function loadAISettings() {
+  // localStorage에서 AI 설정 로드
+  const savedSetting = localStorage.getItem('ENABLE_AI_ANALYSIS');
+  const isEnabled = savedSetting === 'true';
+  
+  // 토글 상태 설정
+  const toggle = $('#ai-analysis-toggle');
+  if (toggle) {
+    toggle.checked = isEnabled;
+  }
+  
+  // 전역 변수 업데이트
+  window.ENABLE_AI_ANALYSIS = isEnabled;
+  
+  // 상태 표시 업데이트
+  updateAIStatus(isEnabled);
+  
+  // 모델 설정 영역 표시/숨김
+  const modelSettings = $('#ai-model-settings');
+  if (modelSettings) {
+    if (isEnabled) {
+      modelSettings.style.display = 'block';
+    } else {
+      modelSettings.style.display = 'none';
+    }
+  }
+  
+  // 통계 카드 표시/숨김
+  const statsCard = $('#ai-stats-card');
+  if (statsCard) {
+    if (isEnabled) {
+      statsCard.style.display = 'block';
+    } else {
+      statsCard.style.display = 'none';
+    }
+  }
+  
+  console.log('⚙️ AI 설정 로드:', isEnabled ? '활성화' : '비활성화');
+}
+
+async function toggleAIAnalysis(enabled) {
+  console.log('🔄 AI 분석 토글:', enabled ? 'ON' : 'OFF');
+  
+  // 전역 변수 업데이트
+  window.ENABLE_AI_ANALYSIS = enabled;
+  
+  // localStorage에 저장
+  localStorage.setItem('ENABLE_AI_ANALYSIS', enabled.toString());
+  
+  // 하이브리드 디텍터 초기화/해제
+  if (enabled) {
+    if (!window.hybridDetector) {
+      try {
+        window.hybridDetector = new HybridDetector();
+        await window.hybridDetector.initialize();
+        console.log('✅ 하이브리드 AI 시스템 활성화');
+      } catch (error) {
+        console.error('❌ 하이브리드 AI 초기화 실패:', error);
+        toast('AI 시스템 초기화 실패', 'error');
+        return;
+      }
+    }
+  }
+  
+  // 상태 표시 업데이트
+  updateAIStatus(enabled);
+  
+  // UI 표시/숨김
+  loadAISettings();
+  
+  // 토스트 메시지
+  if (enabled) {
+    toast('AI 분석이 활성화되었습니다', 'success');
+  } else {
+    toast('AI 분석이 비활성화되었습니다', 'info');
+  }
+}
+
+function updateAIStatus(enabled) {
+  const statusDiv = $('#ai-status');
+  if (!statusDiv) return;
+  
+  const indicator = statusDiv.querySelector('.status-indicator');
+  const text = statusDiv.querySelector('.status-text');
+  
+  if (enabled) {
+    indicator.classList.remove('offline');
+    indicator.classList.add('online');
+    text.textContent = '활성화됨';
+  } else {
+    indicator.classList.remove('online');
+    indicator.classList.add('offline');
+    text.textContent = '비활성화됨';
+  }
+}
+

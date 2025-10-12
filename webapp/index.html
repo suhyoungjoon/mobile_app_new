@@ -115,6 +115,87 @@
         </div>
       </div>
       
+      <div class="card" style="margin-top: 16px;" id="ai-model-settings">
+        <div class="settings-section">
+          <div class="settings-header">
+            <h3>🎯 AI 모델 설정</h3>
+          </div>
+          
+          <div class="label">로컬 AI 모델</div>
+          <select id="local-model-select" class="input" onchange="switchLocalModel(this.value)">
+            <option value="mock" selected>Mock 모드 (즉시 사용, 낮은 정확도)</option>
+            <option value="clip">CLIP 모델 (학습 불필요, 높은 정확도) - 준비중</option>
+            <option value="mobilenet">MobileNet (경량, 빠름) - 준비중</option>
+          </select>
+          <div class="settings-item-description" style="margin-top: 8px; font-size: 12px; color: var(--muted);">
+            로컬 AI는 빠르고 무료이지만 정확도가 낮을 수 있습니다
+          </div>
+          
+          <div class="label" style="margin-top: 16px;">클라우드 AI 프로바이더</div>
+          <select id="cloud-provider-select" class="input" onchange="switchCloudProvider(this.value)">
+            <option value="gpt4o" selected>GPT-4o (추천, $2.5/1M)</option>
+            <option value="gemini">Gemini Pro Vision (가장 저렴, $0.25/1K)</option>
+            <option value="claude">Claude 3.5 Sonnet ($3/1M)</option>
+          </select>
+          <div class="settings-item-description" style="margin-top: 8px; font-size: 12px; color: var(--muted);">
+            로컬 AI 신뢰도가 낮을 때만 호출됩니다
+          </div>
+          
+          <div class="label" style="margin-top: 16px;">신뢰도 임계값 (클라우드 호출 기준)</div>
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <input 
+              type="range" 
+              id="confidence-threshold" 
+              min="0.5" 
+              max="0.95" 
+              step="0.05" 
+              value="0.80"
+              oninput="updateThresholdDisplay(this.value)"
+              onchange="setConfidenceThreshold(this.value)"
+              style="flex: 1;"
+            />
+            <span id="threshold-value" style="min-width: 40px; font-weight: 600;">80%</span>
+          </div>
+          <div class="settings-item-description" style="margin-top: 8px; font-size: 12px; color: var(--muted);">
+            높을수록 클라우드 호출 증가 (정확도 ↑, 비용 ↑)
+          </div>
+        </div>
+      </div>
+      
+      <div class="card" style="margin-top: 16px;" id="ai-stats-card">
+        <div class="settings-section">
+          <div class="settings-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <h3>📊 AI 사용 통계</h3>
+            <button class="button small" onclick="refreshAIStats()" style="padding: 6px 12px; font-size: 12px;">새로고침</button>
+          </div>
+          
+          <div id="ai-stats-content" class="settings-info">
+            <div class="info-row">
+              <span class="info-label">총 분석 수</span>
+              <span class="info-value" id="stat-total">0건</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">로컬 AI 처리</span>
+              <span class="info-value" id="stat-local">0건 (0%)</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">클라우드 AI 호출</span>
+              <span class="info-value" id="stat-cloud">0건 (0%)</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">총 비용</span>
+              <span class="info-value" id="stat-cost">$0.00</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">절감 비용</span>
+              <span class="info-value" id="stat-saved" style="color: var(--success); font-weight: 700;">$0.00</span>
+            </div>
+          </div>
+          
+          <button class="button ghost" onclick="resetAIStats()" style="margin-top: 12px; font-size: 13px;">통계 초기화</button>
+        </div>
+      </div>
+      
       <div class="card" style="margin-top: 16px;">
         <div class="settings-section">
           <div class="settings-header">
@@ -294,6 +375,12 @@
 
 <script src="js/data.js"></script>
 <script src="js/api.js"></script>
+<!-- Hybrid AI System -->
+<script src="js/ai/base-detector.js"></script>
+<script src="js/ai/local-detector.js"></script>
+<script src="js/ai/cloud-detector.js"></script>
+<script src="js/ai/hybrid-detector.js"></script>
+<!-- Legacy AI (fallback) -->
 <script src="js/ai-detector.js"></script>
 <script src="js/app.js"></script>
 <script>
