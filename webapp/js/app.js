@@ -962,10 +962,15 @@ async function handlePhotoUpload(type, inputElement) {
       thumbElement.style.backgroundImage = `url(${e.target.result})`;
       thumbElement.classList.add('has-image');
       
-      // 서버에 사진 업로드
       try {
+        // 이미지 압축 (HD 수준: 1920x1080, 품질 85%)
+        console.log('🗜️ 이미지 압축 시작...');
+        const compressedFile = await compressImage(file, 1920, 1080, 0.85);
+        console.log('✅ 이미지 압축 완료');
+        
+        // 서버에 압축된 사진 업로드
         console.log('📤 서버에 사진 업로드 시작:', type);
-        const uploadResult = await api.uploadImage(file);
+        const uploadResult = await api.uploadImage(compressedFile);
         console.log('✅ 서버 업로드 완료:', uploadResult);
         
         // AppState에 photo key 저장
@@ -977,10 +982,10 @@ async function handlePhotoUpload(type, inputElement) {
         
         toast(`${type === 'near' ? '전체' : '근접'}사진 업로드 완료!`, 'success');
         
-        // AI 감지 시작 (활성화된 경우에만)
+        // AI 감지 시작 (활성화된 경우에만, 압축된 파일 사용)
         if (window.ENABLE_AI_ANALYSIS) {
           try {
-            await analyzePhotoWithAI(file, type);
+            await analyzePhotoWithAI(compressedFile, type);
           } catch (aiError) {
             console.error('❌ AI 분석 오류:', aiError);
             // AI 오류는 무시하고 계속 진행
@@ -988,10 +993,10 @@ async function handlePhotoUpload(type, inputElement) {
         } else {
           console.log('ℹ️ AI 분석이 비활성화되어 있습니다. 사진만 업로드됩니다.');
         }
-      } catch (uploadError) {
-        console.error('❌ 사진 업로드 실패:', uploadError);
-        toast('사진 업로드 실패. 다시 시도해주세요.', 'error');
-        // 업로드 실패 시 썸네일도 제거
+      } catch (error) {
+        console.error('❌ 사진 처리 실패:', error);
+        toast(error.message || '사진 업로드 실패. 다시 시도해주세요.', 'error');
+        // 실패 시 썸네일도 제거
         thumbElement.style.backgroundImage = '';
         thumbElement.classList.remove('has-image');
       }
