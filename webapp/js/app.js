@@ -206,7 +206,7 @@ async function onLogin(){
     return;
   }
 
-      setLoading(true);
+  setLoading(true);
       toast('로그인 중... 처음 접속 시 최대 1-2분 소요될 수 있습니다 (무료 서버 시작 중)', 'info');
   
   try {
@@ -224,6 +224,17 @@ async function onLogin(){
     
     // Load cases after login
     await loadCases();
+    
+    // 케이스가 없으면 자동 생성
+    if (!AppState.cases || AppState.cases.length === 0) {
+      console.log('📋 케이스가 없습니다. 자동 생성...');
+      const newCase = await api.createCase({ type: '하자접수' });
+      AppState.currentCaseId = newCase.id;
+      await loadCases();
+    } else {
+      AppState.currentCaseId = AppState.cases[0].id;
+    }
+    
     route('list');
     
   } catch (error) {
@@ -319,10 +330,10 @@ async function ensureCaseExists() {
   if (AppState.currentCaseId) {
     return;
   }
-  
+
   try {
     // 기존 케이스 목록 확인
-    if (!AppState.cases || AppState.cases.length === 0) {
+  if (!AppState.cases || AppState.cases.length === 0) {
       await loadCases();
     }
     
@@ -331,8 +342,8 @@ async function ensureCaseExists() {
       AppState.currentCaseId = AppState.cases[0].id;
       console.log('✅ 기존 케이스 사용:', AppState.currentCaseId);
       toast('기존 케이스를 사용합니다', 'info');
-      return;
-    }
+    return;
+  }
     
     // 케이스가 없으면 새로 생성
     console.log('📝 케이스가 없어서 자동 생성합니다');
@@ -351,7 +362,7 @@ async function ensureCaseExists() {
 // 케이스별 하자 목록 보기
 async function viewCaseDefects(caseId) {
   if (!checkAuth()) return;
-  
+
   setLoading(true);
   try {
     AppState.currentCaseId = caseId;
@@ -507,15 +518,21 @@ async function onSaveDefect(){
     return;
   }
 
-  const caseId = AppState.currentCaseId;
-  if (!caseId) {
-    toast('먼저 케이스를 생성해 주세요', 'error');
-    return;
-  }
-
+  let caseId = AppState.currentCaseId;
+  
   setLoading(true);
   
   try {
+    // 케이스가 없으면 자동 생성
+    if (!caseId) {
+      console.log('📋 케이스가 없습니다. 자동으로 생성합니다...');
+      const newCase = await api.createCase({ type: '하자접수' });
+      caseId = newCase.id;
+      AppState.currentCaseId = caseId;
+      console.log('✅ 케이스 자동 생성:', caseId);
+      toast('케이스가 자동으로 생성되었습니다', 'info');
+    }
+    
     // Use photo keys from AppState (already uploaded during photo selection)
     const photoNearKey = AppState.photoNearKey || '';
     const photoFarKey = AppState.photoFarKey || '';
@@ -634,7 +651,7 @@ async function sendReportAsSMS() {
     toast('케이스를 먼저 선택해주세요', 'error');
     return;
   }
-  
+
   const phoneNumber = prompt('보고서를 받을 전화번호를 입력하세요 (예: 010-0000-0000)');
   if (!phoneNumber) return;
   
@@ -672,7 +689,7 @@ function checkAuth() {
   if (!AppState.token) {
     toast('로그인이 필요합니다', 'error');
     route('login');
-    return false;
+  return false;
   }
   return true;
 }
@@ -693,9 +710,40 @@ function saveSession() {
   }
 }
 
-document.addEventListener('DOMContentLoaded', ()=>{
-  // Check if user is already authenticated
-  if (!checkAuth()) {
+document.addEventListener('DOMContentLoaded', async ()=>{
+  // 세션 복원 시도
+  const savedSession = localStorage.getItem('insighti_session');
+  if (savedSession) {
+    try {
+      const session = JSON.parse(savedSession);
+      if (session && session.token) {
+        console.log('🔄 세션 복원 중...');
+        AppState.session = session;
+        api.setToken(session.token);
+        $('#badge-user').textContent = `${session.dong}-${session.ho} ${session.name}`;
+        
+        // 케이스 로드
+        await loadCases();
+        
+        // 케이스가 없으면 자동 생성
+        if (!AppState.cases || AppState.cases.length === 0) {
+          console.log('📋 케이스가 없습니다. 자동 생성...');
+          const newCase = await api.createCase({ type: '하자접수' });
+          AppState.currentCaseId = newCase.id;
+          await loadCases();
+        } else {
+          AppState.currentCaseId = AppState.cases[0].id;
+        }
+        
+        console.log('✅ 세션 복원 완료');
+        route('list');
+      }
+    } catch (error) {
+      console.error('❌ 세션 복원 실패:', error);
+      localStorage.removeItem('insighti_session');
+      route('login');
+    }
+  } else {
     route('login');
   }
   
