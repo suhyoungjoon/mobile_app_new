@@ -1,0 +1,618 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>관리자 페이지 - InsightI</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f7fa;
+    }
+    
+    /* 레이아웃 */
+    .admin-container {
+      display: flex;
+      min-height: 100vh;
+    }
+    
+    /* 사이드바 */
+    .sidebar {
+      width: 250px;
+      background: #2c3e50;
+      color: white;
+      padding: 20px 0;
+      position: fixed;
+      height: 100vh;
+      overflow-y: auto;
+    }
+    .sidebar-header {
+      padding: 0 20px 20px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .sidebar-header h2 {
+      font-size: 18px;
+      margin-bottom: 5px;
+    }
+    .sidebar-header .admin-info {
+      font-size: 13px;
+      color: #95a5a6;
+    }
+    .sidebar-menu {
+      padding: 20px 0;
+    }
+    .menu-item {
+      padding: 12px 20px;
+      cursor: pointer;
+      transition: background 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .menu-item:hover {
+      background: rgba(255,255,255,0.1);
+    }
+    .menu-item.active {
+      background: #3498db;
+    }
+    .menu-item span {
+      font-size: 16px;
+    }
+    
+    /* 메인 컨텐츠 */
+    .main-content {
+      margin-left: 250px;
+      flex: 1;
+      padding: 20px;
+    }
+    
+    /* 헤더 */
+    .content-header {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .content-header h1 {
+      font-size: 24px;
+    }
+    
+    /* 카드 */
+    .card {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .card-header {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #ecf0f1;
+    }
+    
+    /* 통계 카드 */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+    .stat-card {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    .stat-card.green { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
+    .stat-card.orange { background: linear-gradient(135deg, #f857a6 0%, #ff5858 100%); }
+    .stat-card.blue { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+    .stat-label {
+      font-size: 13px;
+      opacity: 0.9;
+      margin-bottom: 5px;
+    }
+    .stat-value {
+      font-size: 32px;
+      font-weight: 700;
+    }
+    
+    /* 테이블 */
+    .table-container {
+      overflow-x: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th {
+      background: #f8f9fa;
+      padding: 12px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 13px;
+      color: #495057;
+      border-bottom: 2px solid #dee2e6;
+    }
+    td {
+      padding: 12px;
+      border-bottom: 1px solid #dee2e6;
+      font-size: 14px;
+    }
+    tr:hover {
+      background: #f8f9fa;
+    }
+    
+    /* 폼 */
+    .form-group {
+      margin-bottom: 15px;
+    }
+    .form-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #495057;
+      margin-bottom: 5px;
+    }
+    .form-input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #ced4da;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    .form-input:focus {
+      outline: none;
+      border-color: #3498db;
+    }
+    textarea.form-input {
+      resize: vertical;
+      min-height: 80px;
+    }
+    
+    /* 버튼 */
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: #3498db;
+      color: white;
+    }
+    .btn-primary:hover {
+      background: #2980b9;
+    }
+    .btn-success {
+      background: #27ae60;
+      color: white;
+    }
+    .btn-success:hover {
+      background: #229954;
+    }
+    .btn-secondary {
+      background: #95a5a6;
+      color: white;
+    }
+    .btn-small {
+      padding: 6px 12px;
+      font-size: 12px;
+    }
+    
+    /* 검색바 */
+    .search-bar {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .search-bar input {
+      flex: 1;
+    }
+    
+    /* Badge */
+    .badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .badge-success {
+      background: #d4edda;
+      color: #155724;
+    }
+    .badge-warning {
+      background: #fff3cd;
+      color: #856404;
+    }
+    
+    /* Photo Grid */
+    .photo-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .photo-item {
+      position: relative;
+      aspect-ratio: 1;
+      border: 2px dashed #ced4da;
+      border-radius: 6px;
+      cursor: pointer;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f8f9fa;
+    }
+    .photo-item img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .photo-item .add-icon {
+      font-size: 32px;
+      color: #ced4da;
+    }
+    
+    /* 모달 */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.5);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal.show {
+      display: flex;
+    }
+    .modal-content {
+      background: white;
+      border-radius: 8px;
+      width: 90%;
+      max-width: 600px;
+      max-height: 90vh;
+      overflow-y: auto;
+      padding: 30px;
+    }
+    .modal-header {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 20px;
+    }
+    .modal-footer {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 20px;
+    }
+    
+    /* 로그인 화면 */
+    .login-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    .login-box {
+      background: white;
+      padding: 40px;
+      border-radius: 12px;
+      width: 400px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+    }
+    .login-header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    .login-header h1 {
+      font-size: 24px;
+      margin-bottom: 5px;
+    }
+    .login-header p {
+      color: #7f8c8d;
+      font-size: 14px;
+    }
+    
+    /* Utility */
+    .hidden { display: none !important; }
+    .text-muted { color: #7f8c8d; }
+    .text-center { text-align: center; }
+    .mb-20 { margin-bottom: 20px; }
+    .flex { display: flex; }
+    .gap-10 { gap: 10px; }
+    
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #2c3e50;
+      color: white;
+      padding: 15px 20px;
+      border-radius: 6px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      z-index: 2000;
+      display: none;
+    }
+    .toast.show {
+      display: block;
+      animation: slideIn 0.3s;
+    }
+    @keyframes slideIn {
+      from { transform: translateX(400px); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- 로그인 화면 -->
+<div id="login-screen" class="login-container">
+  <div class="login-box">
+    <div class="login-header">
+      <h1>👨‍💼 관리자 로그인</h1>
+      <p>InsightI Admin Dashboard</p>
+    </div>
+    
+    <div class="form-group">
+      <label class="form-label">이메일</label>
+      <input id="admin-email" type="email" class="form-input" placeholder="admin@example.com" />
+    </div>
+    
+    <div class="form-group">
+      <label class="form-label">비밀번호</label>
+      <input id="admin-password" type="password" class="form-input" placeholder="비밀번호" />
+    </div>
+    
+    <button class="btn btn-primary" style="width: 100%; margin-top: 10px;" onclick="adminLogin()">
+      로그인
+    </button>
+    
+    <p class="text-muted text-center" style="margin-top: 20px; font-size: 12px;">
+      Super Admin 계정으로 로그인하세요
+    </p>
+  </div>
+</div>
+
+<!-- 관리자 대시보드 -->
+<div id="admin-dashboard" class="admin-container hidden">
+  <!-- 사이드바 -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h2>InsightI Admin</h2>
+      <div class="admin-info" id="admin-name">Admin</div>
+    </div>
+    
+    <div class="sidebar-menu">
+      <div class="menu-item active" onclick="showScreen('dashboard')">
+        <span>📊</span> 대시보드
+      </div>
+      <div class="menu-item" onclick="showScreen('users')">
+        <span>👥</span> 사용자 관리
+      </div>
+      <div class="menu-item" onclick="showScreen('defects')">
+        <span>🏗️</span> 하자 관리
+      </div>
+      <div class="menu-item" onclick="adminLogout()">
+        <span>🚪</span> 로그아웃
+      </div>
+    </div>
+  </div>
+  
+  <!-- 메인 컨텐츠 -->
+  <div class="main-content">
+    <!-- 대시보드 화면 -->
+    <div id="screen-dashboard" class="screen">
+      <div class="content-header">
+        <h1>📊 대시보드</h1>
+        <button class="btn btn-secondary btn-small" onclick="loadDashboardStats()">새로고침</button>
+      </div>
+      
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">전체 사용자</div>
+          <div class="stat-value" id="stat-users">0</div>
+        </div>
+        <div class="stat-card green">
+          <div class="stat-label">전체 하자</div>
+          <div class="stat-value" id="stat-defects">0</div>
+        </div>
+        <div class="stat-card orange">
+          <div class="stat-label">미처리 하자</div>
+          <div class="stat-value" id="stat-pending">0</div>
+        </div>
+        <div class="stat-card blue">
+          <div class="stat-label">처리 완료</div>
+          <div class="stat-value" id="stat-resolved">0</div>
+        </div>
+      </div>
+      
+      <div class="card">
+        <div class="card-header">최근 등록 하자</div>
+        <div id="recent-defects">
+          <p class="text-muted">로딩 중...</p>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 사용자 관리 화면 -->
+    <div id="screen-users" class="screen hidden">
+      <div class="content-header">
+        <h1>👥 사용자 관리</h1>
+      </div>
+      
+      <div class="card">
+        <div class="search-bar">
+          <input id="user-search" type="text" class="form-input" placeholder="검색: 단지, 동, 호, 이름, 전화번호" />
+          <button class="btn btn-primary" onclick="searchUsers()">검색</button>
+        </div>
+        
+        <div class="table-container">
+          <table id="users-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>단지</th>
+                <th>동</th>
+                <th>호</th>
+                <th>입주자</th>
+                <th>전화번호</th>
+                <th>하자 수</th>
+                <th>작업</th>
+              </tr>
+            </thead>
+            <tbody id="users-tbody">
+              <tr>
+                <td colspan="8" class="text-center text-muted">로딩 중...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 하자 관리 화면 -->
+    <div id="screen-defects" class="screen hidden">
+      <div class="content-header">
+        <h1>🏗️ 하자 관리</h1>
+      </div>
+      
+      <div class="card">
+        <div class="search-bar">
+          <input id="defect-search" type="text" class="form-input" placeholder="검색: 위치, 유형, 내용, 세대" />
+          <button class="btn btn-primary" onclick="searchDefects()">검색</button>
+        </div>
+        
+        <div class="table-container">
+          <table id="defects-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>단지</th>
+                <th>세대</th>
+                <th>위치</th>
+                <th>유형</th>
+                <th>등록일</th>
+                <th>처리상태</th>
+                <th>작업</th>
+              </tr>
+            </thead>
+            <tbody id="defects-tbody">
+              <tr>
+                <td colspan="8" class="text-center text-muted">로딩 중...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 사용자 상세/수정 모달 -->
+<div id="user-modal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">사용자 상세 정보</div>
+    
+    <div class="form-group">
+      <label class="form-label">단지</label>
+      <input id="modal-complex" class="form-input" readonly />
+    </div>
+    
+    <div class="flex gap-10">
+      <div class="form-group" style="flex: 1;">
+        <label class="form-label">동</label>
+        <input id="modal-dong" class="form-input" readonly />
+      </div>
+      <div class="form-group" style="flex: 1;">
+        <label class="form-label">호</label>
+        <input id="modal-ho" class="form-input" readonly />
+      </div>
+    </div>
+    
+    <div class="form-group">
+      <label class="form-label">입주자명</label>
+      <input id="modal-name" class="form-input" />
+    </div>
+    
+    <div class="form-group">
+      <label class="form-label">전화번호</label>
+      <input id="modal-phone" class="form-input" />
+    </div>
+    
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeUserModal()">취소</button>
+      <button class="btn btn-success" onclick="saveUser()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 처리 결과 등록 모달 -->
+<div id="resolution-modal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">처리 결과 등록</div>
+    
+    <input type="hidden" id="resolution-defect-id" />
+    
+    <div class="form-group">
+      <label class="form-label">처리 메모</label>
+      <textarea id="resolution-memo" class="form-input" placeholder="처리 내용을 입력하세요"></textarea>
+    </div>
+    
+    <div class="form-group">
+      <label class="form-label">처리 업체</label>
+      <input id="resolution-contractor" class="form-input" placeholder="예: ○○건설" />
+    </div>
+    
+    <div class="form-group">
+      <label class="form-label">담당자</label>
+      <input id="resolution-worker" class="form-input" placeholder="예: 김철수" />
+    </div>
+    
+    <div class="form-group">
+      <label class="form-label">비용 (원)</label>
+      <input id="resolution-cost" type="number" class="form-input" placeholder="150000" />
+    </div>
+    
+    <div class="form-group">
+      <label class="form-label">처리 후 사진 (After)</label>
+      <div class="photo-grid" id="resolution-photos-grid">
+        <div class="photo-item" onclick="$('#resolution-photo-input').click()">
+          <div class="add-icon">+</div>
+        </div>
+      </div>
+      <input type="file" id="resolution-photo-input" accept="image/*" multiple style="display: none;" onchange="handleResolutionPhotos(event)" />
+    </div>
+    
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeResolutionModal()">취소</button>
+      <button class="btn btn-success" onclick="saveResolution()">저장</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="js/admin.js"></script>
+</body>
+</html>
+

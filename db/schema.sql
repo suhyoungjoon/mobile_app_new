@@ -39,6 +39,8 @@ CREATE TABLE defect (
   trade TEXT,
   content TEXT,
   memo TEXT,
+  photo_near TEXT,
+  photo_far TEXT,
   created_at TIMESTAMP DEFAULT now()
 );
 
@@ -61,7 +63,34 @@ CREATE TABLE report (
   sent_at TIMESTAMP
 );
 
+-- Admin tables
+CREATE TABLE admin_user (
+  id SERIAL PRIMARY KEY,
+  email TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  name TEXT NOT NULL,
+  role TEXT DEFAULT 'admin' CHECK (role IN ('super_admin', 'admin')),
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMP DEFAULT now(),
+  last_login TIMESTAMP
+);
+
+CREATE TABLE defect_resolution (
+  id SERIAL PRIMARY KEY,
+  defect_id TEXT REFERENCES defect(id),
+  admin_user_id INTEGER REFERENCES admin_user(id),
+  memo TEXT,
+  contractor TEXT,
+  worker TEXT,
+  cost INTEGER,
+  resolution_photos TEXT[], -- Array of photo filenames
+  created_at TIMESTAMP DEFAULT now(),
+  updated_at TIMESTAMP DEFAULT now()
+);
+
 -- Useful indexes
 CREATE INDEX idx_household_complex ON household(complex_id);
 CREATE INDEX idx_case_household ON case_header(household_id);
 CREATE INDEX idx_defect_case ON defect(case_id);
+CREATE INDEX idx_resolution_defect ON defect_resolution(defect_id);
+CREATE INDEX idx_admin_email ON admin_user(email);

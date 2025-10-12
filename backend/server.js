@@ -16,6 +16,7 @@ const azureAIRoutes = require('./routes/azure-ai'); // NEW: Azure OpenAI
 const uploadRoutes = require('./routes/upload');
 const reportsRoutes = require('./routes/reports');
 const smsRoutes = require('./routes/sms');
+const adminRoutes = require('./routes/admin'); // NEW: Admin functions
 
 const app = express();
 
@@ -72,6 +73,7 @@ app.use('/api/azure-ai', azureAIRoutes); // NEW: Azure OpenAI
 app.use('/api/upload', uploadRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/sms', smsRoutes);
+app.use('/api/admin', adminRoutes); // NEW: Admin functions
 
 // Root endpoint (for Render health checks)
 app.get('/', (req, res) => {
