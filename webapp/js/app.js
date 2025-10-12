@@ -1737,3 +1737,105 @@ function updateAIStatus(enabled) {
   }
 }
 
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Image Compression Functions
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/**
+ * 이미지를 HD 수준으로 압축
+ * @param {File} file - 원본 이미지 파일
+ * @param {number} maxWidth - 최대 너비 (기본값: 1920)
+ * @param {number} maxHeight - 최대 높이 (기본값: 1080)
+ * @param {number} quality - JPEG 품질 (0-1, 기본값: 0.85)
+ * @returns {Promise<File>} 압축된 이미지 파일
+ */
+async function compressImage(file, maxWidth = 1920, maxHeight = 1080, quality = 0.85) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    
+    reader.onerror = () => reject(new Error('파일 읽기 실패'));
+    
+    reader.onload = (e) => {
+      const img = new Image();
+      
+      img.onerror = () => reject(new Error('이미지 로드 실패'));
+      
+      img.onload = () => {
+        try {
+          // 원본 크기
+          const originalWidth = img.width;
+          const originalHeight = img.height;
+          
+          console.log('📐 원본 이미지:', `${originalWidth}x${originalHeight}px`);
+          
+          // 비율 유지하면서 최대 크기 계산
+          let targetWidth = originalWidth;
+          let targetHeight = originalHeight;
+          
+          if (originalWidth > maxWidth || originalHeight > maxHeight) {
+            const ratio = Math.min(maxWidth / originalWidth, maxHeight / originalHeight);
+            targetWidth = Math.round(originalWidth * ratio);
+            targetHeight = Math.round(originalHeight * ratio);
+          }
+          
+          console.log('📐 압축 크기:', `${targetWidth}x${targetHeight}px`);
+          
+          // Canvas에 이미지 그리기
+          const canvas = document.createElement('canvas');
+          canvas.width = targetWidth;
+          canvas.height = targetHeight;
+          
+          const ctx = canvas.getContext('2d');
+          
+          // 이미지 품질 향상을 위한 설정
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          
+          // 이미지 그리기
+          ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+          
+          // Blob으로 변환
+          canvas.toBlob(
+            (blob) => {
+              if (!blob) {
+                reject(new Error('이미지 압축 실패'));
+                return;
+              }
+              
+              // File 객체 생성
+              const compressedFile = new File(
+                [blob],
+                file.name,
+                {
+                  type: 'image/jpeg',
+                  lastModified: Date.now()
+                }
+              );
+              
+              const originalSize = (file.size / 1024 / 1024).toFixed(2);
+              const compressedSize = (compressedFile.size / 1024 / 1024).toFixed(2);
+              const reduction = ((1 - compressedFile.size / file.size) * 100).toFixed(1);
+              
+              console.log('✅ 이미지 압축 완료');
+              console.log(`   원본: ${originalSize}MB`);
+              console.log(`   압축: ${compressedSize}MB`);
+              console.log(`   절감: ${reduction}%`);
+              
+              resolve(compressedFile);
+            },
+            'image/jpeg',
+            quality
+          );
+        } catch (error) {
+          reject(error);
+        }
+      };
+      
+      img.src = e.target.result;
+    };
+    
+    reader.readAsDataURL(file);
+  });
+}
+
