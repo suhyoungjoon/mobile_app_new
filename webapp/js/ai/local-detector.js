@@ -97,21 +97,26 @@ class LocalDetector extends BaseDetector {
     // 랜덤 하자 유형 선택
     const defectType = this.defectTypes[Math.floor(Math.random() * this.defectTypes.length)];
     
-    // 낮은 신뢰도 (0.3-0.6) → 클라우드로 보내기 위함
-    const confidence = 0.3 + Math.random() * 0.3;
+    // 높은 신뢰도로 설정 (0.85-0.95) → 클라우드 호출 건너뛰기
+    const confidence = 0.85 + Math.random() * 0.1;
     
     const processingTime = performance.now() - startTime;
     
     return {
       defectType,
       confidence,
-      location: '자동 감지 필요',
+      location: this.getRandomLocation(),
       severity: this.severityMapping[defectType] || '보통',
       description: this.descriptionMapping[defectType] || '',
       source: 'local-mock',
       processingTime: Math.round(processingTime),
-      note: '로컬 AI 예측 (Mock 모드 - 낮은 신뢰도)'
+      note: '로컬 AI 예측 (Mock 모드 - 테스트용 높은 신뢰도)'
     };
+  }
+  
+  getRandomLocation() {
+    const locations = ['좌측 상단', '우측 상단', '좌측 하단', '우측 하단', '중앙', '전체'];
+    return locations[Math.floor(Math.random() * locations.length)];
   }
 
   /**
