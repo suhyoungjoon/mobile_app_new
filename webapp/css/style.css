@@ -17,6 +17,31 @@ html, body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', 'Apple SD Gothic Neo', system-ui, sans-serif;
   background: var(--bg);
   color: var(--text);
+  
+  /* 모바일 자동 감지 비활성화 */
+  -webkit-touch-callout: none;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* 전화번호, 주소, 날짜 자동 링크 비활성화 */
+a[href^="tel:"],
+a[href^="sms:"],
+a[href^="mailto:"] {
+  color: inherit;
+  text-decoration: none;
+  pointer-events: none;
+}
+
+/* 숫자가 포함된 텍스트 자동 링크 방지 */
+.no-auto-link,
+.badge,
+.badge-chip,
+.card,
+.defect-id,
+.case-id {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 .container { max-width: 520px; margin: 0 auto; min-height: 100vh; background: var(--bg); }
 .header {

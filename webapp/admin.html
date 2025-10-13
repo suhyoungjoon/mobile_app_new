@@ -4,11 +4,27 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>관리자 페이지 - InsightI</title>
+  
+  <!-- 모바일 자동 감지 비활성화 -->
+  <meta name="format-detection" content="telephone=no, date=no, address=no, email=no" />
+  <meta name="x-apple-disable-message-reformatting" />
+  
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: #f5f7fa;
+      
+      /* 모바일 자동 감지 비활성화 */
+      -webkit-touch-callout: none;
+      -webkit-text-size-adjust: 100%;
+    }
+    
+    /* 자동 링크 방지 */
+    .no-auto-link,
+    td, th, .stat-number, .user-info {
+      -webkit-touch-callout: none;
+      user-select: none;
     }
     
     /* 레이아웃 */
