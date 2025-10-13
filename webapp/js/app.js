@@ -3,6 +3,67 @@
 const $ = (q)=>document.querySelector(q);
 const $$ = (q)=>document.querySelectorAll(q);
 
+// Debug logging (환경변수로 제어 - 프로덕션에서 로그 최소화)
+const DEBUG = window.location.hostname === 'localhost' || localStorage.getItem('DEBUG_MODE') === 'true';
+const debugLog = (...args) => DEBUG && console.log(...args);
+const debugError = (...args) => {
+  if (DEBUG) console.error(...args);
+  else console.error('[Error]', args[0]); // 프로덕션: 최소 정보만
+};
+const debugWarn = (...args) => DEBUG && console.warn(...args);
+
+// XSS 방지 - HTML escape
+function escapeHTML(str) {
+  if (!str) return '';
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// 중앙화된 API 에러 핸들러
+function handleAPIError(error, context = '') {
+  debugError(`API Error (${context}):`, error);
+  
+  // 네트워크 에러
+  if (error.name === 'AbortError' || error.message?.includes('timeout')) {
+    toast('⏱️ 서버 응답 시간 초과. 다시 시도해 주세요.', 'error');
+    return;
+  }
+  
+  if (!navigator.onLine) {
+    toast('🌐 인터넷 연결을 확인해 주세요.', 'error');
+    return;
+  }
+  
+  // HTTP 상태 코드별 처리
+  if (error.status === 401 || error.status === 403) {
+    toast('🔐 로그인이 만료되었습니다. 다시 로그인해 주세요.', 'warning');
+    setTimeout(() => {
+      logout();
+    }, 1500);
+    return;
+  }
+  
+  if (error.status === 404) {
+    toast('❌ 요청한 데이터를 찾을 수 없습니다.', 'error');
+    return;
+  }
+  
+  if (error.status === 500) {
+    toast('⚠️ 서버 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.', 'error');
+    return;
+  }
+  
+  if (error.status >= 500) {
+    toast('⚠️ 서버가 일시적으로 사용 불가능합니다.', 'error');
+    return;
+  }
+  
+  // 기타 에러
+  const errorMsg = error.message || '알 수 없는 오류가 발생했습니다.';
+  toast(`❌ ${errorMsg}`, 'error');
+}
+
 // AppState for global state management
 const AppState = {
   _session: null,
@@ -50,10 +111,7 @@ function toast(msg, type = 'info') {
   setTimeout(() => t.classList.remove('show'), 3000);
 }
 
-function showError(error) {
-  console.error('Error:', error);
-  toast(`오류: ${error.message}`, 'error');
-}
+// showError는 handleAPIError로 통합되어 제거됨 (위 참조)
 
 // 네비게이션 히스토리
 const navigationHistory = [];
@@ -207,7 +265,7 @@ async function onLogin(){
   }
 
   setLoading(true);
-      toast('로그인 중... 처음 접속 시 최대 1-2분 소요될 수 있습니다 (무료 서버 시작 중)', 'info');
+  toast('로그인 중... 서버 시작까지 1-2분 소요될 수 있습니다', 'info');
   
   try {
     const response = await api.login(complex, dong, ho, name, phone);
@@ -220,25 +278,16 @@ async function onLogin(){
     };
     
     $('#badge-user').textContent = `${dong}-${ho} ${name}`;
-    toast('로그인 성공', 'success');
+    toast('✅ 로그인 성공', 'success');
     
-    // Load cases after login
+    // Load cases and ensure at least one exists
     await loadCases();
-    
-    // 케이스가 없으면 자동 생성
-    if (!AppState.cases || AppState.cases.length === 0) {
-      console.log('📋 케이스가 없습니다. 자동 생성...');
-      const newCase = await api.createCase({ type: '하자접수' });
-      AppState.currentCaseId = newCase.id;
-      await loadCases();
-    } else {
-      AppState.currentCaseId = AppState.cases[0].id;
-    }
+    await ensureCase();
     
     route('list');
     
   } catch (error) {
-    showError(error);
+    handleAPIError(error, 'login');
   } finally {
     setLoading(false);
   }
@@ -383,15 +432,15 @@ async function viewCaseDefects(caseId) {
           container.innerHTML = defects.map(defect => `
             <div class="card">
               <div class="defect-header">
-                <strong>${defect.location} - ${defect.trade}</strong>
+                <strong>${escapeHTML(defect.location)} - ${escapeHTML(defect.trade)}</strong>
                 <span class="badge">${formatDate(defect.created_at)}</span>
               </div>
               <div class="defect-content">
                 <div class="label">내용:</div>
-                <p>${defect.content}</p>
+                <p>${escapeHTML(defect.content)}</p>
                 ${defect.memo ? `
                   <div class="label" style="margin-top:8px;">메모:</div>
-                  <p>${defect.memo}</p>
+                  <p>${escapeHTML(defect.memo)}</p>
                 ` : ''}
                 ${defect.photos && defect.photos.length > 0 ? `
                   <div class="label" style="margin-top:8px;">사진:</div>
@@ -518,18 +567,12 @@ async function onSaveDefect(){
     return;
   }
 
-  let caseId = AppState.currentCaseId;
-  
   setLoading(true);
   
   try {
-    // 케이스가 없으면 자동 생성
-    if (!caseId) {
-      console.log('📋 케이스가 없습니다. 자동으로 생성합니다...');
-      const newCase = await api.createCase({ type: '하자접수' });
-      caseId = newCase.id;
-      AppState.currentCaseId = caseId;
-      console.log('✅ 케이스 자동 생성:', caseId);
+    // 케이스가 없으면 자동 생성 (통합된 헬퍼 함수 사용)
+    const caseId = await ensureCase();
+    if (!AppState.currentCaseId) {
       toast('케이스가 자동으로 생성되었습니다', 'info');
     }
     
@@ -710,63 +753,67 @@ function saveSession() {
   }
 }
 
-document.addEventListener('DOMContentLoaded', async ()=>{
-  // 세션 복원 시도
-  const savedSession = localStorage.getItem('insighti_session');
-  if (savedSession) {
+// 케이스 자동 생성 헬퍼 함수 (중복 제거)
+async function ensureCase() {
+  if (!AppState.currentCaseId || !AppState.cases || AppState.cases.length === 0) {
     try {
-      const session = JSON.parse(savedSession);
-      if (session && session.token) {
-        console.log('🔄 세션 복원 중...');
-        AppState.session = session;
-        api.setToken(session.token);
-        $('#badge-user').textContent = `${session.dong}-${session.ho} ${session.name}`;
-        
-        // 케이스 로드
-        await loadCases();
-        
-        // 케이스가 없으면 자동 생성
-        if (!AppState.cases || AppState.cases.length === 0) {
-          console.log('📋 케이스가 없습니다. 자동 생성...');
-          const newCase = await api.createCase({ type: '하자접수' });
-          AppState.currentCaseId = newCase.id;
-          await loadCases();
-        } else {
-          AppState.currentCaseId = AppState.cases[0].id;
-        }
-        
-        console.log('✅ 세션 복원 완료');
-        route('list');
-      }
+      debugLog('📋 케이스 자동 생성...');
+      const newCase = await api.createCase({ type: '하자접수' });
+      AppState.currentCaseId = newCase.id;
+      await loadCases();
+      debugLog('✅ 케이스 생성 완료:', newCase.id);
+      return newCase.id;
     } catch (error) {
-      console.error('❌ 세션 복원 실패:', error);
-      localStorage.removeItem('insighti_session');
-      route('login');
+      debugError('❌ 케이스 생성 실패:', error);
+      throw error;
     }
-  } else {
-    route('login');
   }
   
+  // 케이스가 있으면 첫 번째 케이스 사용
+  if (!AppState.currentCaseId && AppState.cases && AppState.cases.length > 0) {
+    AppState.currentCaseId = AppState.cases[0].id;
+  }
+  
+  return AppState.currentCaseId;
+}
+
+// UI 초기화 (select, event listener 등)
+function initializeUI() {
   // populate selects
   const locSel = $('#def-location');
   const tradeSel = $('#def-trade');
-  Catalog.locations.forEach(v=>{
-    const opt = document.createElement('option'); opt.value=v; opt.textContent=v; locSel.appendChild(opt);
-  });
-  Catalog.trades.forEach(v=>{
-    const opt = document.createElement('option'); opt.value=v; opt.textContent=v; tradeSel.appendChild(opt);
-  });
+  
+  if (locSel && Catalog.locations) {
+    Catalog.locations.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v;
+      opt.textContent = v;
+      locSel.appendChild(opt);
+    });
+  }
+  
+  if (tradeSel && Catalog.trades) {
+    Catalog.trades.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v;
+      opt.textContent = v;
+      tradeSel.appendChild(opt);
+    });
+  }
   
   // Add logout functionality to user badge
-  $('#badge-user').addEventListener('click', () => {
+  const userBadge = $('#badge-user');
+  if (userBadge) {
+    userBadge.addEventListener('click', () => {
     if (AppState.session) {
       if (confirm('로그아웃하시겠습니까?')) {
         logout();
       }
     }
   });
+  }
   
-  // Save session whenever it changes
+  // Session auto-save on change
   let originalSession = AppState.session;
   Object.defineProperty(AppState, 'session', {
     get() {
@@ -777,10 +824,9 @@ document.addEventListener('DOMContentLoaded', async ()=>{
       saveSession();
     }
   });
+}
 
-  // 하자 카테고리 데이터 로드
-  loadDefectCategories();
-});
+// 첫 번째 DOMContentLoaded 제거됨 - 두 번째(1432줄)와 통합
 
 // 기획서 요구사항 구현 함수들
 
@@ -1362,54 +1408,69 @@ document.addEventListener('click', (e) => {
 
 // 앱 초기화
 window.addEventListener('DOMContentLoaded', async () => {
-  console.log('🚀 앱 초기화 시작');
+  debugLog('🚀 앱 초기화 시작');
   
   // AI 모드 설정 (localStorage에서 로드)
   const savedAISetting = localStorage.getItem('ENABLE_AI_ANALYSIS');
   const aiEnabled = savedAISetting === 'true';
   window.ENABLE_AI_ANALYSIS = aiEnabled;
-  console.log(`🤖 AI 분석: ${window.ENABLE_AI_ANALYSIS ? '활성화' : '비활성화 ✓'}`);
+  debugLog(`🤖 AI 분석: ${window.ENABLE_AI_ANALYSIS ? '활성화' : '비활성화 ✓'}`);
   
   // 하이브리드 AI 디텍터 초기화
   if (window.ENABLE_AI_ANALYSIS) {
     try {
       window.hybridDetector = new HybridDetector();
       await window.hybridDetector.initialize();
-      console.log('✅ 하이브리드 AI 시스템 준비 완료');
+      debugLog('✅ 하이브리드 AI 시스템 준비 완료');
     } catch (error) {
-      console.error('❌ 하이브리드 AI 초기화 실패:', error);
-      console.warn('⚠️ Legacy AI 모드로 폴백');
-      window.USE_AZURE_AI = aiEnabled; // Legacy 모드 유지
+      debugError('❌ 하이브리드 AI 초기화 실패:', error);
+      debugWarn('⚠️ AI 시스템 비활성화');
+      window.ENABLE_AI_ANALYSIS = false;
     }
   }
   
   // 하자 카테고리 미리 로드
   try {
     await loadDefectCategories();
-    console.log('✅ 하자 카테고리 로드 완료');
+    debugLog('✅ 하자 카테고리 로드 완료');
   } catch (error) {
-    console.error('❌ 하자 카테고리 로드 실패:', error);
-    toast('하자 카테고리 로드 중... 서버가 시작 중입니다 (최대 1-2분 소요)', 'info');
-    // 오류가 발생해도 앱은 계속 실행되도록 함
+    debugError('❌ 하자 카테고리 로드 실패:', error);
+    toast('서버 연결 중입니다 (최대 1-2분 소요)', 'info');
   }
   
-  // 세션 확인
-  if (AppState.token) {
+  // 세션 복원 시도
+  const savedSession = localStorage.getItem('insighti_session');
+  if (savedSession) {
     try {
-      const sessionData = await api.getSession();
-      AppState.session = sessionData;
-      route('list');
-      await loadCases();
+      const session = JSON.parse(savedSession);
+      if (session && session.token) {
+        debugLog('🔄 세션 복원 중...');
+        AppState.session = session;
+        api.setToken(session.token);
+        $('#badge-user').textContent = `${session.dong}-${session.ho} ${session.name}`;
+        
+        // 케이스 로드 및 자동 생성
+        await loadCases();
+        await ensureCase();
+        
+        debugLog('✅ 세션 복원 완료');
+        route('list');
+      } else {
+        route('login');
+      }
     } catch (error) {
-      console.error('세션 복원 실패:', error);
-      api.clearToken();
+      debugError('❌ 세션 복원 실패:', error);
+      localStorage.removeItem('insighti_session');
       route('login');
     }
   } else {
     route('login');
   }
   
-  console.log('✅ 앱 초기화 완료');
+  // UI 초기화
+  initializeUI();
+  
+  debugLog('✅ 앱 초기화 완료');
 });
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
