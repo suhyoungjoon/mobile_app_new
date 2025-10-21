@@ -37,7 +37,7 @@ router.post('/session', async (req, res) => {
     
     // Household 찾기 (단지+동+호만으로 조회)
     let householdResult = await pool.query(
-      `SELECT id, resident_name, phone FROM household 
+      `SELECT id, resident_name, phone, user_type FROM household 
        WHERE complex_id = $1 AND dong = $2 AND ho = $3`,
       [complexId, dong, ho]
     );
@@ -75,6 +75,12 @@ router.post('/session', async (req, res) => {
       console.log('👤 기존 세대 로그인:', householdId);
     }
 
+    // Get user type for token
+    let userType = 'resident'; // Default for new households
+    if (householdResult.rows.length > 0) {
+      userType = householdResult.rows[0].user_type || 'resident';
+    }
+
     // Generate JWT token
     const token = jwt.sign(
       { 
@@ -84,6 +90,7 @@ router.post('/session', async (req, res) => {
         ho, 
         name, 
         phone,
+        user_type: userType, // Add user type to token
         purpose: 'precheck' // Default purpose
       },
       config.jwt.secret,
