@@ -46,7 +46,7 @@ router.post('/', authenticateToken, async (req, res) => {
     const { type } = req.body;
     const { householdId } = req.user;
 
-    if (!type || !['하자접수', '추가접수'].includes(type)) {
+    if (!type || !['하자접수', '추가접수', '장비점검', '종합점검'].includes(type)) {
       return res.status(400).json({ error: 'Invalid case type' });
     }
 
