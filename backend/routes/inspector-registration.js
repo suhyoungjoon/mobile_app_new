@@ -7,9 +7,14 @@ const router = express.Router();
 
 // Admin 권한 체크 미들웨어 (Admin 라우트와 동일한 방식)
 function requireAdmin(req, res, next) {
+  console.log('🔍 Admin 권한 체크 - req.user:', JSON.stringify(req.user, null, 2));
+  
   if (!req.user || !req.user.isAdmin) {
+    console.log('❌ Admin 권한 없음 - isAdmin:', req.user?.isAdmin);
     return res.status(403).json({ error: 'Admin access required' });
   }
+  
+  console.log('✅ Admin 권한 확인됨');
   next();
 }
 
