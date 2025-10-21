@@ -24,14 +24,14 @@ async function testInspectorRegistrationAPI() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         complex: '서울 인싸이트자이',
-        dong: '103',
-        ho: '1207',
-        inspector_name: '박점검',
-        phone: '010-7777-7777',
-        company_name: '테스트 점검회사',
-        license_number: 'TEST123',
-        email: 'park@test.com',
-        registration_reason: '테스트용 점검원 등록 신청입니다.'
+        dong: '106',
+        ho: '1210',
+        inspector_name: '한점검',
+        phone: '010-1111-1111',
+        company_name: '테스트 점검회사4',
+        license_number: 'TEST000',
+        email: 'han@test.com',
+        registration_reason: '테스트용 점검원 등록 신청입니다 (네 번째).'
       })
     });
     
