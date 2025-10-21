@@ -12,7 +12,7 @@ router.get('/preview', authenticateToken, async (req, res) => {
   try {
     const { householdId, complex, dong, ho, name } = req.user;
 
-    // Get latest case with defects from database
+    // Get latest case with defects and equipment inspections from database
     const query = `
       SELECT c.id, c.type, c.created_at,
              json_agg(
@@ -48,22 +48,145 @@ router.get('/preview', authenticateToken, async (req, res) => {
     }
 
     const caseData = result.rows[0];
-    
-    // Generate HTML preview
-    const html = generateReportHTML({
+    const caseId = caseData.id;
+
+    // Get equipment inspection data
+    const equipmentQuery = `
+      SELECT 
+        ii.type,
+        ii.location,
+        ii.trade,
+        ii.note,
+        ii.result,
+        ii.created_at,
+        -- Air measurements
+        am.tvoc,
+        am.hcho,
+        am.co2,
+        am.unit_tvoc,
+        am.unit_hcho,
+        -- Radon measurements
+        rm.radon,
+        rm.unit_radon,
+        -- Level measurements
+        lm.left_mm,
+        lm.right_mm,
+        -- Thermal photos
+        (
+          SELECT json_agg(
+            json_build_object(
+              'file_url', tp.file_url,
+              'caption', tp.caption,
+              'shot_at', tp.shot_at
+            )
+          )
+          FROM thermal_photo tp WHERE tp.item_id = ii.id
+        ) as photos
+      FROM inspection_item ii
+      LEFT JOIN air_measure am ON ii.id = am.item_id
+      LEFT JOIN radon_measure rm ON ii.id = rm.item_id
+      LEFT JOIN level_measure lm ON ii.id = lm.item_id
+      WHERE ii.case_id = $1
+      ORDER BY ii.created_at ASC
+    `;
+
+    const equipmentResult = await pool.query(equipmentQuery, [caseId]);
+    const equipmentData = equipmentResult.rows;
+
+    // Process equipment data by type
+    const airMeasurements = [];
+    const radonMeasurements = [];
+    const levelMeasurements = [];
+    const thermalInspections = [];
+
+    equipmentData.forEach(item => {
+      const baseData = {
+        location: item.location,
+        trade: item.trade,
+        note: item.note,
+        result: item.result,
+        result_text: getResultText(item.result),
+        created_at: item.created_at
+      };
+
+      switch (item.type) {
+        case 'air':
+          airMeasurements.push({
+            ...baseData,
+            tvoc: item.tvoc,
+            hcho: item.hcho,
+            co2: item.co2,
+            unit_tvoc: item.unit_tvoc,
+            unit_hcho: item.unit_hcho
+          });
+          break;
+        case 'radon':
+          radonMeasurements.push({
+            ...baseData,
+            radon: item.radon,
+            unit: item.unit_radon
+          });
+          break;
+        case 'level':
+          levelMeasurements.push({
+            ...baseData,
+            left_mm: item.left_mm,
+            right_mm: item.right_mm
+          });
+          break;
+        case 'thermal':
+          thermalInspections.push({
+            ...baseData,
+            photos: item.photos || []
+          });
+          break;
+      }
+    });
+
+    // Calculate totals
+    const totalDefects = caseData.defects ? caseData.defects.length : 0;
+    const totalThermal = thermalInspections.length;
+    const totalAir = airMeasurements.length;
+    const totalRadon = radonMeasurements.length;
+    const totalLevel = levelMeasurements.length;
+    const totalEquipment = totalThermal + totalAir + totalRadon + totalLevel;
+    const hasEquipmentData = totalEquipment > 0;
+
+    // Generate comprehensive HTML report
+    const html = generateComprehensiveReportHTML({
       complex,
       dong,
       ho,
       name,
+      type: caseData.type,
       created_at: caseData.created_at,
-      defects: caseData.defects || []
+      generated_at: new Date(),
+      total_defects: totalDefects,
+      total_thermal: totalThermal,
+      total_air: totalAir,
+      total_radon: totalRadon,
+      total_level: totalLevel,
+      total_equipment: totalEquipment,
+      has_equipment_data: hasEquipmentData,
+      defects: caseData.defects || [],
+      air_measurements: airMeasurements,
+      radon_measurements: radonMeasurements,
+      level_measurements: levelMeasurements,
+      thermal_inspections: thermalInspections
     });
 
     res.json({
       html,
       case_id: caseData.id,
-      defects_count: caseData.defects?.length || 0,
-      defects: caseData.defects || []
+      defects_count: totalDefects,
+      equipment_count: totalEquipment,
+      defects: caseData.defects || [],
+      equipment_data: {
+        air: airMeasurements,
+        radon: radonMeasurements,
+        level: levelMeasurements,
+        thermal: thermalInspections
+      }
     });
 
   } catch (error) {
@@ -235,7 +358,45 @@ router.post('/send', authenticateToken, async (req, res) => {
   }
 });
 
-// Simple HTML report generator
+// Helper function to get result text
+function getResultText(result) {
+  const resultMap = {
+    'normal': '정상',
+    'check': '확인요망',
+    'na': '해당없음'
+  };
+  return resultMap[result] || result;
+}
+
+// Comprehensive HTML report generator
+function generateComprehensiveReportHTML(data) {
+  const handlebars = require('handlebars');
+  const fs = require('fs');
+  const path = require('path');
+  
+  const templatePath = path.join(__dirname, '../templates/comprehensive-report.hbs');
+  const templateSource = fs.readFileSync(templatePath, 'utf8');
+  const template = handlebars.compile(templateSource);
+  
+  // Add formatDate helper
+  const templateData = {
+    ...data,
+    formatDate: (date) => {
+      if (!date) return '-';
+      return new Date(date).toLocaleDateString('ko-KR', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+  };
+  
+  return template(templateData);
+}
+
+// Simple HTML report generator (legacy)
 function generateReportHTML(data) {
   const { complex, dong, ho, name, created_at, defects } = data;
   

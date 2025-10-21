@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>세대 점검 종합보고서</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #fff;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 40px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            border-bottom: 3px solid #1a73e8;
+            padding-bottom: 20px;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            color: #1a73e8;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+        
+        .header .subtitle {
+            font-size: 16px;
+            color: #666;
+            font-weight: 400;
+        }
+        
+        .meta-info {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            border-left: 4px solid #1a73e8;
+        }
+        
+        .meta-info h2 {
+            font-size: 18px;
+            color: #1a73e8;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+        
+        .meta-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        
+        .meta-item {
+            display: flex;
+            align-items: center;
+        }
+        
+        .meta-label {
+            font-weight: 600;
+            color: #555;
+            min-width: 80px;
+            margin-right: 10px;
+        }
+        
+        .meta-value {
+            color: #333;
+        }
+        
+        .summary {
+            background: #e8f5e8;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            border-left: 4px solid #10b981;
+        }
+        
+        .summary h3 {
+            color: #10b981;
+            margin-bottom: 15px;
+            font-size: 16px;
+            font-weight: 600;
+        }
+        
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        
+        .summary-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #d1fae5;
+        }
+        
+        .summary-item:last-child {
+            border-bottom: none;
+        }
+        
+        .summary-label {
+            font-weight: 600;
+            color: #065f46;
+        }
+        
+        .summary-value {
+            color: #047857;
+            font-weight: 500;
+        }
+        
+        .section {
+            margin-bottom: 40px;
+        }
+        
+        .section h2 {
+            font-size: 20px;
+            color: #1a73e8;
+            margin-bottom: 20px;
+            font-weight: 600;
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 10px;
+        }
+        
+        /* 장비점검 섹션 스타일 */
+        .equipment-summary {
+            background: #f0f8ff;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #1a73e8;
+        }
+        
+        .equipment-summary h3 {
+            color: #1a73e8;
+            margin-bottom: 15px;
+            font-size: 16px;
+            font-weight: 600;
+        }
+        
+        .equipment-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+        
+        .equipment-item {
+            text-align: center;
+            padding: 15px;
+            background: white;
+            border-radius: 6px;
+            border: 1px solid #e1e8ed;
+        }
+        
+        .equipment-icon {
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+        
+        .equipment-label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+        
+        .equipment-count {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1a73e8;
+        }
+        
+        /* 테이블 스타일 */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .data-table th {
+            background: #1a73e8;
+            color: white;
+            padding: 12px 15px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        .data-table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 14px;
+        }
+        
+        .data-table tr:last-child td {
+            border-bottom: none;
+        }
+        
+        .data-table tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+        
+        /* 상태 배지 */
+        .status-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            text-align: center;
+            min-width: 60px;
+        }
+        
+        .status-normal {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-check {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .status-na {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        /* 열화상 사진 그리드 */
+        .thermal-photos {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .thermal-photo {
+            text-align: center;
+            padding: 10px;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            background: #f8f9fa;
+        }
+        
+        .thermal-photo img {
+            width: 100%;
+            height: 120px;
+            object-fit: cover;
+            border-radius: 4px;
+            margin-bottom: 8px;
+        }
+        
+        .thermal-photo .caption {
+            font-size: 12px;
+            color: #666;
+            font-weight: 500;
+        }
+        
+        /* 하자 카드 스타일 */
+        .defect-card {
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .defect-header {
+            background: #f8f9fa;
+            padding: 15px 20px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        
+        .defect-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1a73e8;
+            margin-bottom: 5px;
+        }
+        
+        .defect-meta {
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .defect-body {
+            padding: 20px;
+        }
+        
+        .defect-content {
+            margin-bottom: 15px;
+        }
+        
+        .defect-content h4 {
+            font-size: 14px;
+            color: #555;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+        
+        .defect-content p {
+            color: #333;
+            line-height: 1.5;
+        }
+        
+        .defect-memo {
+            background: #f0f8ff;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 3px solid #1a73e8;
+        }
+        
+        .defect-memo h4 {
+            font-size: 14px;
+            color: #1a73e8;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+        
+        .defect-memo p {
+            color: #333;
+            font-style: italic;
+        }
+        
+        .photos-section {
+            margin-top: 15px;
+        }
+        
+        .photos-section h4 {
+            font-size: 14px;
+            color: #555;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+        
+        .photos-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        
+        .photo-item {
+            text-align: center;
+            padding: 10px;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            background: #f8f9fa;
+        }
+        
+        .photo-label {
+            font-size: 12px;
+            color: #666;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        
+        .photo-placeholder {
+            width: 100%;
+            height: 120px;
+            background: #e5e7eb;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #666;
+            font-size: 12px;
+        }
+        
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #e5e7eb;
+            text-align: center;
+            color: #666;
+            font-size: 12px;
+        }
+        
+        .footer .generated {
+            margin-bottom: 10px;
+        }
+        
+        .footer .note {
+            font-style: italic;
+            color: #888;
+        }
+        
+        @media print {
+            .container {
+                padding: 20px;
+            }
+            
+            .header h1 {
+                font-size: 24px;
+            }
+            
+            .defect-card {
+                break-inside: avoid;
+                margin-bottom: 15px;
+            }
+            
+            .equipment-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>세대 점검 종합보고서</h1>
+            <div class="subtitle">InsightI Pre/Post Inspection Comprehensive Report</div>
+        </div>
+        
+        <div class="meta-info">
+            <h2>점검 정보</h2>
+            <div class="meta-grid">
+                <div class="meta-item">
+                    <span class="meta-label">단지명:</span>
+                    <span class="meta-value">{{complex}}</span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label">동-호:</span>
+                    <span class="meta-value">{{dong}}-{{ho}}</span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label">세대주:</span>
+                    <span class="meta-value">{{name}}</span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label">점검일:</span>
+                    <span class="meta-value">{{formatDate created_at}}</span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label">점검 유형:</span>
+                    <span class="meta-value">{{type}}</span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label">보고서 생성일:</span>
+                    <span class="meta-value">{{formatDate generated_at}}</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="summary">
+            <h3>점검 요약</h3>
+            <div class="summary-grid">
+                <div class="summary-item">
+                    <span class="summary-label">총 하자 건수:</span>
+                    <span class="summary-value">{{total_defects}}건</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">열화상 점검:</span>
+                    <span class="summary-value">{{total_thermal}}건</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">공기질 측정:</span>
+                    <span class="summary-value">{{total_air}}건</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">라돈 측정:</span>
+                    <span class="summary-value">{{total_radon}}건</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">레벨기 측정:</span>
+                    <span class="summary-value">{{total_level}}건</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">총 장비점검:</span>
+                    <span class="summary-value">{{total_equipment}}건</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 장비점검 섹션 -->
+        {{#if has_equipment_data}}
+        <div class="section">
+            <h2>🔧 장비점검 결과</h2>
+            
+            <div class="equipment-summary">
+                <h3>장비점검 현황</h3>
+                <div class="equipment-grid">
+                    <div class="equipment-item">
+                        <div class="equipment-icon">📷</div>
+                        <div class="equipment-label">열화상</div>
+                        <div class="equipment-count">{{total_thermal}}</div>
+                    </div>
+                    <div class="equipment-item">
+                        <div class="equipment-icon">🌬️</div>
+                        <div class="equipment-label">공기질</div>
+                        <div class="equipment-count">{{total_air}}</div>
+                    </div>
+                    <div class="equipment-item">
+                        <div class="equipment-icon">☢️</div>
+                        <div class="equipment-label">라돈</div>
+                        <div class="equipment-count">{{total_radon}}</div>
+                    </div>
+                    <div class="equipment-item">
+                        <div class="equipment-icon">📏</div>
+                        <div class="equipment-label">레벨기</div>
+                        <div class="equipment-count">{{total_level}}</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 공기질 측정 결과 -->
+            {{#if air_measurements}}
+            <h3>🌬️ 공기질 측정 결과</h3>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>위치</th>
+                        <th>공정</th>
+                        <th>TVOC (mg/m³)</th>
+                        <th>HCHO (mg/m³)</th>
+                        <th>CO2 (ppm)</th>
+                        <th>결과</th>
+                        <th>메모</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{#each air_measurements}}
+                    <tr>
+                        <td>{{location}}</td>
+                        <td>{{trade}}</td>
+                        <td>{{tvoc}}</td>
+                        <td>{{hcho}}</td>
+                        <td>{{co2}}</td>
+                        <td><span class="status-badge status-{{result}}">{{result_text}}</span></td>
+                        <td>{{note}}</td>
+                    </tr>
+                    {{/each}}
+                </tbody>
+            </table>
+            {{/if}}
+            
+            <!-- 라돈 측정 결과 -->
+            {{#if radon_measurements}}
+            <h3>☢️ 라돈 측정 결과</h3>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>위치</th>
+                        <th>공정</th>
+                        <th>라돈 농도</th>
+                        <th>단위</th>
+                        <th>결과</th>
+                        <th>메모</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{#each radon_measurements}}
+                    <tr>
+                        <td>{{location}}</td>
+                        <td>{{trade}}</td>
+                        <td>{{radon}}</td>
+                        <td>{{unit}}</td>
+                        <td><span class="status-badge status-{{result}}">{{result_text}}</span></td>
+                        <td>{{note}}</td>
+                    </tr>
+                    {{/each}}
+                </tbody>
+            </table>
+            {{/if}}
+            
+            <!-- 레벨기 측정 결과 -->
+            {{#if level_measurements}}
+            <h3>📏 레벨기 측정 결과</h3>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>위치</th>
+                        <th>공정</th>
+                        <th>좌측 (mm)</th>
+                        <th>우측 (mm)</th>
+                        <th>결과</th>
+                        <th>메모</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{#each level_measurements}}
+                    <tr>
+                        <td>{{location}}</td>
+                        <td>{{trade}}</td>
+                        <td>{{left_mm}}</td>
+                        <td>{{right_mm}}</td>
+                        <td><span class="status-badge status-{{result}}">{{result_text}}</span></td>
+                        <td>{{note}}</td>
+                    </tr>
+                    {{/each}}
+                </tbody>
+            </table>
+            {{/if}}
+            
+            <!-- 열화상 점검 결과 -->
+            {{#if thermal_inspections}}
+            <h3>📷 열화상 점검 결과</h3>
+            {{#each thermal_inspections}}
+            <div class="defect-card">
+                <div class="defect-header">
+                    <div class="defect-title">열화상 점검 #{{@index}}</div>
+                    <div class="defect-meta">{{location}} / {{trade}}</div>
+                </div>
+                <div class="defect-body">
+                    <div class="defect-content">
+                        <h4>점검 결과</h4>
+                        <p><span class="status-badge status-{{result}}">{{result_text}}</span></p>
+                    </div>
+                    
+                    {{#if note}}
+                    <div class="defect-memo">
+                        <h4>메모</h4>
+                        <p>{{note}}</p>
+                    </div>
+                    {{/if}}
+                    
+                    {{#if photos}}
+                    <div class="photos-section">
+                        <h4>열화상 사진</h4>
+                        <div class="thermal-photos">
+                            {{#each photos}}
+                            <div class="thermal-photo">
+                                <img src="{{file_url}}" alt="열화상 사진" />
+                                <div class="caption">{{caption}}</div>
+                            </div>
+                            {{/each}}
+                        </div>
+                    </div>
+                    {{/if}}
+                </div>
+            </div>
+            {{/each}}
+            {{/if}}
+        </div>
+        {{/if}}
+        
+        <!-- 하자 섹션 -->
+        <div class="section">
+            <h2>🏗️ 하자 상세 목록</h2>
+            {{#if defects}}
+                {{#each defects}}
+                <div class="defect-card">
+                    <div class="defect-header">
+                        <div class="defect-title">하자 #{{@index}}</div>
+                        <div class="defect-meta">{{location}} / {{trade}}</div>
+                    </div>
+                    <div class="defect-body">
+                        <div class="defect-content">
+                            <h4>하자 내용</h4>
+                            <p>{{content}}</p>
+                        </div>
+                        
+                        {{#if memo}}
+                        <div class="defect-memo">
+                            <h4>메모</h4>
+                            <p>{{memo}}</p>
+                        </div>
+                        {{/if}}
+                        
+                        <div class="photos-section">
+                            <h4>사진</h4>
+                            <div class="photos-grid">
+                                <div class="photo-item">
+                                    <div class="photo-label">근거리</div>
+                                    <div class="photo-placeholder">사진 없음</div>
+                                </div>
+                                <div class="photo-item">
+                                    <div class="photo-label">원거리</div>
+                                    <div class="photo-placeholder">사진 없음</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {{/each}}
+            {{else}}
+            <div style="text-align: center; padding: 40px; color: #666; font-style: italic;">
+                등록된 하자가 없습니다.
+            </div>
+            {{/if}}
+        </div>
+        
+        <div class="footer">
+            <div class="generated">
+                보고서 생성일: {{formatDate generated_at}}
+            </div>
+            <div class="note">
+                ※ 본 문서는 InsightI 앱을 통해 자동 생성된 종합 보고서입니다.<br>
+                실제 현장 사진과 측정값은 별도로 관리됩니다.
+            </div>
+        </div>
+    </div>
+</body>
+</html>
