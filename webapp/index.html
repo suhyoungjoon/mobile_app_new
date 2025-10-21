@@ -358,11 +358,201 @@
         </div>
       </div>
     </div>
+
+    <!-- EQUIPMENT INSPECTION -->
+    <div id="equipment" class="screen hidden">
+      <div class="card">
+        <div class="header">
+          <h2>장비점검</h2>
+          <button class="button" onclick="onShowList()">← 뒤로</button>
+        </div>
+        
+        <!-- 고객정보 -->
+        <div class="customer-info">
+          <div class="customer-label">고객정보</div>
+          <div id="equipment-customer-details" class="customer-details">105동 2302호 홍길동</div>
+        </div>
+
+        <!-- 장비점검 탭 -->
+        <div class="equipment-tabs">
+          <button class="equipment-tab active" onclick="showEquipmentTab('thermal')">열화상</button>
+          <button class="equipment-tab" onclick="showEquipmentTab('air')">공기질</button>
+          <button class="equipment-tab" onclick="showEquipmentTab('radon')">라돈</button>
+          <button class="equipment-tab" onclick="showEquipmentTab('level')">레벨기</button>
+        </div>
+
+        <!-- 열화상 탭 -->
+        <div id="thermal-tab" class="equipment-tab-content">
+          <div class="form-group">
+            <label class="form-label">위치</label>
+            <input id="thermal-location" class="input" placeholder="예: 거실, 주방" />
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">공정</label>
+            <input id="thermal-trade" class="input" placeholder="예: 마감, 바닥재" />
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">메모</label>
+            <textarea id="thermal-note" class="input" placeholder="열화상 촬영 특이사항"></textarea>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">열화상 사진</label>
+            <div class="photo-grid" id="thermal-photos">
+              <div class="photo-add" onclick="addThermalPhoto()">
+                <span>+</span>
+                <div>사진 추가</div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">결과</label>
+            <select id="thermal-result" class="input">
+              <option value="normal">정상</option>
+              <option value="check">확인요망</option>
+              <option value="na">해당없음</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 공기질 탭 -->
+        <div id="air-tab" class="equipment-tab-content hidden">
+          <div class="form-group">
+            <label class="form-label">위치</label>
+            <input id="air-location" class="input" placeholder="예: 거실, 침실" />
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">공정</label>
+            <input id="air-trade" class="input" placeholder="예: 마감, 바닥재" />
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">TVOC (mg/m³)</label>
+              <input id="air-tvoc" type="number" step="0.01" min="0" max="20" class="input" placeholder="0.00" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">HCHO (mg/m³)</label>
+              <input id="air-hcho" type="number" step="0.01" min="0" max="20" class="input" placeholder="0.00" />
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">CO2 (ppm)</label>
+            <input id="air-co2" type="number" min="0" max="10000" class="input" placeholder="400" />
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">메모</label>
+            <textarea id="air-note" class="input" placeholder="공기질 측정 특이사항"></textarea>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">결과</label>
+            <select id="air-result" class="input">
+              <option value="normal">정상</option>
+              <option value="check">확인요망</option>
+              <option value="na">해당없음</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 라돈 탭 -->
+        <div id="radon-tab" class="equipment-tab-content hidden">
+          <div class="form-group">
+            <label class="form-label">위치</label>
+            <input id="radon-location" class="input" placeholder="예: 침실, 거실" />
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">공정</label>
+            <input id="radon-trade" class="input" placeholder="예: 마감, 바닥재" />
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">라돈 농도</label>
+              <input id="radon-value" type="number" step="0.01" min="0" max="5000" class="input" placeholder="0.00" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">단위</label>
+              <select id="radon-unit" class="input">
+                <option value="Bq/m³">Bq/m³</option>
+                <option value="pCi/L">pCi/L</option>
+              </select>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">메모</label>
+            <textarea id="radon-note" class="input" placeholder="라돈 측정 특이사항"></textarea>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">결과</label>
+            <select id="radon-result" class="input">
+              <option value="normal">정상</option>
+              <option value="check">확인요망</option>
+              <option value="na">해당없음</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 레벨기 탭 -->
+        <div id="level-tab" class="equipment-tab-content hidden">
+          <div class="form-group">
+            <label class="form-label">위치</label>
+            <input id="level-location" class="input" placeholder="예: 주방, 거실" />
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">공정</label>
+            <input id="level-trade" class="input" placeholder="예: 바닥, 타일" />
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">좌측 (mm)</label>
+              <input id="level-left" type="number" step="0.1" min="-50" max="50" class="input" placeholder="0.0" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">우측 (mm)</label>
+              <input id="level-right" type="number" step="0.1" min="-50" max="50" class="input" placeholder="0.0" />
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">메모</label>
+            <textarea id="level-note" class="input" placeholder="레벨기 측정 특이사항"></textarea>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">결과</label>
+            <select id="level-result" class="input">
+              <option value="normal">이상없음</option>
+              <option value="check">확인요망</option>
+              <option value="na">해당없음</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 저장 버튼 -->
+        <div class="button-group">
+          <button class="button" onclick="resetEquipmentForm()">재설정</button>
+          <button class="button success" onclick="saveEquipmentInspection()">저장</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div class="tabbar">
     <button id="tab-list" onclick="onShowList()">목록</button>
     <button id="tab-add" onclick="route('newdefect')">하자등록</button>
+    <button id="tab-equipment" class="company-only hidden" onclick="route('equipment')">장비점검</button>
     <button id="tab-report" onclick="onPreviewReport()">보고서</button>
   </div>
 
@@ -380,6 +570,8 @@
 <script src="js/ai/local-detector.js"></script>
 <script src="js/ai/cloud-detector.js"></script>
 <script src="js/ai/hybrid-detector.js"></script>
+<!-- Equipment Inspection (Phase 3) -->
+<script src="js/equipment.js"></script>
 <!-- Legacy AI (제거됨 - Hybrid AI로 완전 전환) -->
 <!-- <script src="js/ai-detector.js"></script> -->
 <script src="js/app.js"></script>
