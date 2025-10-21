@@ -56,11 +56,11 @@ router.post('/thermal', authenticateToken, requireEquipmentAccess, async (req, r
       RETURNING *
     `;
     
-    const result = await pool.query(query, [itemId, caseId, location, trade, note, result]);
+    const queryResult = await pool.query(query, [itemId, caseId, location, trade, note, result]);
     
     res.status(201).json({
       success: true,
-      item: result.rows[0],
+      item: queryResult.rows[0],
       message: '열화상 점검 항목이 생성되었습니다'
     });
     
