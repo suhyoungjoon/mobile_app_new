@@ -150,3 +150,28 @@ CREATE INDEX idx_air_measure_item ON air_measure(item_id);
 CREATE INDEX idx_radon_measure_item ON radon_measure(item_id);
 CREATE INDEX idx_level_measure_item ON level_measure(item_id);
 CREATE INDEX idx_thermal_photo_item ON thermal_photo(item_id);
+
+-- Inspector Registration System (Phase 4)
+CREATE TABLE inspector_registration (
+  id SERIAL PRIMARY KEY,
+  complex_id INTEGER REFERENCES complex(id),
+  dong TEXT NOT NULL,
+  ho TEXT NOT NULL,
+  inspector_name TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  company_name TEXT,
+  license_number TEXT,
+  email TEXT,
+  registration_reason TEXT,
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+  approved_by INTEGER REFERENCES admin_user(id),
+  approved_at TIMESTAMP,
+  rejection_reason TEXT,
+  created_at TIMESTAMP DEFAULT now(),
+  updated_at TIMESTAMP DEFAULT now()
+);
+
+-- Indexes for inspector registration
+CREATE INDEX idx_inspector_registration_status ON inspector_registration(status);
+CREATE INDEX idx_inspector_registration_complex ON inspector_registration(complex_id);
+CREATE INDEX idx_inspector_registration_created ON inspector_registration(created_at);

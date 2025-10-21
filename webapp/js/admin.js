@@ -131,6 +131,8 @@ function showScreen(screenName) {
     loadDashboardStats();
   } else if (screenName === 'users') {
     loadUsers();
+  } else if (screenName === 'inspectors') {
+    loadInspectorRegistrations();
   } else if (screenName === 'defects') {
     loadDefects();
   }
@@ -533,5 +535,244 @@ window.addEventListener('DOMContentLoaded', () => {
       adminLogin();
     }
   });
+  
+  // 점검원 승인 모달 라디오 버튼 이벤트
+  $$('input[name="approval-action"]').forEach(radio => {
+    radio.addEventListener('change', (e) => {
+      const rejectionGroup = $('#rejection-reason-group');
+      if (e.target.value === 'reject') {
+        rejectionGroup.style.display = 'block';
+      } else {
+        rejectionGroup.style.display = 'none';
+      }
+    });
+  });
 });
+
+// ===== 점검원 관리 기능 =====
+
+// 점검원 등록 목록 로드
+async function loadInspectorRegistrations() {
+  try {
+    const data = await apiCall('/api/inspector-registration/admin/pending');
+    
+    // 통계 업데이트
+    $('#inspector-total').textContent = data.total;
+    $('#inspector-pending').textContent = data.pending;
+    $('#inspector-approved').textContent = data.approved;
+    $('#inspector-rejected').textContent = data.rejected;
+    
+    // 테이블 업데이트
+    const tbody = $('#inspectors-tbody');
+    tbody.innerHTML = '';
+    
+    if (data.registrations.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">등록 신청이 없습니다</td></tr>';
+      return;
+    }
+    
+    data.registrations.forEach(reg => {
+      const row = document.createElement('tr');
+      
+      const statusBadge = getStatusBadge(reg.status);
+      const processedDate = reg.approved_at ? new Date(reg.approved_at).toLocaleDateString() : '-';
+      
+      row.innerHTML = `
+        <td>#${reg.id}</td>
+        <td>${reg.complex}</td>
+        <td>${reg.dong}동 ${reg.ho}호</td>
+        <td>${reg.inspector_name}</td>
+        <td>${reg.company_name || '-'}</td>
+        <td>${new Date(reg.created_at).toLocaleDateString()}</td>
+        <td>${statusBadge}</td>
+        <td>${processedDate}</td>
+        <td>
+          ${reg.status === 'pending' ? 
+            `<button class="btn btn-sm btn-primary" onclick="openInspectorApprovalModal(${reg.id})">처리</button>` :
+            `<button class="btn btn-sm btn-secondary" onclick="viewInspectorDetails(${reg.id})">상세</button>`
+          }
+        </td>
+      `;
+      
+      tbody.appendChild(row);
+    });
+    
+  } catch (error) {
+    console.error('점검원 등록 목록 로드 오류:', error);
+    toast('점검원 등록 목록을 불러오는데 실패했습니다', 'error');
+  }
+}
+
+// 상태 배지 생성
+function getStatusBadge(status) {
+  const badges = {
+    'pending': '<span class="badge badge-warning">승인 대기</span>',
+    'approved': '<span class="badge badge-success">승인 완료</span>',
+    'rejected': '<span class="badge badge-danger">승인 거부</span>'
+  };
+  return badges[status] || '<span class="badge badge-secondary">알 수 없음</span>';
+}
+
+// 점검원 승인 모달 열기
+async function openInspectorApprovalModal(registrationId) {
+  try {
+    // 등록 정보 로드
+    const data = await apiCall(`/api/inspector-registration/status/${registrationId}`);
+    const reg = data.registration;
+    
+    // 모달 정보 업데이트
+    $('#approval-registration-id').value = registrationId;
+    $('#approval-inspector-info').innerHTML = `
+      <div class="info-item">
+        <strong>점검원:</strong> ${reg.inspector_name}
+      </div>
+      <div class="info-item">
+        <strong>연락처:</strong> ${reg.phone}
+      </div>
+      <div class="info-item">
+        <strong>회사명:</strong> ${reg.company_name || '-'}
+      </div>
+      <div class="info-item">
+        <strong>자격증:</strong> ${reg.license_number || '-'}
+      </div>
+      <div class="info-item">
+        <strong>등록 사유:</strong> ${reg.registration_reason}
+      </div>
+    `;
+    
+    // 기본값 설정
+    $('input[name="approval-action"][value="approve"]').checked = true;
+    $('#rejection-reason-group').style.display = 'none';
+    $('#rejection-reason').value = '';
+    
+    // 모달 표시
+    $('#inspector-approval-modal').style.display = 'flex';
+    
+  } catch (error) {
+    console.error('점검원 승인 모달 열기 오류:', error);
+    toast('점검원 정보를 불러오는데 실패했습니다', 'error');
+  }
+}
+
+// 점검원 승인 모달 닫기
+function closeInspectorApprovalModal() {
+  $('#inspector-approval-modal').style.display = 'none';
+}
+
+// 점검원 승인/거부 처리
+async function processInspectorApproval() {
+  const registrationId = $('#approval-registration-id').value;
+  const action = $('input[name="approval-action"]:checked').value;
+  const rejectionReason = $('#rejection-reason').value.trim();
+  
+  if (action === 'reject' && !rejectionReason) {
+    toast('거부 사유를 입력해주세요', 'error');
+    return;
+  }
+  
+  try {
+    const data = await apiCall(`/api/inspector-registration/admin/${registrationId}/approve`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        approved: action === 'approve',
+        rejection_reason: action === 'reject' ? rejectionReason : null
+      })
+    });
+    
+    if (action === 'approve') {
+      toast('점검원 등록이 승인되었습니다', 'success');
+    } else {
+      toast('점검원 등록이 거부되었습니다', 'warning');
+    }
+    
+    closeInspectorApprovalModal();
+    loadInspectorRegistrations();
+    
+  } catch (error) {
+    console.error('점검원 승인/거부 처리 오류:', error);
+    toast('처리 중 오류가 발생했습니다', 'error');
+  }
+}
+
+// 점검원 상세 정보 보기
+async function viewInspectorDetails(registrationId) {
+  try {
+    const data = await apiCall(`/api/inspector-registration/status/${registrationId}`);
+    const reg = data.registration;
+    
+    const details = `
+      <div class="inspector-details">
+        <h3>점검원 등록 상세 정보</h3>
+        <div class="detail-grid">
+          <div class="detail-item">
+            <label>등록 ID:</label>
+            <span>#${reg.id}</span>
+          </div>
+          <div class="detail-item">
+            <label>단지:</label>
+            <span>${reg.complex}</span>
+          </div>
+          <div class="detail-item">
+            <label>세대:</label>
+            <span>${reg.dong}동 ${reg.ho}호</span>
+          </div>
+          <div class="detail-item">
+            <label>점검원명:</label>
+            <span>${reg.inspector_name}</span>
+          </div>
+          <div class="detail-item">
+            <label>연락처:</label>
+            <span>${reg.phone}</span>
+          </div>
+          <div class="detail-item">
+            <label>회사명:</label>
+            <span>${reg.company_name || '-'}</span>
+          </div>
+          <div class="detail-item">
+            <label>자격증 번호:</label>
+            <span>${reg.license_number || '-'}</span>
+          </div>
+          <div class="detail-item">
+            <label>이메일:</label>
+            <span>${reg.email || '-'}</span>
+          </div>
+          <div class="detail-item">
+            <label>등록 사유:</label>
+            <span>${reg.registration_reason}</span>
+          </div>
+          <div class="detail-item">
+            <label>신청일:</label>
+            <span>${new Date(reg.created_at).toLocaleString()}</span>
+          </div>
+          <div class="detail-item">
+            <label>처리일:</label>
+            <span>${reg.approved_at ? new Date(reg.approved_at).toLocaleString() : '-'}</span>
+          </div>
+          <div class="detail-item">
+            <label>처리자:</label>
+            <span>${reg.approved_by || '-'}</span>
+          </div>
+          ${reg.rejection_reason ? `
+            <div class="detail-item">
+              <label>거부 사유:</label>
+              <span>${reg.rejection_reason}</span>
+            </div>
+          ` : ''}
+        </div>
+      </div>
+    `;
+    
+    // 모달이나 팝업으로 표시 (간단하게 alert 사용)
+    alert(details.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim());
+    
+  } catch (error) {
+    console.error('점검원 상세 정보 조회 오류:', error);
+    toast('상세 정보를 불러오는데 실패했습니다', 'error');
+  }
+}
+
+// 점검원 등록 목록 새로고침
+function refreshInspectorRegistrations() {
+  loadInspectorRegistrations();
+}
 

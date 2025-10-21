@@ -12,6 +12,7 @@ const casesRoutes = require('./routes/cases');
 const defectsRoutes = require('./routes/defects');
 const defectCategoriesRoutes = require('./routes/defect-categories');
 const inspectionsRoutes = require('./routes/inspections'); // NEW: Equipment inspections
+const inspectorRegistrationRoutes = require('./routes/inspector-registration'); // NEW: Inspector registration
 const aiLearningRoutes = require('./routes/ai-learning');
 const azureAIRoutes = require('./routes/azure-ai'); // NEW: Azure OpenAI
 const uploadRoutes = require('./routes/upload');
@@ -70,6 +71,7 @@ app.use('/api/cases', casesRoutes);
 app.use('/api/defects', defectsRoutes);
 app.use('/api/defect-categories', defectCategoriesRoutes);
 app.use('/api/inspections', inspectionsRoutes); // NEW: Equipment inspections
+app.use('/api/inspector-registration', inspectorRegistrationRoutes); // NEW: Inspector registration
 app.use('/api/ai-learning', aiLearningRoutes);
 app.use('/api/azure-ai', azureAIRoutes); // NEW: Azure OpenAI
 app.use('/api/upload', uploadRoutes);
@@ -100,13 +102,14 @@ app.get('/health', (req, res) => {
 app.get('/api', (req, res) => {
   res.json({
     name: 'InsightI Pre/Post Inspection API',
-    version: '2.3.0',
+    version: '2.4.0', // Updated version
     endpoints: {
       auth: '/api/auth',
       cases: '/api/cases',
       defects: '/api/defects',
       defectCategories: '/api/defect-categories',
       inspections: '/api/inspections', // NEW: Equipment inspections
+      inspectorRegistration: '/api/inspector-registration', // NEW: Inspector registration
       aiLearning: '/api/ai-learning',
       azureAI: '/api/azure-ai',
       upload: '/api/upload',
