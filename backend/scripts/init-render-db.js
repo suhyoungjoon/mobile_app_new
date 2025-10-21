@@ -63,12 +63,48 @@ async function initDatabase() {
       const complexId = complexResult.rows[0].id;
       
       await client.query(`
-        INSERT INTO household (complex_id, dong, ho, resident_name, phone) 
-        VALUES ($1, '101', '1203', '홍길동', '010-0000-0000')
+        INSERT INTO household (complex_id, dong, ho, resident_name, phone, user_type) 
+        VALUES ($1, '101', '1203', '홍길동', '010-0000-0000', 'resident')
         ON CONFLICT DO NOTHING;
       `, [complexId]);
       
-      console.log('✅ 샘플 데이터 삽입 완료!');
+      // 샘플 장비점검 데이터 삽입 (Phase 1)
+      console.log('🔧 샘플 장비점검 데이터 삽입 중...');
+      
+      // 샘플 케이스 생성 (장비점검 타입)
+      await client.query(`
+        INSERT INTO case_header (id, household_id, type) 
+        VALUES ('equipment-sample-001', $1, '장비점검')
+        ON CONFLICT DO NOTHING;
+      `, [complexId]);
+      
+      // 샘플 공기질 측정 데이터
+      await client.query(`
+        INSERT INTO inspection_item (id, case_id, type, location, trade, note, result)
+        VALUES ('air-sample-001', 'equipment-sample-001', 'air', '거실', '마감', '공기질 측정 완료', 'normal')
+        ON CONFLICT DO NOTHING;
+      `);
+      
+      await client.query(`
+        INSERT INTO air_measure (item_id, tvoc, hcho, co2)
+        VALUES ('air-sample-001', 0.12, 0.03, 450.0)
+        ON CONFLICT DO NOTHING;
+      `);
+      
+      // 샘플 라돈 측정 데이터
+      await client.query(`
+        INSERT INTO inspection_item (id, case_id, type, location, trade, note, result)
+        VALUES ('radon-sample-001', 'equipment-sample-001', 'radon', '침실', '마감', '라돈 측정 완료', 'normal')
+        ON CONFLICT DO NOTHING;
+      `);
+      
+      await client.query(`
+        INSERT INTO radon_measure (item_id, radon, unit_radon)
+        VALUES ('radon-sample-001', 150.0, 'Bq/m³')
+        ON CONFLICT DO NOTHING;
+      `);
+      
+      console.log('✅ 샘플 장비점검 데이터 삽입 완료!');
     }
     
     console.log('\n🎉 데이터베이스 준비 완료!');
