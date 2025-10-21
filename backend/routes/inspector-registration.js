@@ -1,9 +1,17 @@
 // Inspector Registration Routes
 const express = require('express');
 const pool = require('../database');
-const { authenticateToken, requireAdminAccess } = require('../middleware/auth');
+const { authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
+
+// Admin 권한 체크 미들웨어 (Admin 라우트와 동일한 방식)
+function requireAdmin(req, res, next) {
+  if (!req.user || !req.user.isAdmin) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  next();
+}
 
 // 점검원 등록 신청
 router.post('/register', async (req, res) => {
@@ -169,7 +177,7 @@ router.get('/status/:registrationId', async (req, res) => {
 });
 
 // 관리자: 대기 중인 점검원 등록 목록 조회
-router.get('/admin/pending', authenticateToken, requireAdminAccess, async (req, res) => {
+router.get('/admin/pending', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT 
@@ -220,7 +228,7 @@ router.get('/admin/pending', authenticateToken, requireAdminAccess, async (req, 
 });
 
 // 관리자: 점검원 등록 승인/거부
-router.put('/admin/:registrationId/approve', authenticateToken, requireAdminAccess, async (req, res) => {
+router.put('/admin/:registrationId/approve', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { registrationId } = req.params;
     const { approved, rejection_reason } = req.body;
@@ -351,7 +359,7 @@ router.put('/admin/:registrationId/approve', authenticateToken, requireAdminAcce
 });
 
 // 관리자: 점검원 등록 삭제
-router.delete('/admin/:registrationId', authenticateToken, requireAdminAccess, async (req, res) => {
+router.delete('/admin/:registrationId', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { registrationId } = req.params;
 
