@@ -13,6 +13,8 @@ const defectsRoutes = require('./routes/defects');
 const defectCategoriesRoutes = require('./routes/defect-categories');
 const inspectionsRoutes = require('./routes/inspections'); // NEW: Equipment inspections
 const inspectorRegistrationRoutes = require('./routes/inspector-registration'); // NEW: Inspector registration
+const pushNotificationRoutes = require('./routes/push-notifications'); // NEW: Push notifications
+const youtubeSearchRoutes = require('./routes/youtube-search'); // NEW: YouTube 실시간 검색
 const aiLearningRoutes = require('./routes/ai-learning');
 const azureAIRoutes = require('./routes/azure-ai'); // NEW: Azure OpenAI
 const uploadRoutes = require('./routes/upload');
@@ -48,6 +50,24 @@ app.use(cors({
   exposedHeaders: ['Content-Type', 'Authorization']
 }));
 
+// HTTPS 강제 리다이렉트 (프로덕션 환경)
+if (process.env.NODE_ENV === 'production') {
+  app.use((req, res, next) => {
+    // X-Forwarded-Proto 헤더 확인 (Vercel, Render 등 프록시 환경)
+    if (req.header('x-forwarded-proto') !== 'https') {
+      res.redirect(`https://${req.header('host')}${req.url}`);
+    } else {
+      next();
+    }
+  });
+  
+  // HSTS 헤더 설정 (선택)
+  app.use((req, res, next) => {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    next();
+  });
+}
+
 // Security middleware
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" }
@@ -72,6 +92,8 @@ app.use('/api/defects', defectsRoutes);
 app.use('/api/defect-categories', defectCategoriesRoutes);
 app.use('/api/inspections', inspectionsRoutes); // NEW: Equipment inspections
 app.use('/api/inspector-registration', inspectorRegistrationRoutes); // NEW: Inspector registration
+app.use('/api/push', pushNotificationRoutes); // NEW: Push notifications
+app.use('/api/youtube', youtubeSearchRoutes); // NEW: YouTube 실시간 검색
 app.use('/api/ai-learning', aiLearningRoutes);
 app.use('/api/azure-ai', azureAIRoutes); // NEW: Azure OpenAI
 app.use('/api/upload', uploadRoutes);
@@ -102,7 +124,7 @@ app.get('/health', (req, res) => {
 app.get('/api', (req, res) => {
   res.json({
     name: 'InsightI Pre/Post Inspection API',
-    version: '2.4.0', // Updated version
+    version: '2.5.0', // Updated version for YouTube integration
     endpoints: {
       auth: '/api/auth',
       cases: '/api/cases',
@@ -110,6 +132,8 @@ app.get('/api', (req, res) => {
       defectCategories: '/api/defect-categories',
       inspections: '/api/inspections', // NEW: Equipment inspections
       inspectorRegistration: '/api/inspector-registration', // NEW: Inspector registration
+      pushNotifications: '/api/push', // NEW: Push notifications
+      youtubeSearch: '/api/youtube', // NEW: YouTube 실시간 검색
       aiLearning: '/api/ai-learning',
       azureAI: '/api/azure-ai',
       upload: '/api/upload',

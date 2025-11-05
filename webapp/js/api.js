@@ -230,6 +230,34 @@ class APIClient {
     });
   }
 
+  // Push Notifications
+  async sendPushNotification(type, data = {}) {
+    const endpoint = `/push/${type}`;
+    return await this.request(endpoint, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  }
+
+  async sendTestNotification(title, body, icon) {
+    return await this.request('/push/test', {
+      method: 'POST',
+      body: JSON.stringify({ title, body, icon })
+    });
+  }
+
+  // YouTube 실시간 검색 API 메서드들
+  
+  // YouTube 동영상 검색
+  async searchYouTubeVideos(query, maxResults = 5) {
+    return await this.request(`/youtube/search/${encodeURIComponent(query)}?maxResults=${maxResults}`);
+  }
+
+  // YouTube 동영상 상세 정보 조회
+  async getYouTubeVideoDetails(videoId) {
+    return await this.request(`/youtube/video/${videoId}`);
+  }
+
   // 하자 카테고리 관련 API 메서드들
   
   // 모든 하자 카테고리 목록 조회

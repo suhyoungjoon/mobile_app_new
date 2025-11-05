@@ -593,6 +593,20 @@ async function onSaveDefect(){
     
     const newDefect = await api.createDefect(defectData);
     
+    // 푸시 알림 발송 (하자 등록 완료)
+    try {
+      await api.sendPushNotification('defect-registered', {
+        defectId: newDefect.id,
+        location,
+        trade,
+        content
+      });
+      console.log('✅ Defect registration notification sent');
+    } catch (error) {
+      console.warn('⚠️ Failed to send push notification:', error);
+      // 푸시 알림 실패는 하자 등록을 방해하지 않음
+    }
+    
     // Clear form
     $('#def-location').value = '';
     $('#def-trade').value = '';
@@ -894,13 +908,47 @@ async function loadDefectDescription() {
     // 하자 내용 자동 입력
     $('#def-content').value = categoryDetail.description;
     
-    // 동영상 표시 (있는 경우)
-    if (categoryDetail.videos && categoryDetail.videos.length > 0) {
-      const primaryVideo = categoryDetail.videos.find(v => v.is_primary) || categoryDetail.videos[0];
-      loadYouTubeVideo(primaryVideo);
-      videoSection.classList.remove('hidden');
-    } else {
-      videoSection.classList.add('hidden');
+    // 실시간 YouTube 검색 시도
+    console.log(`🔍 YouTube 실시간 검색 시작: "${categoryDetail.name}"`);
+    
+    try {
+      const searchResult = await api.searchYouTubeVideos(categoryDetail.name, 3);
+      
+      if (searchResult.success && searchResult.videos && searchResult.videos.length > 0) {
+        console.log(`✅ YouTube 검색 성공: ${searchResult.videos.length}개 동영상 발견`);
+        
+        // 첫 번째 동영상을 주요 동영상으로 사용
+        const primaryVideo = searchResult.videos[0];
+        loadYouTubeVideo(primaryVideo);
+        videoSection.classList.remove('hidden');
+        
+        // 검색 결과를 화면에 표시
+        showYouTubeSearchResults(searchResult.videos, categoryDetail.name);
+        
+      } else {
+        console.log('⚠️ YouTube 검색 결과 없음, 기존 동영상 확인');
+        
+        // 기존 데이터베이스 동영상 확인
+        if (categoryDetail.videos && categoryDetail.videos.length > 0) {
+          const primaryVideo = categoryDetail.videos.find(v => v.is_primary) || categoryDetail.videos[0];
+          loadYouTubeVideo(primaryVideo);
+          videoSection.classList.remove('hidden');
+        } else {
+          videoSection.classList.add('hidden');
+        }
+      }
+      
+    } catch (youtubeError) {
+      console.warn('⚠️ YouTube 검색 실패, 기존 동영상 사용:', youtubeError.message);
+      
+      // YouTube 검색 실패 시 기존 동영상 사용
+      if (categoryDetail.videos && categoryDetail.videos.length > 0) {
+        const primaryVideo = categoryDetail.videos.find(v => v.is_primary) || categoryDetail.videos[0];
+        loadYouTubeVideo(primaryVideo);
+        videoSection.classList.remove('hidden');
+      } else {
+        videoSection.classList.add('hidden');
+      }
     }
     
   } catch (error) {
@@ -911,11 +959,80 @@ async function loadDefectDescription() {
   }
 }
 
-// YouTube 동영상 로드
-function loadYouTubeVideo(videoInfo) {
-  const iframe = $('#youtube-iframe');
-  const videoUrl = `https://www.youtube.com/embed/${videoInfo.youtube_video_id}?start=${videoInfo.timestamp_start}&end=${videoInfo.timestamp_end}&autoplay=0&rel=0&modestbranding=1`;
-  iframe.src = videoUrl;
+// YouTube 검색 결과 표시
+function showYouTubeSearchResults(videos, defectName) {
+  const videoSection = $('#video-section');
+  
+  // 검색 결과 정보 표시
+  const searchInfo = document.createElement('div');
+  searchInfo.className = 'youtube-search-info';
+  searchInfo.innerHTML = `
+    <div class="search-info-header">
+      <span class="search-icon">🔍</span>
+      <span class="search-text">"${defectName}" 관련 동영상 ${videos.length}개 발견</span>
+      <button class="button small" onclick="refreshYouTubeSearch('${defectName}')">새로고침</button>
+    </div>
+  `;
+  
+  // 기존 검색 정보 제거
+  const existingInfo = videoSection.querySelector('.youtube-search-info');
+  if (existingInfo) {
+    existingInfo.remove();
+  }
+  
+  // 검색 정보 추가
+  videoSection.insertBefore(searchInfo, videoSection.firstChild);
+  
+  // 동영상 목록 표시 (선택 가능)
+  if (videos.length > 1) {
+    const videoList = document.createElement('div');
+    videoList.className = 'youtube-video-list';
+    videoList.innerHTML = `
+      <div class="video-list-header">다른 동영상 보기:</div>
+      <div class="video-list-items">
+        ${videos.slice(1).map((video, index) => `
+          <div class="video-item" onclick="loadYouTubeVideo(${JSON.stringify(video).replace(/"/g, '&quot;')})">
+            <img src="${video.thumbnail}" alt="${video.title}" class="video-thumbnail">
+            <div class="video-info">
+              <div class="video-title">${video.title}</div>
+              <div class="video-channel">${video.channel_title}</div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+    
+    // 기존 동영상 목록 제거
+    const existingList = videoSection.querySelector('.youtube-video-list');
+    if (existingList) {
+      existingList.remove();
+    }
+    
+    // 동영상 목록 추가
+    videoSection.appendChild(videoList);
+  }
+}
+
+// YouTube 검색 새로고침
+async function refreshYouTubeSearch(defectName) {
+  try {
+    setLoading(true);
+    const searchResult = await api.searchYouTubeVideos(defectName, 3);
+    
+    if (searchResult.success && searchResult.videos && searchResult.videos.length > 0) {
+      const primaryVideo = searchResult.videos[0];
+      loadYouTubeVideo(primaryVideo);
+      showYouTubeSearchResults(searchResult.videos, defectName);
+      toast('YouTube 검색이 새로고침되었습니다', 'success');
+    } else {
+      toast('새로운 동영상을 찾을 수 없습니다', 'warning');
+    }
+  } catch (error) {
+    console.error('YouTube 검색 새로고침 실패:', error);
+    toast('YouTube 검색 새로고침에 실패했습니다', 'error');
+  } finally {
+    setLoading(false);
+  }
 }
 
 // 동영상에서 하자 위치 마킹 (기획서 요구사항)
@@ -1695,6 +1812,9 @@ function showSettings() {
   // AI 통계 새로고침
   refreshAIStats();
   
+  // 푸시 알림 설정 로드
+  loadPushNotificationSettings();
+  
   // 사용자 메뉴 닫기
   const userMenu = $('#user-menu');
   if (userMenu) {
@@ -1898,5 +2018,94 @@ async function compressImage(file, maxWidth = 1920, maxHeight = 1080, quality = 
     
     reader.readAsDataURL(file);
   });
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Push Notification Functions
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+function loadPushNotificationSettings() {
+  if (!window.pushManager) {
+    console.warn('⚠️ PushManager not available');
+    return;
+  }
+  
+  const status = window.pushManager.getSubscriptionStatus();
+  const toggle = document.getElementById('notification-toggle');
+  const statusElement = document.getElementById('notification-status');
+  
+  if (toggle) {
+    toggle.checked = status.isSubscribed;
+    toggle.disabled = !status.isSupported;
+  }
+  
+  if (statusElement) {
+    const statusText = statusElement.querySelector('.status-text');
+    const statusIndicator = statusElement.querySelector('.status-indicator');
+    
+    if (statusText && statusIndicator) {
+      if (!status.isSupported) {
+        statusText.textContent = '지원하지 않음';
+        statusIndicator.className = 'status-indicator offline';
+      } else if (status.isSubscribed) {
+        statusText.textContent = '활성화됨';
+        statusIndicator.className = 'status-indicator online';
+      } else {
+        statusText.textContent = '비활성화됨';
+        statusIndicator.className = 'status-indicator offline';
+      }
+    }
+  }
+}
+
+async function togglePushNotifications() {
+  if (!window.pushManager) {
+    toast('푸시 알림을 지원하지 않는 브라우저입니다', 'error');
+    return;
+  }
+  
+  const toggle = document.getElementById('notification-toggle');
+  if (!toggle) return;
+  
+  try {
+    if (toggle.checked) {
+      await window.pushManager.subscribe();
+      toast('✅ 푸시 알림이 활성화되었습니다!', 'success');
+    } else {
+      await window.pushManager.unsubscribe();
+      toast('✅ 푸시 알림이 비활성화되었습니다', 'info');
+    }
+    
+    // UI 업데이트
+    loadPushNotificationSettings();
+    
+  } catch (error) {
+    console.error('❌ Push notification toggle failed:', error);
+    toast('푸시 알림 설정에 실패했습니다', 'error');
+    
+    // 토글 상태 복원
+    toggle.checked = !toggle.checked;
+  }
+}
+
+async function sendTestNotification() {
+  if (!window.pushManager) {
+    toast('푸시 알림을 지원하지 않는 브라우저입니다', 'error');
+    return;
+  }
+  
+  const status = window.pushManager.getSubscriptionStatus();
+  if (!status.isSubscribed) {
+    toast('푸시 알림을 먼저 활성화해주세요', 'warning');
+    return;
+  }
+  
+  try {
+    await window.pushManager.sendTestNotification();
+    toast('✅ 테스트 알림을 발송했습니다!', 'success');
+  } catch (error) {
+    console.error('❌ Test notification failed:', error);
+    toast('테스트 알림 발송에 실패했습니다', 'error');
+  }
 }
 

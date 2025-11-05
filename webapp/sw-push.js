@@ -1,19 +1,13 @@
 // Enhanced Service Worker with Push Notifications
-const CACHE_NAME = 'insighti-v3.0-push';
+const CACHE_NAME = 'insighti-v3.0';
 const ASSETS = [
   '/index.html',
   '/css/style.css',
   '/js/data.js',
   '/js/api.js',
+  '/js/ai-detector.js',
   '/js/app.js',
-  '/js/push-manager.js',
-  '/js/ai/base-detector.js',
-  '/js/ai/local-detector.js',
-  '/js/ai/cloud-detector.js',
-  '/js/ai/hybrid-detector.js',
-  '/js/equipment.js',
-  '/js/inspector-registration.js',
-  '/manifest.json'
+  '/js/push-manager.js'
 ];
 
 // Install event
@@ -22,9 +16,7 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       console.log('📦 Caching assets...');
-      return cache.addAll(ASSETS).catch(err => {
-        console.warn('⚠️ Some assets failed to cache:', err);
-      });
+      return cache.addAll(ASSETS);
     }).then(() => {
       console.log('✅ Service Worker installed');
       return self.skipWaiting();
@@ -80,9 +72,6 @@ self.addEventListener('fetch', (event) => {
           });
         }
         return response;
-      }).catch(err => {
-        console.error('❌ Fetch failed:', request.url, err);
-        throw err;
       });
     })
   );
@@ -158,13 +147,65 @@ self.addEventListener('notificationclick', (event) => {
       
       // 새 창 열기
       if (clients.openWindow) {
-        const urlToOpen = event.notification.data?.url || '/';
-        console.log('🆕 Opening new window:', urlToOpen);
-        return clients.openWindow(urlToOpen);
+        console.log('🆕 Opening new window');
+        return clients.openWindow('/');
       }
     })
   );
 });
 
-console.log('📱 Service Worker loaded with push notifications');
+// Background sync (오프라인 지원)
+self.addEventListener('sync', (event) => {
+  console.log('🔄 Background sync:', event.tag);
+  
+  if (event.tag === 'defect-sync') {
+    event.waitUntil(syncDefects());
+  } else if (event.tag === 'inspection-sync') {
+    event.waitUntil(syncInspections());
+  }
+});
 
+// 오프라인 데이터 동기화
+async function syncDefects() {
+  console.log('🔄 Syncing defects...');
+  try {
+    // IndexedDB에서 대기 중인 하자 데이터 가져오기
+    const pendingDefects = await getPendingDefects();
+    
+    for (const defect of pendingDefects) {
+      try {
+        await fetch('/api/defects', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(defect)
+        });
+        
+        // 성공 시 로컬 데이터 삭제
+        await removePendingDefect(defect.id);
+        console.log('✅ Synced defect:', defect.id);
+      } catch (error) {
+        console.error('❌ Failed to sync defect:', defect.id, error);
+      }
+    }
+  } catch (error) {
+    console.error('❌ Sync failed:', error);
+  }
+}
+
+async function syncInspections() {
+  console.log('🔄 Syncing inspections...');
+  // 점검 데이터 동기화 로직
+}
+
+// IndexedDB 헬퍼 함수들
+async function getPendingDefects() {
+  // IndexedDB에서 대기 중인 하자 데이터 조회
+  return [];
+}
+
+async function removePendingDefect(id) {
+  // IndexedDB에서 동기화 완료된 하자 데이터 삭제
+  console.log('🗑️ Removed pending defect:', id);
+}
+
+console.log('📱 Service Worker loaded with push notifications');

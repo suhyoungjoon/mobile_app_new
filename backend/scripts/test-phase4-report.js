@@ -24,10 +24,10 @@ async function testComprehensiveReportAPI() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         complex: '서울 인싸이트자이',
-        dong: '106',
-        ho: '1210',
-        name: '한점검',
-        phone: '010-1111-1111'
+        dong: '101',
+        ho: '1203',
+        name: '홍길동',
+        phone: '010-0000-0000'
       })
     });
     

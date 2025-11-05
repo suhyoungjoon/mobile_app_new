@@ -191,6 +191,19 @@ async function saveAirInspection() {
   
   if (response.success) {
     showToast('공기질 측정이 저장되었습니다');
+    
+    // 푸시 알림 발송 (점검 완료)
+    try {
+      await api.sendPushNotification('inspection-completed', {
+        inspectionType: 'air',
+        location,
+        result
+      });
+      console.log('✅ Air inspection notification sent');
+    } catch (error) {
+      console.warn('⚠️ Failed to send push notification:', error);
+    }
+    
     resetEquipmentForm();
   } else {
     showToast('저장에 실패했습니다', 'error');

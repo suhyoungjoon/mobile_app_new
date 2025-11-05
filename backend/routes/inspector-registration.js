@@ -2,6 +2,8 @@
 const express = require('express');
 const pool = require('../database');
 const { authenticateToken } = require('../middleware/auth');
+const { safeLog } = require('../utils/logger');
+const { encrypt, decrypt } = require('../utils/encryption');
 
 const router = express.Router();
 
@@ -76,18 +78,24 @@ router.post('/register', async (req, res) => {
       }
     }
 
-    // 점검원 등록 신청 생성
+    // 점검원 등록 신청 생성 (암호화하여 저장)
+    const inspectorNameEncrypted = encrypt(inspector_name);
+    const phoneEncrypted = encrypt(phone);
+    const emailEncrypted = email ? encrypt(email) : null;
+    
     const registrationResult = await pool.query(
       `INSERT INTO inspector_registration 
-       (complex_id, dong, ho, inspector_name, phone, company_name, license_number, email, registration_reason)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       (complex_id, dong, ho, inspector_name, phone, company_name, license_number, email, registration_reason,
+        inspector_name_encrypted, phone_encrypted, email_encrypted)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING id, status, created_at`,
-      [complexId, dong, ho, inspector_name, phone, company_name, license_number, email, registration_reason]
+      [complexId, dong, ho, inspector_name, phone, company_name, license_number, email, registration_reason,
+       inspectorNameEncrypted, phoneEncrypted, emailEncrypted]
     );
 
     const registration = registrationResult.rows[0];
 
-    console.log('🔍 점검원 등록 신청:', {
+    safeLog('info', '점검원 등록 신청', {
       id: registration.id,
       complex,
       dong,
@@ -116,7 +124,7 @@ router.post('/register', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('점검원 등록 오류:', error);
+    safeLog('error', '점검원 등록 오류', { error: error.message });
     res.status(500).json({ 
       error: '점검원 등록 중 오류가 발생했습니다',
       details: error.message 
@@ -143,7 +151,20 @@ router.get('/status/:registrationId', async (req, res) => {
       return res.status(404).json({ error: '등록 신청을 찾을 수 없습니다' });
     }
 
-    const registration = result.rows[0];
+    const registrationRaw = result.rows[0];
+    // 암호화된 필드가 있으면 복호화, 없으면 평문 사용 (호환성)
+    const registration = {
+      ...registrationRaw,
+      inspector_name: registrationRaw.inspector_name_encrypted 
+        ? decrypt(registrationRaw.inspector_name_encrypted) 
+        : registrationRaw.inspector_name,
+      phone: registrationRaw.phone_encrypted 
+        ? decrypt(registrationRaw.phone_encrypted) 
+        : registrationRaw.phone,
+      email: registrationRaw.email_encrypted 
+        ? decrypt(registrationRaw.email_encrypted) 
+        : registrationRaw.email
+    };
 
     res.json({
       success: true,
@@ -168,7 +189,7 @@ router.get('/status/:registrationId', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('등록 상태 조회 오류:', error);
+    safeLog('error', '등록 상태 조회 오류', { error: error.message });
     res.status(500).json({ 
       error: '등록 상태 조회 중 오류가 발생했습니다',
       details: error.message 
@@ -190,24 +211,33 @@ router.get('/admin/pending', authenticateToken, requireAdmin, async (req, res) =
        ORDER BY ir.created_at DESC`
     );
 
-    const registrations = result.rows.map(row => ({
-      id: row.id,
-      complex: row.complex_name,
-      dong: row.dong,
-      ho: row.ho,
-      inspector_name: row.inspector_name,
-      phone: row.phone,
-      company_name: row.company_name,
-      license_number: row.license_number,
-      email: row.email,
-      registration_reason: row.registration_reason,
-      status: row.status,
-      approved_by: row.approved_by_name,
-      approved_at: row.approved_at,
-      rejection_reason: row.rejection_reason,
-      created_at: row.created_at,
-      updated_at: row.updated_at
-    }));
+    const registrations = result.rows.map(row => {
+      // 암호화된 필드가 있으면 복호화, 없으면 평문 사용 (호환성)
+      return {
+        id: row.id,
+        complex: row.complex_name,
+        dong: row.dong,
+        ho: row.ho,
+        inspector_name: row.inspector_name_encrypted 
+          ? decrypt(row.inspector_name_encrypted) 
+          : row.inspector_name,
+        phone: row.phone_encrypted 
+          ? decrypt(row.phone_encrypted) 
+          : row.phone,
+        company_name: row.company_name,
+        license_number: row.license_number,
+        email: row.email_encrypted 
+          ? decrypt(row.email_encrypted) 
+          : row.email,
+        registration_reason: row.registration_reason,
+        status: row.status,
+        approved_by: row.approved_by_name,
+        approved_at: row.approved_at,
+        rejection_reason: row.rejection_reason,
+        created_at: row.created_at,
+        updated_at: row.updated_at
+      };
+    });
 
     res.json({
       success: true,
@@ -219,7 +249,7 @@ router.get('/admin/pending', authenticateToken, requireAdmin, async (req, res) =
     });
 
   } catch (error) {
-    console.error('관리자 등록 목록 조회 오류:', error);
+    safeLog('error', '관리자 등록 목록 조회 오류', { error: error.message });
     res.status(500).json({ 
       error: '등록 목록 조회 중 오류가 발생했습니다',
       details: error.message 
@@ -251,7 +281,20 @@ router.put('/admin/:registrationId/approve', authenticateToken, requireAdmin, as
       return res.status(404).json({ error: '등록 신청을 찾을 수 없습니다' });
     }
 
-    const registration = registrationResult.rows[0];
+    const registrationRaw = registrationResult.rows[0];
+    // 암호화된 필드가 있으면 복호화, 없으면 평문 사용 (호환성)
+    const registration = {
+      ...registrationRaw,
+      inspector_name: registrationRaw.inspector_name_encrypted 
+        ? decrypt(registrationRaw.inspector_name_encrypted) 
+        : registrationRaw.inspector_name,
+      phone: registrationRaw.phone_encrypted 
+        ? decrypt(registrationRaw.phone_encrypted) 
+        : registrationRaw.phone,
+      email: registrationRaw.email_encrypted 
+        ? decrypt(registrationRaw.email_encrypted) 
+        : registrationRaw.email
+    };
 
     if (registration.status !== 'pending') {
       return res.status(400).json({ 
@@ -275,12 +318,15 @@ router.put('/admin/:registrationId/approve', authenticateToken, requireAdmin, as
           [adminId, registrationId]
         );
 
-        // 2. 해당 세대의 user_type을 company로 변경
+        // 2. 해당 세대의 user_type을 company로 변경 (암호화하여 저장)
+        const nameEncrypted = encrypt(registration.inspector_name);
+        const phoneEncrypted = encrypt(registration.phone);
         await pool.query(
           `UPDATE household 
-           SET user_type = 'company', resident_name = $1, phone = $2
+           SET user_type = 'company', resident_name = $1, phone = $2,
+               resident_name_encrypted = $6, phone_encrypted = $7
            WHERE complex_id = $3 AND dong = $4 AND ho = $5`,
-          [registration.inspector_name, registration.phone, registration.complex_id, registration.dong, registration.ho]
+          [registration.inspector_name, registration.phone, registration.complex_id, registration.dong, registration.ho, nameEncrypted, phoneEncrypted]
         );
 
         // 3. 해당 세대가 없으면 새로 생성
@@ -290,16 +336,19 @@ router.put('/admin/:registrationId/approve', authenticateToken, requireAdmin, as
         );
 
         if (householdCheck.rows.length === 0) {
+          // 암호화하여 저장
+          const nameEncrypted = encrypt(registration.inspector_name);
+          const phoneEncrypted = encrypt(registration.phone);
           await pool.query(
-            `INSERT INTO household (complex_id, dong, ho, resident_name, phone, user_type)
-             VALUES ($1, $2, $3, $4, $5, 'company')`,
-            [registration.complex_id, registration.dong, registration.ho, registration.inspector_name, registration.phone]
+            `INSERT INTO household (complex_id, dong, ho, resident_name, phone, user_type, resident_name_encrypted, phone_encrypted)
+             VALUES ($1, $2, $3, $4, $5, 'company', $6, $7)`,
+            [registration.complex_id, registration.dong, registration.ho, registration.inspector_name, registration.phone, nameEncrypted, phoneEncrypted]
           );
         }
 
         await pool.query('COMMIT');
 
-        console.log('✅ 점검원 승인 완료:', {
+        safeLog('info', '점검원 승인 완료', {
           registration_id: registrationId,
           inspector_name: registration.inspector_name,
           approved_by: adminId
@@ -330,7 +379,7 @@ router.put('/admin/:registrationId/approve', authenticateToken, requireAdmin, as
         [adminId, rejection_reason, registrationId]
       );
 
-      console.log('❌ 점검원 등록 거부:', {
+      safeLog('info', '점검원 등록 거부', {
         registration_id: registrationId,
         inspector_name: registration.inspector_name,
         rejection_reason,
@@ -350,7 +399,7 @@ router.put('/admin/:registrationId/approve', authenticateToken, requireAdmin, as
     }
 
   } catch (error) {
-    console.error('점검원 승인/거부 오류:', error);
+    safeLog('error', '점검원 승인/거부 오류', { error: error.message });
     res.status(500).json({ 
       error: '승인/거부 처리 중 오류가 발생했습니다',
       details: error.message 
@@ -372,7 +421,7 @@ router.delete('/admin/:registrationId', authenticateToken, requireAdmin, async (
       return res.status(404).json({ error: '등록 신청을 찾을 수 없습니다' });
     }
 
-    console.log('🗑️ 점검원 등록 삭제:', {
+    safeLog('info', '점검원 등록 삭제', {
       registration_id: registrationId,
       inspector_name: result.rows[0].inspector_name
     });
@@ -383,7 +432,7 @@ router.delete('/admin/:registrationId', authenticateToken, requireAdmin, async (
     });
 
   } catch (error) {
-    console.error('점검원 등록 삭제 오류:', error);
+    safeLog('error', '점검원 등록 삭제 오류', { error: error.message });
     res.status(500).json({ 
       error: '등록 삭제 중 오류가 발생했습니다',
       details: error.message 
