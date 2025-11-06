@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: insighti-backend-v2
+    name: mobile_app_new
     runtime: node
     region: singapore
     plan: free
