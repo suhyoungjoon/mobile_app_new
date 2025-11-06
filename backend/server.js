@@ -25,23 +25,35 @@ const adminRoutes = require('./routes/admin'); // NEW: Admin functions
 const app = express();
 
 // CORS configuration - must be before helmet
-app.use(cors({
+const corsOptions = {
   origin: (origin, callback) => {
+    // 허용할 Origin 목록
     const allowedOrigins = [
       'http://localhost:3000', 
       'http://127.0.0.1:3000', 
       'http://localhost:8080', 
       'http://127.0.0.1:8080',
-      'file://'
+      'https://insighti.vercel.app',
+      'https://*.vercel.app'
     ];
     
-    // Allow all Vercel deployment URLs
-    const isVercelApp = origin && origin.includes('.vercel.app');
+    // Vercel 도메인 체크
+    const isVercelApp = origin && (
+      origin.includes('.vercel.app') || 
+      origin.includes('insighti.vercel.app')
+    );
     
-    // Allow all origins in development, or specific origins in production
-    if (!origin || allowedOrigins.includes(origin) || isVercelApp || process.env.NODE_ENV !== 'production') {
+    // 개발 환경에서는 모든 origin 허용
+    if (process.env.NODE_ENV !== 'production') {
+      callback(null, true);
+      return;
+    }
+    
+    // Origin이 없거나 (같은 도메인 요청, Postman 등) 허용된 origin인 경우
+    if (!origin || allowedOrigins.some(allowed => origin.includes(allowed.replace('*.', ''))) || isVercelApp) {
       callback(null, true);
     } else {
+      console.warn(`CORS blocked origin: ${origin}`);
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -51,10 +63,12 @@ app.use(cors({
   exposedHeaders: ['Content-Type', 'Authorization'],
   preflightContinue: false,
   optionsSuccessStatus: 204
-}));
+};
 
-// OPTIONS 요청 명시적 처리 (CORS preflight)
-app.options('*', cors());
+app.use(cors(corsOptions));
+
+// OPTIONS 요청 명시적 처리 (CORS preflight) - 모든 경로에 대해
+app.options('*', cors(corsOptions));
 
 // HTTPS 강제 리다이렉트 (프로덕션 환경)
 if (process.env.NODE_ENV === 'production') {
