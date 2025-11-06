@@ -227,6 +227,41 @@ async function switchAdminScreen(page, screenName) {
   return false;
 }
 
+// 관리자 계정 확인 및 생성
+async function ensureAdminAccount() {
+  console.log('🔍 관리자 계정 확인 중...');
+  
+  try {
+    const response = await fetch(`${config.backendUrl}/api/admin/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: testData.admin.email,
+        password: testData.admin.password
+      })
+    });
+    
+    if (response.status === 200) {
+      const data = await response.json();
+      console.log('✅ 관리자 계정 확인됨');
+      console.log(`   이름: ${data.admin.name}`);
+      console.log(`   역할: ${data.admin.role}\n`);
+      return true;
+    } else {
+      const error = await response.json();
+      console.log('⚠️  관리자 계정이 없거나 비밀번호가 틀립니다');
+      console.log(`   오류: ${error.error || 'Unknown error'}\n`);
+      console.log('💡 관리자 계정 생성 방법:');
+      console.log(`   DATABASE_URL="..." node backend/scripts/create-admin.js\n`);
+      return false;
+    }
+  } catch (error) {
+    console.log('⚠️  관리자 계정 확인 실패:', error.message);
+    console.log('   관리자 계정이 없을 수 있습니다\n');
+    return false;
+  }
+}
+
 // 기능 6: 관리자 기능 테스트
 async function testAdminFeatures() {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -235,6 +270,12 @@ async function testAdminFeatures() {
   console.log(`관리자 URL: ${config.adminUrl}`);
   console.log(`백엔드: ${config.backendUrl}`);
   console.log(`스크린샷: ${config.screenshotsDir}\n`);
+  
+  // 관리자 계정 확인
+  const adminExists = await ensureAdminAccount();
+  if (!adminExists) {
+    console.log('⚠️  관리자 계정이 없습니다. 테스트를 계속 진행하지만 로그인은 실패할 수 있습니다.\n');
+  }
   
   let browser;
   let page;
