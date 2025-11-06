@@ -5,7 +5,7 @@ const $$ = (q) => document.querySelectorAll(q);
 // API Base URL
 const API_BASE = window.location.hostname === 'localhost' 
   ? 'http://localhost:3000' 
-  : 'https://insighti-backend-production-bda8.up.railway.app';
+  : 'https://insighti-backend-v2.onrender.com';
 
 // Admin State
 const AdminState = {

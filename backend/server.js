@@ -38,17 +38,23 @@ app.use(cors({
     // Allow all Vercel deployment URLs
     const isVercelApp = origin && origin.includes('.vercel.app');
     
-    if (!origin || allowedOrigins.includes(origin) || isVercelApp) {
+    // Allow all origins in development, or specific origins in production
+    if (!origin || allowedOrigins.includes(origin) || isVercelApp || process.env.NODE_ENV !== 'production') {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  exposedHeaders: ['Content-Type', 'Authorization']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  exposedHeaders: ['Content-Type', 'Authorization'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 }));
+
+// OPTIONS 요청 명시적 처리 (CORS preflight)
+app.options('*', cors());
 
 // HTTPS 강제 리다이렉트 (프로덕션 환경)
 if (process.env.NODE_ENV === 'production') {
