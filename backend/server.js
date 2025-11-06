@@ -187,17 +187,22 @@ app.use('*', (req, res) => {
 const PORT = config.port;
 
 // Start server with error handling
-try {
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Server running on port ${PORT}`);
-    console.log(`📚 API Documentation: http://localhost:${PORT}/api`);
-    console.log(`🏥 Health Check: http://localhost:${PORT}/health`);
-    console.log(`✅ Server is ready to accept connections`);
-  });
-} catch (error) {
-  console.error('❌ Failed to start server:', error);
+const server = app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`📚 API Documentation: http://localhost:${PORT}/api`);
+  console.log(`🏥 Health Check: http://localhost:${PORT}/health`);
+  console.log(`✅ Server is ready to accept connections`);
+  console.log(`🌐 Server listening on 0.0.0.0:${PORT}`);
+});
+
+// Handle server errors
+server.on('error', (error) => {
+  console.error('❌ Server error:', error);
+  if (error.code === 'EADDRINUSE') {
+    console.error(`❌ Port ${PORT} is already in use`);
+  }
   process.exit(1);
-}
+});
 
 // Handle uncaught errors
 process.on('uncaughtException', (error) => {
