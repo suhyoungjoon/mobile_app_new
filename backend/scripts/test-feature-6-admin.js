@@ -26,7 +26,7 @@ if (!fs.existsSync(config.screenshotsDir)) {
 // 테스트 데이터
 const testData = {
   admin: {
-    email: process.env.ADMIN_EMAIL || 'admin@example.com',
+    email: process.env.ADMIN_EMAIL || 'admin@insighti.com',
     password: process.env.ADMIN_PASSWORD || 'admin123'
   }
 };
