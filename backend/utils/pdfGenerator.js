@@ -64,11 +64,16 @@ class PDFGenerator {
 
     let browser;
     try {
-      // Launch browser
-      browser = await puppeteer.launch({
+      // Launch browser with automatic Chromium download if needed
+      // In Render, Chromium will be downloaded on first use if not present
+      const launchOptions = {
         headless: 'new',
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
-      });
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+      };
+      
+      // If Chromium is not found, Puppeteer will download it automatically
+      // This happens at runtime, not during build
+      browser = await puppeteer.launch(launchOptions);
 
       const page = await browser.newPage();
 
