@@ -1,5 +1,5 @@
-// PDF generation service using Puppeteer
-const puppeteer = require('puppeteer');
+// PDF generation service using html-pdf (lightweight alternative to Puppeteer)
+const pdf = require('html-pdf');
 const fs = require('fs');
 const path = require('path');
 const handlebars = require('handlebars');
@@ -62,21 +62,7 @@ class PDFGenerator {
       footerTemplate = ''
     } = options;
 
-    let browser;
     try {
-      // Launch browser with automatic Chromium download if needed
-      // In Render, Chromium will be downloaded on first use if not present
-      const launchOptions = {
-        headless: 'new',
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-      };
-      
-      // If Chromium is not found, Puppeteer will download it automatically
-      // This happens at runtime, not during build
-      browser = await puppeteer.launch(launchOptions);
-
-      const page = await browser.newPage();
-
       // Load template
       const templatePath = path.join(this.templateDir, `${templateName}.hbs`);
       const templateContent = fs.readFileSync(templatePath, 'utf8');
@@ -85,37 +71,51 @@ class PDFGenerator {
       // Generate HTML
       const html = template(data);
 
-      // Set content
-      await page.setContent(html, { waitUntil: 'networkidle0' });
-
-      // Generate PDF
-      const pdfBuffer = await page.pdf({
-        format,
-        margin,
-        printBackground,
-        displayHeaderFooter,
-        headerTemplate,
-        footerTemplate
-      });
-
-      // Save to file
-      const outputPath = path.join(this.outputDir, filename);
-      fs.writeFileSync(outputPath, pdfBuffer);
-
-      return {
-        filename,
-        path: outputPath,
-        url: `/reports/${filename}`,
-        size: pdfBuffer.length
+      // PDF options for html-pdf
+      const pdfOptions = {
+        format: format,
+        border: {
+          top: margin.top,
+          right: margin.right,
+          bottom: margin.bottom,
+          left: margin.left
+        },
+        type: 'pdf',
+        quality: '75',
+        renderDelay: 1000, // Wait for any dynamic content
+        timeout: 30000
       };
+
+      // Generate PDF using html-pdf
+      return new Promise((resolve, reject) => {
+        pdf.create(html, pdfOptions).toBuffer((err, buffer) => {
+          if (err) {
+            console.error('PDF generation error:', err);
+            reject(new Error(`PDF generation failed: ${err.message}`));
+            return;
+          }
+
+          try {
+            // Save to file
+            const outputPath = path.join(this.outputDir, filename);
+            fs.writeFileSync(outputPath, buffer);
+
+            resolve({
+              filename,
+              path: outputPath,
+              url: `/reports/${filename}`,
+              size: buffer.length
+            });
+          } catch (fileError) {
+            console.error('File save error:', fileError);
+            reject(new Error(`Failed to save PDF file: ${fileError.message}`));
+          }
+        });
+      });
 
     } catch (error) {
       console.error('PDF generation error:', error);
       throw new Error(`PDF generation failed: ${error.message}`);
-    } finally {
-      if (browser) {
-        await browser.close();
-      }
     }
   }
 
