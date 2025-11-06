@@ -5,7 +5,7 @@ services:
     region: singapore
     plan: free
     rootDir: backend
-    buildCommand: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true npm install --prefer-offline --no-audit --loglevel=verbose
+    buildCommand: export PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true && echo "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=$PUPPETEER_SKIP_CHROMIUM_DOWNLOAD" && npm install --prefer-offline --no-audit --loglevel=verbose
     startCommand: npm start
     envVars:
       - key: NODE_ENV
@@ -16,3 +16,5 @@ services:
         value: insighti-super-secret-key-2024
       - key: JWT_EXPIRES_IN
         value: 3d
+      - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
+        value: "true"
