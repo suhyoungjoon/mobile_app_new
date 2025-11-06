@@ -5,7 +5,7 @@ services:
     region: singapore
     plan: free
     rootDir: backend
-    buildCommand: npm ci --prefer-offline --no-audit || npm install --prefer-offline --no-audit
+    buildCommand: npm ci --prefer-offline --no-audit --loglevel=verbose || npm install --prefer-offline --no-audit --loglevel=verbose
     startCommand: npm start
     envVars:
       - key: NODE_ENV
