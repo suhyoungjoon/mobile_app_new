@@ -203,15 +203,81 @@ async function adminLogin(page) {
 async function switchAdminScreen(page, screenName) {
   console.log(`📋 ${screenName} 화면으로 전환 중...`);
   
-  await page.evaluate((name) => {
-    if (typeof showScreen === 'function') {
-      showScreen(name);
-    } else if (window.showScreen) {
-      window.showScreen(name);
+  // 방법 1: 메뉴 항목 클릭 시도
+  const menuItem = await page.$(`.menu-item[onclick*="showScreen('${screenName}')"]`);
+  if (menuItem) {
+    try {
+      await menuItem.click();
+      await page.waitForTimeout(2000);
+    } catch (error) {
+      console.log(`   메뉴 클릭 실패, 직접 호출 시도...`);
+      // 방법 2: 직접 호출 (event 객체 없이)
+      await page.evaluate((name) => {
+        // 모든 화면 숨기기
+        document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+        
+        // 선택된 화면 표시
+        const targetScreen = document.querySelector(`#screen-${name}`);
+        if (targetScreen) {
+          targetScreen.classList.remove('hidden');
+        }
+        
+        // 메뉴 활성화 (event 없이 직접 처리)
+        document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active'));
+        const menuItem = Array.from(document.querySelectorAll('.menu-item')).find(m => 
+          m.getAttribute('onclick') && m.getAttribute('onclick').includes(`'${name}'`)
+        );
+        if (menuItem) {
+          menuItem.classList.add('active');
+        }
+        
+        // 데이터 로드 함수 호출
+        if (name === 'dashboard' && typeof loadDashboardStats === 'function') {
+          loadDashboardStats();
+        } else if (name === 'users' && typeof loadUsers === 'function') {
+          loadUsers();
+        } else if (name === 'inspectors' && typeof loadInspectorRegistrations === 'function') {
+          loadInspectorRegistrations();
+        } else if (name === 'defects' && typeof loadDefects === 'function') {
+          loadDefects();
+        }
+      }, screenName);
+      await page.waitForTimeout(2000);
     }
-  }, screenName);
-  
-  await page.waitForTimeout(2000);
+  } else {
+    // 메뉴 항목이 없으면 직접 호출
+    await page.evaluate((name) => {
+      // 모든 화면 숨기기
+      document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+      
+      // 선택된 화면 표시
+      const targetScreen = document.querySelector(`#screen-${name}`);
+      if (targetScreen) {
+        targetScreen.classList.remove('hidden');
+      }
+      
+      // 메뉴 활성화
+      document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active'));
+      const menuItem = Array.from(document.querySelectorAll('.menu-item')).find(m => 
+        m.getAttribute('onclick') && m.getAttribute('onclick').includes(`'${name}'`)
+      );
+      if (menuItem) {
+        menuItem.classList.add('active');
+      }
+      
+      // 데이터 로드 함수 호출
+      if (name === 'dashboard' && typeof loadDashboardStats === 'function') {
+        loadDashboardStats();
+      } else if (name === 'users' && typeof loadUsers === 'function') {
+        loadUsers();
+      } else if (name === 'inspectors' && typeof loadInspectorRegistrations === 'function') {
+        loadInspectorRegistrations();
+      } else if (name === 'defects' && typeof loadDefects === 'function') {
+        loadDefects();
+      }
+    }, screenName);
+    await page.waitForTimeout(2000);
+  }
   
   // 화면 확인
   const screenElement = await page.$(`#screen-${screenName}`);
