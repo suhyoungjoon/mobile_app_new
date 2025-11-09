@@ -415,6 +415,9 @@
       <div class="menu-item" onclick="showScreen('defects')">
         <span>🏗️</span> 하자 관리
       </div>
+      <div class="menu-item" onclick="showScreen('ai-settings')">
+        <span>🤖</span> AI 판정 설정
+      </div>
       <div class="menu-item" onclick="adminLogout()">
         <span>🚪</span> 로그아웃
       </div>
@@ -583,6 +586,95 @@
           </table>
         </div>
       </div>
+
+    <!-- AI 설정 화면 -->
+    <div id="screen-ai-settings" class="screen hidden">
+      <div class="content-header">
+        <h1>🤖 AI 판정 설정</h1>
+      </div>
+
+      <div class="card">
+        <div class="card-header">AI 판정 옵션</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">AI 모드</label>
+            <select id="ai-mode" class="input">
+              <option value="hybrid">하이브리드 (로컬 → 외부 모델)</option>
+              <option value="local">로컬 규칙 우선</option>
+              <option value="azure">Azure 전용</option>
+              <option value="huggingface">Hugging Face 전용</option>
+            </select>
+            <small class="text-muted">하이브리드 모드에서는 로컬 분석 후 필요 시 선택한 외부 모델을 호출합니다.</small>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">외부 모델 공급자</label>
+            <select id="ai-provider" class="input">
+              <option value="azure">Azure OpenAI</option>
+              <option value="huggingface">Hugging Face</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">로컬 분석 사용</label>
+            <select id="ai-local-enabled" class="input">
+              <option value="true">사용</option>
+              <option value="false">미사용</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Azure 분석 사용</label>
+            <select id="ai-azure-enabled" class="input">
+              <option value="true">사용</option>
+              <option value="false">미사용</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Hugging Face 분석 사용</label>
+            <select id="ai-hf-enabled" class="input">
+              <option value="false">미사용</option>
+              <option value="true">사용</option>
+            </select>
+          </div>
+
+          <div class="form-group" id="ai-hf-model-group">
+            <label class="form-label">Hugging Face 모델명</label>
+            <input id="ai-hf-model" type="text" class="input" placeholder="microsoft/resnet-50" />
+            <small class="text-muted">이미지 분류 모델 이름을 입력하세요.</small>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">외부 모델 호출 기준 신뢰도</label>
+            <input id="ai-azure-threshold" type="number" step="0.05" min="0" max="1" class="input" placeholder="0.80" />
+            <small class="text-muted">로컬 신뢰도가 이 값보다 낮을 때 외부 모델을 호출합니다.</small>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">로컬 기본 신뢰도</label>
+            <input id="ai-local-confidence" type="number" step="0.05" min="0" max="1" class="input" placeholder="0.65" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">최대 감지 건수</label>
+            <input id="ai-max-detections" type="number" min="1" max="5" class="input" placeholder="3" />
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button class="button primary" onclick="saveAISettings()">설정 저장</button>
+          <button class="button" onclick="loadAISettings()">설정 새로고침</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">로컬 규칙 요약</div>
+        <div id="ai-local-rules-summary" class="ai-rules-summary">
+          <p class="text-muted">로컬 규칙 정보를 불러오는 중입니다...</p>
+        </div>
+      </div>
+    </div>
     </div>
   </div>
 </div>

@@ -1240,25 +1240,14 @@ async function analyzePhotoWithAI(file, photoType) {
     if (window.hybridDetector) {
       console.log('🎯 하이브리드 AI 분석 시작...');
       
-      const result = await window.hybridDetector.analyze(file);
+      const result = await window.hybridDetector.analyze(file, photoType);
       console.log('✅ 하이브리드 분석 완료:', result);
       
-      // 결과를 배열 형식으로 변환 (기존 UI 호환)
-      const detectedDefects = [{
-        defectType: result.defectType,
-        confidence: result.confidence,
-        location: result.location,
-        severity: result.severity,
-        description: result.description,
-        source: result.source,
-        cost: result.cost || 0
-      }];
-      
-      displayAIDetectionResults(detectedDefects, photoType);
+      displayAIDetectionResults(result, photoType);
       
       // 학습 데이터 저장
       try {
-        await saveLearningData(file.name, result, photoType);
+        await saveLearningData(file.name, result.primary, photoType);
       } catch (error) {
         console.error('학습 데이터 저장 실패:', error);
       }
@@ -1266,36 +1255,9 @@ async function analyzePhotoWithAI(file, photoType) {
       return;
     }
     
-    // Legacy: Azure OpenAI 사용
-    if (window.USE_AZURE_AI) {
-      console.log('🌐 Azure OpenAI Vision으로 분석 시작...');
-      
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        try {
-          const imageBase64 = e.target.result;
-          const result = await api.analyzeDefectWithAzureAI(imageBase64, photoType);
-          console.log('✅ Azure AI 분석 완료:', result);
-          
-          if (result && result.analysis && result.analysis.detectedDefects) {
-            displayAIDetectionResults(result.analysis.detectedDefects, photoType);
-          } else {
-            displayAIDetectionResults([], photoType);
-          }
-        } catch (aiError) {
-          console.error('❌ Azure AI 분석 오류:', aiError);
-          const mockDefects = generateQuickMockDefects();
-          displayAIDetectionResults(mockDefects, photoType);
-        }
-      };
-      reader.readAsDataURL(file);
-      return;
-    }
-    
-    // Fallback: 모의 결과
-    console.warn('⚠️ AI 감지기가 로드되지 않았습니다. 모의 결과를 생성합니다.');
+    console.warn('⚠️ 하이브리드 감지기가 준비되지 않았습니다. 모의 결과를 생성합니다.');
     const mockDefects = generateQuickMockDefects();
-    displayAIDetectionResults(mockDefects, photoType);
+    displayAIDetectionResults({ source: 'mock', defects: mockDefects, primary: mockDefects[0] }, photoType);
     
   } catch (error) {
     console.error('AI 분석 실패:', error);
@@ -1357,11 +1319,17 @@ function generateQuickMockDefects() {
 }
 
 // AI 감지 결과 표시
-function displayAIDetectionResults(defects, photoType) {
+function displayAIDetectionResults(aiResult, photoType) {
   const aiResultsDiv = $('#ai-analysis-results');
   const detectedListDiv = $('#ai-detected-defects');
+  const defects = Array.isArray(aiResult?.defects) ? aiResult.defects : aiResult || [];
+  window.currentAIResult = {
+    defects,
+    source: aiResult?.source || (Array.isArray(aiResult) ? 'local' : 'unknown'),
+    raw: aiResult
+  };
   
-  if (defects.length === 0) {
+  if (!defects.length) {
     aiResultsDiv.innerHTML = `
       <div class="ai-analysis-header">
         <h4>✅ AI 분석 완료</h4>
@@ -1384,7 +1352,8 @@ function displayAIDetectionResults(defects, photoType) {
             <span class="ai-confidence">${Math.round(defect.confidence * 100)}%</span>
           </div>
         </div>
-        <div class="ai-defect-description">${defect.description}</div>
+        <div class="ai-defect-description">${defect.description || '추가 설명 없음'}</div>
+        ${defect.recommendation ? `<div class="ai-defect-recommendation">💡 ${defect.recommendation}</div>` : ''}
         <div class="ai-defect-actions">
           <button class="button success" onclick="useAIDetection(${index}, '${photoType}')">
             ✅ 이 결과 사용
@@ -1397,9 +1366,18 @@ function displayAIDetectionResults(defects, photoType) {
     `;
   });
   
-  const aiModeMessage = window.USE_AZURE_AI 
-    ? '<div class="ai-mode-badge azure">🌐 Azure OpenAI Vision</div>'
-    : '<div class="ai-mode-badge mock">🎭 모의(Mock) 모드 - 실제 AI 학습 시 정확도가 향상됩니다</div>';
+  const mode = window.hybridDetector?.settings?.mode || aiResult?.source || 'local';
+  const provider = window.hybridDetector?.settings?.provider || (aiResult?.source === 'huggingface' ? 'huggingface' : 'azure');
+  let aiModeMessage = '<div class="ai-mode-badge mock">🎯 로컬 규칙 기반 분석</div>';
+  if (mode === 'azure' || (provider === 'azure' && aiResult?.source === 'azure')) {
+    aiModeMessage = '<div class="ai-mode-badge azure">🌐 Azure OpenAI Vision</div>';
+  } else if (mode === 'huggingface' || aiResult?.source === 'huggingface' || provider === 'huggingface') {
+    aiModeMessage = '<div class="ai-mode-badge huggingface">🤗 Hugging Face Inference</div>';
+  } else if (mode === 'hybrid') {
+    aiModeMessage = provider === 'huggingface'
+      ? '<div class="ai-mode-badge hybrid">🔄 하이브리드 모드 (로컬 → Hugging Face)</div>'
+      : '<div class="ai-mode-badge hybrid">🔄 하이브리드 모드 (로컬 → Azure)</div>';
+  }
   
   aiResultsDiv.innerHTML = `
     <div class="ai-analysis-header">
@@ -1418,12 +1396,19 @@ function useAIDetection(defectIndex, photoType) {
   // AI 감지 결과를 현재 하자 등록 폼에 적용
   const aiResultsDiv = $('#ai-analysis-results');
   const defectItem = aiResultsDiv.querySelector(`[data-defect-index="${defectIndex}"]`);
+  const currentResult = window.currentAIResult;
   
   if (!defectItem) return;
+  if (!currentResult || !currentResult.defects || !currentResult.defects[defectIndex]) {
+    toast('AI 결과를 찾을 수 없습니다', 'error');
+    return;
+  }
+
+  const defectData = currentResult.defects[defectIndex];
   
   // 감지된 하자 정보 추출
-  const defectType = defectItem.querySelector('.ai-defect-type').textContent;
-  const description = defectItem.querySelector('.ai-defect-description').textContent;
+  const defectType = defectData.type;
+  const description = defectData.description || '';
   
   // 하자명 드롭다운에서 해당 항목 선택
   const categorySelect = $('#defect-category');
@@ -1463,8 +1448,9 @@ function useAIDetection(defectIndex, photoType) {
 function rejectAIDetection(defectIndex) {
   const aiResultsDiv = $('#ai-analysis-results');
   const defectItem = aiResultsDiv.querySelector(`[data-defect-index="${defectIndex}"]`);
+  const currentResult = window.currentAIResult;
   
-  if (!defectItem) return;
+  if (!defectItem || !currentResult) return;
   
   // 거부 피드백 표시
   defectItem.innerHTML = `
@@ -1606,13 +1592,13 @@ async function saveLearningData(filename, analysisResult, photoType) {
       image_hash: imageHash,
       filename: filename,
       photo_type: photoType,
-      local_prediction: analysisResult.source.includes('local') ? analysisResult.defectType : null,
-      local_confidence: analysisResult.source.includes('local') ? analysisResult.confidence : null,
-      cloud_prediction: analysisResult.source.includes('cloud') ? analysisResult.defectType : null,
-      cloud_confidence: analysisResult.source.includes('cloud') ? analysisResult.confidence : null,
+      prediction: analysisResult.defectType,
+      confidence: analysisResult.confidence,
+      severity: analysisResult.severity,
+      source: analysisResult.source || (window.currentAIResult?.source ?? 'local'),
       final_label: null, // 사용자가 저장할 때 업데이트
-      processing_time: analysisResult.processingTime,
-      cost: analysisResult.cost || 0,
+      processing_time: analysisResult.processingTime || window.currentAIResult?.raw?.totalProcessingTime,
+      recommendation: analysisResult.recommendation || '',
       created_at: new Date().toISOString()
     };
     

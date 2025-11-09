@@ -90,6 +90,7 @@ async function adminLogin() {
     // 대시보드 로드
     showScreen('dashboard');
     loadDashboardStats();
+    loadAISettings();
     
   } catch (error) {
     console.error('Login error:', error);
@@ -124,7 +125,17 @@ function showScreen(screenName) {
   
   // 메뉴 활성화
   $$('.menu-item').forEach(m => m.classList.remove('active'));
-  event.currentTarget.classList.add('active');
+  if (typeof event !== 'undefined' && event?.currentTarget) {
+    event.currentTarget.classList.add('active');
+  } else {
+    const menuItem = Array.from($$('.menu-item')).find(m => {
+      const handler = m.getAttribute('onclick') || '';
+      return handler.includes(`showScreen('${screenName}')`);
+    });
+    if (menuItem) {
+      menuItem.classList.add('active');
+    }
+  }
   
   // 데이터 로드
   if (screenName === 'dashboard') {
@@ -135,6 +146,8 @@ function showScreen(screenName) {
     loadInspectorRegistrations();
   } else if (screenName === 'defects') {
     loadDefects();
+  } else if (screenName === 'ai-settings') {
+    loadAISettings();
   }
 }
 
@@ -349,6 +362,158 @@ async function loadDefects() {
     console.error('Load defects error:', error);
     toast('하자 목록 로드 실패', 'error');
   }
+}
+
+// AI 설정 로드
+async function loadAISettings() {
+  const modeSelect = document.getElementById('ai-mode');
+  if (!modeSelect) return;
+
+  try {
+    const result = await apiCall('/api/ai-detection/settings');
+    if (!result || !result.success) {
+      throw new Error(result?.error || '설정 정보를 불러오지 못했습니다.');
+    }
+
+    const settings = result.settings || {};
+
+    $('#ai-mode').value = settings.mode || 'hybrid';
+    $('#ai-provider').value = settings.provider || 'azure';
+    $('#ai-local-enabled').value = String(settings.localEnabled ?? true);
+    $('#ai-azure-enabled').value = String(settings.azureEnabled ?? true);
+    const hfEnabled = settings.huggingfaceEnabled;
+    $('#ai-hf-enabled').value = String(hfEnabled ?? (settings.provider === 'huggingface'));
+    $('#ai-hf-model').value = settings.huggingfaceModel || 'microsoft/resnet-50';
+    $('#ai-azure-threshold').value = (settings.azureFallbackThreshold ?? 0.8).toFixed(2);
+    $('#ai-local-confidence').value = (settings.localBaseConfidence ?? 0.65).toFixed(2);
+    $('#ai-max-detections').value = settings.maxDetections ?? 3;
+
+    updateAIProviderVisibility();
+    renderAIRulesSummary(settings);
+
+    if (window.hybridDetector) {
+      window.hybridDetector.settings = settings;
+    }
+  } catch (error) {
+    console.error('AI 설정 로드 실패:', error);
+    toast('AI 설정을 불러오지 못했습니다', 'error');
+  }
+}
+
+// AI 설정 저장
+async function saveAISettings() {
+  try {
+    const payload = {
+      mode: $('#ai-mode').value,
+      provider: $('#ai-provider').value,
+      localEnabled: $('#ai-local-enabled').value === 'true',
+      azureEnabled: $('#ai-azure-enabled').value === 'true',
+      azureFallbackThreshold: parseFloat($('#ai-azure-threshold').value) || 0.8,
+      localBaseConfidence: parseFloat($('#ai-local-confidence').value) || 0.65,
+      maxDetections: parseInt($('#ai-max-detections').value, 10) || 3,
+      huggingfaceEnabled: $('#ai-hf-enabled').value === 'true',
+      huggingfaceModel: $('#ai-hf-model').value.trim() || 'microsoft/resnet-50'
+    };
+
+    const result = await apiCall('/api/ai-detection/settings', {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
+
+    if (!result || !result.success) {
+      throw new Error(result?.error || '설정 저장에 실패했습니다.');
+    }
+
+    toast('AI 설정이 저장되었습니다', 'success');
+    const updated = result.settings || payload;
+    renderAIRulesSummary(updated);
+
+    if (window.hybridDetector) {
+      window.hybridDetector.settings = updated;
+    }
+  } catch (error) {
+    console.error('AI 설정 저장 실패:', error);
+    toast(error.message || 'AI 설정 저장에 실패했습니다', 'error');
+  }
+}
+
+function updateAIProviderVisibility() {
+  const provider = $('#ai-provider').value;
+  const azureGroup = $('#ai-azure-enabled').closest('.form-group');
+  const hfGroup = $('#ai-hf-enabled').closest('.form-group');
+  const hfModelGroup = document.getElementById('ai-hf-model-group');
+
+  if (provider === 'azure') {
+    if (azureGroup) azureGroup.style.display = '';
+    if (hfGroup) {
+      hfGroup.style.display = 'none';
+      $('#ai-hf-enabled').value = 'false';
+    }
+    if (hfModelGroup) hfModelGroup.style.display = 'none';
+  } else if (provider === 'huggingface') {
+    if (azureGroup) {
+      azureGroup.style.display = 'none';
+      $('#ai-azure-enabled').value = 'false';
+    }
+    if (hfGroup) {
+      hfGroup.style.display = '';
+      if ($('#ai-hf-enabled').value === 'false') {
+        $('#ai-hf-enabled').value = 'true';
+      }
+    }
+    if (hfModelGroup) hfModelGroup.style.display = '';
+  } else {
+    if (azureGroup) azureGroup.style.display = '';
+    if (hfGroup) hfGroup.style.display = '';
+    if (hfModelGroup) hfModelGroup.style.display = '';
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const providerSelect = document.getElementById('ai-provider');
+  if (providerSelect) {
+    providerSelect.addEventListener('change', updateAIProviderVisibility);
+  }
+});
+
+// 로컬 규칙 요약 표시
+function renderAIRulesSummary(settings = {}) {
+  const summaryEl = document.getElementById('ai-local-rules-summary');
+  if (!summaryEl) return;
+
+  const rules = settings.rules;
+  if (!rules || rules.length === 0) {
+    summaryEl.innerHTML = `
+      <p class="text-muted">
+        등록된 사용자 정의 규칙이 없습니다. 기본 규칙 세트를 사용합니다.
+      </p>
+      <ul class="ai-rules-list">
+        <li>천장누수: 파란 채널이 높고 대비가 낮은 경우</li>
+        <li>욕실곰팡이: 전체가 어둡고 대비가 낮은 경우</li>
+        <li>벽균열: 밝은 배경에서 대비가 높은 경우</li>
+      </ul>
+    `;
+    return;
+  }
+
+  const items = rules.map(rule => `
+    <li>
+      <strong>${rule.label || rule.id || '규칙'}</strong> - ${rule.description || '설명 없음'}
+      <div class="text-muted" style="font-size: 12px;">
+        심각도: ${rule.severity || '보통'}
+      </div>
+    </li>
+  `).join('');
+
+  summaryEl.innerHTML = `
+    <p>총 ${rules.length}개의 사용자 정의 규칙이 적용됩니다.</p>
+    <ul class="ai-rules-list">
+      ${items}
+    </ul>
+    <div class="text-muted" style="font-size: 12px;">
+      마지막 수정: ${settings.updatedAt ? new Date(settings.updatedAt).toLocaleString('ko-KR') : '알 수 없음'}
+    </div>
+  `;
 }
 
 // 하자 검색

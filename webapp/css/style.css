@@ -461,6 +461,16 @@ html, body {
   color: white;
 }
 
+.ai-mode-badge.huggingface {
+  background: linear-gradient(135deg, #ff5f6d 0%, #ffc371 100%);
+  color: white;
+}
+
+.ai-mode-badge.hybrid {
+  background: linear-gradient(135deg, #5c258d 0%, #4389a2 100%);
+  color: white;
+}
+
 .ai-mode-badge.mock {
   background: linear-gradient(135deg, #ff9800 0%, #ffb74d 100%);
   color: white;

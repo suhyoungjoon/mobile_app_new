@@ -17,6 +17,7 @@ const pushNotificationRoutes = require('./routes/push-notifications'); // NEW: P
 const youtubeSearchRoutes = require('./routes/youtube-search'); // NEW: YouTube 실시간 검색
 const aiLearningRoutes = require('./routes/ai-learning');
 const azureAIRoutes = require('./routes/azure-ai'); // NEW: Azure OpenAI
+const aiDetectionRoutes = require('./routes/ai-detection'); // NEW: 하이브리드 AI 감지
 const uploadRoutes = require('./routes/upload');
 const reportsRoutes = require('./routes/reports');
 const smsRoutes = require('./routes/sms');
@@ -116,6 +117,7 @@ app.use('/api/push', pushNotificationRoutes); // NEW: Push notifications
 app.use('/api/youtube', youtubeSearchRoutes); // NEW: YouTube 실시간 검색
 app.use('/api/ai-learning', aiLearningRoutes);
 app.use('/api/azure-ai', azureAIRoutes); // NEW: Azure OpenAI
+app.use('/api/ai-detection', aiDetectionRoutes); // NEW: Hybrid AI detection
 app.use('/api/upload', uploadRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/sms', smsRoutes);
@@ -156,6 +158,7 @@ app.get('/api', (req, res) => {
       youtubeSearch: '/api/youtube', // NEW: YouTube 실시간 검색
       aiLearning: '/api/ai-learning',
       azureAI: '/api/azure-ai',
+          aiDetection: '/api/ai-detection',
       upload: '/api/upload',
       reports: '/api/reports',
       sms: '/api/sms',

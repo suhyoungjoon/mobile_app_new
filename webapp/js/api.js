@@ -361,6 +361,30 @@ class APIClient {
     return await this.request('/azure-ai/status');
   }
 
+  // 하이브리드 AI 감지 (로컬 + Azure)
+  async analyzeDefectHybrid(imageBase64, photoType = 'near') {
+    return await this.request('/ai-detection/detect', {
+      method: 'POST',
+      body: JSON.stringify({
+        imageBase64,
+        photoType
+      })
+    });
+  }
+
+  // AI 판정 설정 조회 (관리자)
+  async getAIDetectionSettings() {
+    return await this.request('/ai-detection/settings');
+  }
+
+  // AI 판정 설정 업데이트 (관리자)
+  async updateAIDetectionSettings(settings) {
+    return await this.request('/ai-detection/settings', {
+      method: 'PUT',
+      body: JSON.stringify(settings)
+    });
+  }
+
   // 장비점검 관련 API 메서드들 (Phase 2)
   
   // 열화상 점검 항목 생성
