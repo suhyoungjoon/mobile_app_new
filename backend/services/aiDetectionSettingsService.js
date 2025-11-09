@@ -155,6 +155,18 @@ class AiDetectionSettingsService {
       );
     `);
 
+    await pool.query(`ALTER TABLE ai_detection_settings ADD COLUMN IF NOT EXISTS mode TEXT NOT NULL DEFAULT 'hybrid';`);
+    await pool.query(`ALTER TABLE ai_detection_settings ADD COLUMN IF NOT EXISTS provider TEXT NOT NULL DEFAULT 'azure';`);
+    await pool.query(`ALTER TABLE ai_detection_settings ADD COLUMN IF NOT EXISTS azure_enabled BOOLEAN NOT NULL DEFAULT true;`);
+    await pool.query(`ALTER TABLE ai_detection_settings ADD COLUMN IF NOT EXISTS local_enabled BOOLEAN NOT NULL DEFAULT true;`);
+    await pool.query(`ALTER TABLE ai_detection_settings ADD COLUMN IF NOT EXISTS azure_fallback_threshold REAL NOT NULL DEFAULT 0.8;`);
+    await pool.query(`ALTER TABLE ai_detection_settings ADD COLUMN IF NOT EXISTS local_base_confidence REAL NOT NULL DEFAULT 0.65;`);
+    await pool.query(`ALTER TABLE ai_detection_settings ADD COLUMN IF NOT EXISTS max_detections INTEGER NOT NULL DEFAULT 3;`);
+    await pool.query(`ALTER TABLE ai_detection_settings ADD COLUMN IF NOT EXISTS huggingface_enabled BOOLEAN NOT NULL DEFAULT false;`);
+    await pool.query(`ALTER TABLE ai_detection_settings ADD COLUMN IF NOT EXISTS huggingface_model TEXT DEFAULT 'microsoft/resnet-50';`);
+    await pool.query(`ALTER TABLE ai_detection_settings ADD COLUMN IF NOT EXISTS rules JSONB;`);
+    await pool.query(`ALTER TABLE ai_detection_settings ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();`);
+
     await pool.query(`
       INSERT INTO ai_detection_settings (id)
       VALUES (1)
