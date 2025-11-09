@@ -55,33 +55,73 @@ class HuggingFaceVisionService {
     }
 
     const data = await response.json();
+    return this._parseDetections(data, modelName);
+  }
 
-    if (!Array.isArray(data)) {
+  _parseDetections(rawResponse, modelName) {
+    const list = Array.isArray(rawResponse)
+      ? rawResponse
+      : Array.isArray(rawResponse?.predictions)
+      ? rawResponse.predictions
+      : Array.isArray(rawResponse?.[0]?.predictions)
+      ? rawResponse[0].predictions
+      : null;
+
+    if (!Array.isArray(list)) {
       return {
         detectedDefects: [],
         overallAssessment: '모델 응답 형식을 해석할 수 없습니다.',
-        raw: data
+        raw: rawResponse
       };
     }
 
-    const detections = data
-      .filter(item => typeof item.score === 'number' && item.score > 0)
-      .slice(0, 3)
-      .map(item => ({
-        type: item.label || 'HuggingFace 예측',
-        actualDefect: item.label || 'HuggingFace 예측',
-        confidence: item.score,
-        severity: item.score > 0.75 ? '심각' : item.score > 0.5 ? '보통' : '경미',
-        description: `Hugging Face 모델(${modelName})에서 감지된 하자 유형입니다.`,
-        repairSuggestion: ''
-      }));
+    const detections = list
+      .map(item => {
+        const score = item.score ?? item.confidence ?? item.probability ?? 0;
+        const label =
+          item.label ??
+          item.class ??
+          item.class_name ??
+          item.actualDefect ??
+          'HuggingFace 예측';
+        const box = item.box ?? item.boundingBox ?? item.bbox ?? null;
+        const severity = score > 0.75 ? '심각' : score > 0.5 ? '보통' : '경미';
+
+        return {
+          type: label,
+          actualDefect: label,
+          confidence: score,
+          severity,
+          description: `Hugging Face 모델(${modelName})에서 감지된 하자 유형입니다.`,
+          repairSuggestion: '',
+          ...(box
+            ? {
+                boundingBox: {
+                  xmin: box.xmin ?? box[0] ?? box.x1 ?? null,
+                  ymin: box.ymin ?? box[1] ?? box.y1 ?? null,
+                  xmax: box.xmax ?? box[2] ?? box.x2 ?? null,
+                  ymax: box.ymax ?? box[3] ?? box.y2 ?? null,
+                  width:
+                    box.width ??
+                    (box.xmax != null && box.xmin != null ? box.xmax - box.xmin : null),
+                  height:
+                    box.height ??
+                    (box.ymax != null && box.ymin != null ? box.ymax - box.ymin : null)
+                }
+              }
+            : {})
+        };
+      })
+      .filter(item => typeof item.confidence === 'number' && item.confidence > 0)
+      .sort((a, b) => b.confidence - a.confidence)
+      .slice(0, 5);
 
     return {
       detectedDefects: detections,
       overallAssessment: detections.length
         ? `${detections[0].type} 가능성이 가장 높습니다.`
         : '확실한 하자를 감지하지 못했습니다.',
-      raw: data
+      raw: rawResponse
     };
   }
 }
