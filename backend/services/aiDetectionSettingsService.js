@@ -13,6 +13,9 @@ const DEFAULT_SETTINGS = {
   maxDetections: 3,
   huggingfaceEnabled: defaultProvider === 'huggingface',
   huggingfaceModel: 'microsoft/resnet-50',
+  huggingfaceTask: 'image-classification', // image-classification | object-detection | image-to-text | visual-question-answering
+  huggingfacePrompt:
+    'Describe any visible building defects such as cracks, water leaks, mold, or safety issues in this photo.',
   updatedAt: null,
   rules: null
 };
@@ -42,6 +45,8 @@ class AiDetectionSettingsService {
                 max_detections AS "maxDetections",
                 huggingface_enabled AS "huggingfaceEnabled",
                 huggingface_model AS "huggingfaceModel",
+                huggingface_task AS "huggingfaceTask",
+                huggingface_prompt AS "huggingfacePrompt",
                 rules,
                 updated_at AS "updatedAt"
          FROM ai_detection_settings
@@ -61,6 +66,8 @@ class AiDetectionSettingsService {
                   max_detections AS "maxDetections",
                   huggingface_enabled AS "huggingfaceEnabled",
                   huggingface_model AS "huggingfaceModel",
+                  huggingface_task AS "huggingfaceTask",
+                  huggingface_prompt AS "huggingfacePrompt",
                   rules,
                   updated_at AS "updatedAt"
            FROM ai_detection_settings
@@ -105,8 +112,8 @@ class AiDetectionSettingsService {
 
     await pool.query(
       `INSERT INTO ai_detection_settings
-        (id, mode, provider, azure_enabled, local_enabled, azure_fallback_threshold, local_base_confidence, max_detections, huggingface_enabled, huggingface_model, rules, updated_at)
-       VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+        (id, mode, provider, azure_enabled, local_enabled, azure_fallback_threshold, local_base_confidence, max_detections, huggingface_enabled, huggingface_model, huggingface_task, huggingface_prompt, rules, updated_at)
+       VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
        ON CONFLICT (id) DO UPDATE SET
          mode = EXCLUDED.mode,
          provider = EXCLUDED.provider,
@@ -117,6 +124,8 @@ class AiDetectionSettingsService {
          max_detections = EXCLUDED.max_detections,
          huggingface_enabled = EXCLUDED.huggingface_enabled,
          huggingface_model = EXCLUDED.huggingface_model,
+         huggingface_task = EXCLUDED.huggingface_task,
+         huggingface_prompt = EXCLUDED.huggingface_prompt,
          rules = EXCLUDED.rules,
          updated_at = NOW()`,
       [
@@ -129,6 +138,8 @@ class AiDetectionSettingsService {
         settings.maxDetections,
         settings.huggingfaceEnabled,
         settings.huggingfaceModel,
+        settings.huggingfaceTask,
+        settings.huggingfacePrompt,
         settings.rules
       ]
     );
@@ -151,6 +162,8 @@ class AiDetectionSettingsService {
         max_detections INTEGER NOT NULL DEFAULT 3,
         huggingface_enabled BOOLEAN NOT NULL DEFAULT false,
         huggingface_model TEXT DEFAULT 'microsoft/resnet-50',
+        huggingface_task TEXT DEFAULT 'image-classification',
+        huggingface_prompt TEXT,
         rules JSONB,
         updated_at TIMESTAMP DEFAULT NOW()
       );
@@ -165,6 +178,8 @@ class AiDetectionSettingsService {
     await pool.query(`ALTER TABLE ai_detection_settings ADD COLUMN IF NOT EXISTS max_detections INTEGER NOT NULL DEFAULT 3;`);
     await pool.query(`ALTER TABLE ai_detection_settings ADD COLUMN IF NOT EXISTS huggingface_enabled BOOLEAN NOT NULL DEFAULT false;`);
     await pool.query(`ALTER TABLE ai_detection_settings ADD COLUMN IF NOT EXISTS huggingface_model TEXT DEFAULT 'microsoft/resnet-50';`);
+    await pool.query(`ALTER TABLE ai_detection_settings ADD COLUMN IF NOT EXISTS huggingface_task TEXT DEFAULT 'image-classification';`);
+    await pool.query(`ALTER TABLE ai_detection_settings ADD COLUMN IF NOT EXISTS huggingface_prompt TEXT;`);
     await pool.query(`ALTER TABLE ai_detection_settings ADD COLUMN IF NOT EXISTS rules JSONB;`);
     await pool.query(`ALTER TABLE ai_detection_settings ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();`);
 

@@ -75,7 +75,12 @@ class AiDetectionService {
         try {
           const hfAnalysis = await huggingFaceVisionService.analyzeDefect(
             imageBase64,
-            settings.huggingfaceModel
+            settings.huggingfaceModel,
+            {
+              task: settings.huggingfaceTask,
+              prompt: settings.huggingfacePrompt,
+              maxDetections: settings.maxDetections
+            }
           );
 
           responses.push({

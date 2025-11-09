@@ -387,6 +387,10 @@ async function loadAISettings() {
     $('#ai-azure-threshold').value = (settings.azureFallbackThreshold ?? 0.8).toFixed(2);
     $('#ai-local-confidence').value = (settings.localBaseConfidence ?? 0.65).toFixed(2);
     $('#ai-max-detections').value = settings.maxDetections ?? 3;
+    $('#ai-hf-task').value = settings.huggingfaceTask || 'image-classification';
+    $('#ai-hf-prompt').value =
+      settings.huggingfacePrompt ||
+      'Describe any building defects such as cracks, water leaks, mold, or safety issues in this photo.';
 
     updateAIProviderVisibility();
     renderAIRulesSummary(settings);
@@ -412,7 +416,11 @@ async function saveAISettings() {
       localBaseConfidence: parseFloat($('#ai-local-confidence').value) || 0.65,
       maxDetections: parseInt($('#ai-max-detections').value, 10) || 3,
       huggingfaceEnabled: $('#ai-hf-enabled').value === 'true',
-      huggingfaceModel: $('#ai-hf-model').value.trim() || 'microsoft/resnet-50'
+      huggingfaceModel: $('#ai-hf-model').value.trim() || 'microsoft/resnet-50',
+      huggingfaceTask: $('#ai-hf-task').value,
+      huggingfacePrompt:
+        $('#ai-hf-prompt').value.trim() ||
+        'Describe any building defects such as cracks, water leaks, mold, or safety issues in this photo.'
     };
 
     const result = await apiCall('/api/ai-detection/settings', {
@@ -442,6 +450,8 @@ function updateAIProviderVisibility() {
   const azureGroup = $('#ai-azure-enabled').closest('.form-group');
   const hfGroup = $('#ai-hf-enabled').closest('.form-group');
   const hfModelGroup = document.getElementById('ai-hf-model-group');
+  const hfTaskGroup = document.getElementById('ai-hf-task-group');
+  const hfPromptGroup = document.getElementById('ai-hf-prompt-group');
 
   if (provider === 'azure') {
     if (azureGroup) azureGroup.style.display = '';
@@ -450,6 +460,8 @@ function updateAIProviderVisibility() {
       $('#ai-hf-enabled').value = 'false';
     }
     if (hfModelGroup) hfModelGroup.style.display = 'none';
+    if (hfTaskGroup) hfTaskGroup.style.display = 'none';
+    if (hfPromptGroup) hfPromptGroup.style.display = 'none';
   } else if (provider === 'huggingface') {
     if (azureGroup) {
       azureGroup.style.display = 'none';
@@ -462,10 +474,14 @@ function updateAIProviderVisibility() {
       }
     }
     if (hfModelGroup) hfModelGroup.style.display = '';
+    if (hfTaskGroup) hfTaskGroup.style.display = '';
+    if (hfPromptGroup) hfPromptGroup.style.display = '';
   } else {
     if (azureGroup) azureGroup.style.display = '';
     if (hfGroup) hfGroup.style.display = '';
     if (hfModelGroup) hfModelGroup.style.display = '';
+    if (hfTaskGroup) hfTaskGroup.style.display = '';
+    if (hfPromptGroup) hfPromptGroup.style.display = '';
   }
 }
 

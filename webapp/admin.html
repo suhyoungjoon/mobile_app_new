@@ -645,6 +645,31 @@
             <small class="text-muted">이미지 분류 모델 이름을 입력하세요.</small>
           </div>
 
+          <div class="form-group" id="ai-hf-task-group">
+            <label class="form-label">Hugging Face 작업 유형</label>
+            <select id="ai-hf-task" class="input">
+              <option value="image-classification">이미지 분류 (라벨 기반)</option>
+              <option value="object-detection">객체 감지 (YOLO 등)</option>
+              <option value="image-to-text">이미지 설명 (캡셔닝)</option>
+              <option value="visual-question-answering">질문 응답 (프롬프트 기반)</option>
+            </select>
+            <small class="text-muted">
+              일반 캡셔닝 모델을 사용할 때는 "이미지 설명" 또는 "질문 응답"을 선택하세요.
+            </small>
+          </div>
+
+          <div class="form-group" id="ai-hf-prompt-group">
+            <label class="form-label">하자 중심 프롬프트 / 질문</label>
+            <textarea
+              id="ai-hf-prompt"
+              class="form-input"
+              placeholder="Describe any building defects such as cracks, water leaks, mold, or safety issues in this photo."
+            ></textarea>
+            <small class="text-muted">
+              캡셔닝/질문응답 작업에서 사용할 하자 중심 프롬프트를 입력합니다.
+            </small>
+          </div>
+
           <div class="form-group">
             <label class="form-label">외부 모델 호출 기준 신뢰도</label>
             <input id="ai-azure-threshold" type="number" step="0.05" min="0" max="1" class="input" placeholder="0.80" />
