@@ -1,6 +1,7 @@
 class HuggingFaceVisionService {
   constructor() {
     this.apiToken = process.env.HUGGINGFACE_API_TOKEN;
+    this.baseUrl = process.env.HUGGINGFACE_ROUTER_BASE_URL || 'https://router.huggingface.co/hf-inference';
   }
 
   _getHeaders() {
@@ -10,7 +11,9 @@ class HuggingFaceVisionService {
 
     return {
       Authorization: `Bearer ${this.apiToken}`,
-      'Content-Type': 'application/octet-stream'
+      'Content-Type': 'application/octet-stream',
+      Accept: 'application/json',
+      'x-wait-for-model': 'true'
     };
   }
 
@@ -23,15 +26,32 @@ class HuggingFaceVisionService {
       ? Buffer.from(imageBase64.split(',')[1], 'base64')
       : Buffer.from(imageBase64, 'base64');
 
-    const response = await fetch(`https://api-inference.huggingface.co/models/${modelName}`, {
+    const endpoint = `${this.baseUrl}/models/${encodeURIComponent(modelName)}`;
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: this._getHeaders(),
       body: buffer
     });
 
+    if (response.status === 202) {
+      throw new Error('Hugging Face 모델을 로딩 중입니다. 잠시 후 다시 시도해주세요.');
+    }
+
+    const contentType = response.headers.get('content-type') || '';
+
     if (!response.ok) {
-      const err = await response.text();
-      throw new Error(`Hugging Face API 호출 실패: ${response.status} ${err}`);
+      const errText = await response.text();
+      let detail = errText;
+      if (contentType.includes('application/json')) {
+        try {
+          const parsed = JSON.parse(errText);
+          detail = parsed.error || parsed.message || errText;
+        } catch {
+          // ignore JSON parse errors, keep original text
+        }
+      }
+
+      throw new Error(`Hugging Face API 호출 실패: ${response.status} ${detail}`);
     }
 
     const data = await response.json();
