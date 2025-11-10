@@ -660,6 +660,7 @@ async function loadAISettings() {
   if (adminDashboard && adminDashboard.classList.contains('hidden')) {
     console.log('⚠️ admin-dashboard가 숨겨져 있습니다. 표시합니다.');
     adminDashboard.classList.remove('hidden');
+    adminDashboard.style.display = 'flex';
   }
   
   // 화면이 보이는지 확인하고, 안 보이면 잠시 대기
@@ -671,21 +672,19 @@ async function loadAISettings() {
     return;
   }
   
-  if (screenEl.classList.contains('hidden')) {
-    console.log('⏳ AI 설정 화면이 아직 숨겨져 있습니다. 잠시 후 다시 시도...');
-    // 최대 10번까지 재시도 (1초)
-    if (!loadAISettings.retryCount) {
-      loadAISettings.retryCount = 0;
-    }
-    if (loadAISettings.retryCount < 10) {
-      loadAISettings.retryCount++;
-      setTimeout(() => loadAISettings(), 100);
-      return;
-    } else {
-      console.error('❌ 화면이 너무 오래 숨겨져 있습니다. 강제로 표시합니다.');
-      screenEl.classList.remove('hidden');
-    }
-  }
+  // 강제로 표시 (showScreen에서 설정했지만 다시 확인)
+  screenEl.classList.remove('hidden');
+  screenEl.style.display = 'block';
+  screenEl.style.visibility = 'visible';
+  screenEl.style.opacity = '1';
+  screenEl.style.width = '100%';
+  screenEl.style.minHeight = '500px';
+  
+  console.log('🔧 loadAISettings에서 화면 강제 표시:', {
+    hasHidden: screenEl.classList.contains('hidden'),
+    inlineDisplay: screenEl.style.display,
+    computedDisplay: window.getComputedStyle(screenEl).display
+  });
   
   // 부모 요소도 확인
   if (screenEl.offsetParent === null && adminDashboard) {
