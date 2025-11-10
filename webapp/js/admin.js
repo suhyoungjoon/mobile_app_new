@@ -405,14 +405,43 @@ function showScreen(screenName) {
     hasHidden: targetScreen.classList.contains('hidden')
   });
   
-  // 화면을 보이도록 스크롤
+  // 화면을 보이도록 스크롤 (즉시 실행)
   setTimeout(() => {
     const rect = targetScreen.getBoundingClientRect();
-    if (rect.top < 0 || rect.top > window.innerHeight) {
+    const viewportHeight = window.innerHeight;
+    
+    console.log('🔍 화면 위치 확인:', {
+      top: rect.top,
+      viewportHeight: viewportHeight,
+      needsScroll: rect.top < 0 || rect.top > viewportHeight
+    });
+    
+    if (rect.top < 0 || rect.top > viewportHeight) {
       console.log('🔍 화면이 보이지 않는 위치에 있습니다. 스크롤합니다.');
-      targetScreen.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      
+      // 여러 방법으로 스크롤 시도
+      targetScreen.scrollIntoView({ behavior: 'auto', block: 'start', inline: 'nearest' });
+      
+      // main-content도 스크롤
+      const mainContent = targetScreen.closest('.main-content');
+      if (mainContent) {
+        mainContent.scrollTop = 0;
+        console.log('🔍 main-content 스크롤 초기화');
+      }
+      
+      // window도 스크롤
+      window.scrollTo({ top: 0, behavior: 'auto' });
+      
+      // 다시 확인
+      setTimeout(() => {
+        const newRect = targetScreen.getBoundingClientRect();
+        console.log('🔍 스크롤 후 위치:', {
+          top: newRect.top,
+          isVisible: newRect.top >= 0 && newRect.top < viewportHeight
+        });
+      }, 50);
     }
-  }, 100);
+  }, 50);
   
   // 다른 화면이 여전히 보이는지 확인
   const visibleScreens = Array.from($$('.screen')).filter(s => {
@@ -962,14 +991,39 @@ async function loadAISettings() {
           // 화면이 뷰포트 밖에 있으면 스크롤
           if (finalRect.top < 0 || finalRect.top > viewportHeight || 
               finalRect.left < 0 || finalRect.left > viewportWidth) {
-            console.log('🔍 화면이 뷰포트 밖에 있습니다. 스크롤합니다.');
-            screenEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            console.log('🔍 화면이 뷰포트 밖에 있습니다. 강제로 스크롤합니다.');
+            
+            // 여러 방법으로 스크롤 시도
+            screenEl.scrollIntoView({ behavior: 'auto', block: 'start', inline: 'nearest' });
             
             // main-content도 스크롤
             const mainContent = screenEl.closest('.main-content');
             if (mainContent) {
-              mainContent.scrollTop = 0;
+              // main-content의 스크롤 위치 계산
+              const mainContentRect = mainContent.getBoundingClientRect();
+              const targetTop = finalRect.top - mainContentRect.top;
+              mainContent.scrollTop = Math.max(0, targetTop - 20); // 20px 여유
+              console.log('🔍 main-content 스크롤:', {
+                scrollTop: mainContent.scrollTop,
+                targetTop: targetTop
+              });
             }
+            
+            // window도 스크롤
+            window.scrollTo({ top: 0, behavior: 'auto' });
+            
+            // 다시 확인
+            setTimeout(() => {
+              const afterScrollRect = screenEl.getBoundingClientRect();
+              console.log('🔍 스크롤 후 최종 위치:', {
+                top: afterScrollRect.top,
+                left: afterScrollRect.left,
+                isVisible: afterScrollRect.top >= 0 && afterScrollRect.top < viewportHeight &&
+                          afterScrollRect.left >= 0 && afterScrollRect.left < viewportWidth
+              });
+            }, 100);
+          } else {
+            console.log('✅ 화면이 뷰포트 내에 있습니다.');
           }
         } else {
           console.error('❌ 여전히 화면 크기가 0입니다. 추가 조사가 필요합니다.');
