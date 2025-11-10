@@ -670,10 +670,17 @@ async function loadAISettings() {
       screenVisibility: screenStyle.visibility,
       screenPosition: screenStyle.position,
       screenOpacity: screenStyle.opacity,
+      screenWidth: screenStyle.width,
+      screenHeight: screenStyle.height,
       parentHidden: adminDashboard.classList.contains('hidden'),
       parentDisplay: window.getComputedStyle(adminDashboard).display,
       mainContentDisplay: mainContentStyle?.display,
-      mainContentVisibility: mainContentStyle?.visibility
+      mainContentVisibility: mainContentStyle?.visibility,
+      mainContentWidth: mainContentStyle?.width,
+      mainContentHeight: mainContentStyle?.height,
+      mainContentPosition: mainContentStyle?.position,
+      screenRect: screenEl.getBoundingClientRect(),
+      mainContentRect: mainContent?.getBoundingClientRect()
     });
     
     // CSS 강제 설정
@@ -690,17 +697,51 @@ async function loadAISettings() {
       screenEl.style.opacity = '1';
     }
     
+    // main-content도 확인
+    if (mainContent) {
+      const mcStyle = window.getComputedStyle(mainContent);
+      if (mcStyle.display === 'none') {
+        console.log('🔧 main-content display: none을 block으로 변경');
+        mainContent.style.display = 'block';
+      }
+      if (mcStyle.visibility === 'hidden') {
+        console.log('🔧 main-content visibility: hidden을 visible로 변경');
+        mainContent.style.visibility = 'visible';
+      }
+    }
+    
     // 강제로 표시
     adminDashboard.classList.remove('hidden');
     screenEl.classList.remove('hidden');
     
+    // position을 명시적으로 설정 (offsetParent 문제 해결)
+    if (screenStyle.position === 'static' || screenStyle.position === '') {
+      console.log('🔧 position을 relative로 설정');
+      screenEl.style.position = 'relative';
+    }
+    
     // 다시 확인
     const newStyle = window.getComputedStyle(screenEl);
+    const newRect = screenEl.getBoundingClientRect();
     console.log('✅ 수정 후 상태:', {
       display: newStyle.display,
       visibility: newStyle.visibility,
-      offsetParent: screenEl.offsetParent !== null
+      position: newStyle.position,
+      offsetParent: screenEl.offsetParent !== null,
+      boundingRect: {
+        top: newRect.top,
+        left: newRect.left,
+        width: newRect.width,
+        height: newRect.height
+      }
     });
+    
+    // 실제로 화면이 보이는지 확인
+    if (newRect.width > 0 && newRect.height > 0) {
+      console.log('✅ 화면이 실제로 렌더링되고 있습니다!');
+    } else {
+      console.error('❌ 화면 크기가 0입니다. 레이아웃 문제가 있을 수 있습니다.');
+    }
   }
 
   const modeSelect = document.getElementById('ai-mode');
