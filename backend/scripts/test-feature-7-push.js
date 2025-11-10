@@ -293,9 +293,200 @@ async function loginAdmin() {
   return json.token;
 }
 
+async function setupAdminPushSubscription(browser, results) {
+  console.log('👤 관리자 계정 푸시 구독 설정 중...');
+  const context = await browser.createIncognitoBrowserContext();
+  await context.overridePermissions(config.frontendUrl, ['notifications']);
+  const adminPage = await context.newPage();
+  await adminPage.setViewport(config.viewport);
+  await adminPage.setUserAgent(
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1'
+  );
+
+  try {
+    // 관리자 로그인하여 토큰 획득
+    const adminToken = await loginAdmin();
+    
+    // 관리자 페이지로 이동하여 Service Worker 등록
+    await adminPage.goto(`${config.frontendUrl}/admin`, { waitUntil: 'networkidle0', timeout: config.waitTimeout });
+    await adminPage.waitForTimeout(2000);
+
+    // Service Worker 등록 대기
+    await adminPage.evaluate(() => {
+      return navigator.serviceWorker.ready;
+    });
+
+    // 푸시 구독 생성
+    const subscription = await adminPage.evaluate(async () => {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        throw new Error('푸시 알림을 지원하지 않습니다.');
+      }
+
+      // urlBase64ToUint8Array 함수 정의
+      function urlBase64ToUint8Array(base64String) {
+        const padding = '='.repeat((4 - base64String.length % 4) % 4);
+        const base64 = (base64String + padding)
+          .replace(/\-/g, '+')
+          .replace(/_/g, '/');
+        const rawData = window.atob(base64);
+        const outputArray = new Uint8Array(rawData.length);
+        for (let i = 0; i < rawData.length; ++i) {
+          outputArray[i] = rawData.charCodeAt(i);
+        }
+        return outputArray;
+      }
+
+      const registration = await navigator.serviceWorker.ready;
+      const existingSubscription = await registration.pushManager.getSubscription();
+      
+      if (existingSubscription) {
+        return existingSubscription.toJSON();
+      }
+
+      // VAPID 공개키 가져오기
+      const backendUrl = window.location.origin.includes('localhost') ? 'http://localhost:3000' : 'https://mobile-app-new.onrender.com';
+      const vapidKeyResponse = await fetch(`${backendUrl}/api/push/vapid-key`);
+      const { publicKey } = await vapidKeyResponse.json();
+
+      // 푸시 구독 생성
+      const newSubscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey)
+      });
+
+      return newSubscription.toJSON();
+    });
+
+    // 푸시 구독을 백엔드에 등록
+    const subscribeResponse = await fetch(`${config.backendUrl}/api/push/subscribe`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        subscription,
+        userAgent: 'Puppeteer Test',
+        timestamp: new Date().toISOString()
+      })
+    });
+
+    if (!subscribeResponse.ok) {
+      const errorText = await subscribeResponse.text();
+      throw new Error(`푸시 구독 등록 실패: HTTP ${subscribeResponse.status} ${errorText}`);
+    }
+
+    const screenshot = await takeScreenshot(adminPage, 'admin-push-enabled', '관리자 계정 푸시 구독 활성화');
+    results.push({
+      scenario: '관리자 푸시 구독',
+      success: true,
+      message: '관리자 계정의 푸시 구독을 활성화했습니다.',
+      screenshots: [screenshot]
+    });
+  } catch (error) {
+    console.warn('⚠️ 관리자 푸시 구독 설정 실패:', error.message);
+    results.push({
+      scenario: '관리자 푸시 구독',
+      success: false,
+      message: `관리자 푸시 구독 설정 실패: ${error.message}`
+    });
+  } finally {
+    await adminPage.close();
+    await context.close();
+  }
+}
+
+async function setupResidentPushSubscription(browser, complex, dong, ho, name, phone, results) {
+  console.log(`🏠 입주자 계정 (${complex} ${dong}-${ho}) 푸시 구독 설정 중...`);
+  const context = await browser.createIncognitoBrowserContext();
+  await context.overridePermissions(config.frontendUrl, ['notifications']);
+  const residentPage = await context.newPage();
+  await residentPage.setViewport(config.viewport);
+  await residentPage.setUserAgent(
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1'
+  );
+
+  try {
+    // 입주자 로그인
+    await residentPage.goto(config.frontendUrl, { waitUntil: 'networkidle0', timeout: config.waitTimeout });
+    await residentPage.waitForTimeout(2000);
+
+    const fields = {
+      '#login-complex': complex,
+      '#login-dong': dong,
+      '#login-ho': ho,
+      '#login-name': name,
+      '#login-phone': phone
+    };
+
+    for (const [selector, value] of Object.entries(fields)) {
+      const element = await residentPage.$(selector);
+      if (element) {
+        await element.click({ clickCount: 3 });
+        await element.type(value, { delay: 80 });
+        await residentPage.waitForTimeout(200);
+      }
+    }
+
+    let loginButton = await residentPage.$('button[onclick="onLogin()"]');
+    if (!loginButton) {
+      const buttons = await residentPage.$$('button');
+      for (const button of buttons) {
+        const text = await residentPage.evaluate((el) => el.textContent, button);
+        if (text && text.includes('로그인')) {
+          loginButton = button;
+          break;
+        }
+      }
+    }
+
+    if (loginButton) {
+      await loginButton.click();
+      await residentPage.waitForTimeout(3000);
+    }
+
+    // 설정 화면 열기
+    await openSettings(residentPage);
+
+    // 푸시 활성화
+    const notificationToggle = await residentPage.$('#notification-toggle');
+    if (notificationToggle) {
+      const isChecked = await residentPage.evaluate((el) => el.checked, notificationToggle);
+      if (!isChecked) {
+        await residentPage.evaluate((el) => {
+          el.checked = true;
+          if (typeof togglePushNotifications === 'function') {
+            togglePushNotifications();
+          } else if (window.pushManager && window.pushManager.subscribe) {
+            window.pushManager.subscribe();
+          }
+        }, notificationToggle);
+        await waitForToast(residentPage, '푸시 알림이 활성화되었습니다', 7000);
+      }
+      const screenshot = await takeScreenshot(residentPage, 'resident-push-enabled', `입주자 계정 (${dong}-${ho}) 푸시 구독 활성화`);
+      results.push({
+        scenario: '입주자 푸시 구독',
+        success: true,
+        message: `입주자 계정 (${dong}-${ho})의 푸시 구독을 활성화했습니다.`,
+        screenshots: [screenshot]
+      });
+    }
+  } catch (error) {
+    console.warn(`⚠️ 입주자 푸시 구독 설정 실패: ${error.message}`);
+    results.push({
+      scenario: '입주자 푸시 구독',
+      success: false,
+      message: `입주자 푸시 구독 설정 실패: ${error.message}`
+    });
+  } finally {
+    await residentPage.close();
+    await context.close();
+  }
+}
+
 async function testPushNotifications() {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('📋 기능 7: 푸시 알림 테스트');
+  console.log('📋 기능 7: 푸시 알림 테스트 (구독 설정 포함)');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log(`프론트엔드: ${config.frontendUrl}`);
   console.log(`백엔드: ${config.backendUrl}`);
@@ -340,6 +531,22 @@ async function testPushNotifications() {
     }
 
     browser = await puppeteer.launch(launchOptions);
+
+    // 1. 관리자 계정 푸시 구독 설정
+    await setupAdminPushSubscription(browser, results);
+
+    // 2. 점검원 신청 세대 계정 푸시 구독 설정
+    await setupResidentPushSubscription(
+      browser,
+      testData.complex,
+      testData.dong,
+      testData.ho,
+      testData.name,
+      testData.phone,
+      results
+    );
+
+    // 3. 메인 테스트 페이지 준비
     const context = await browser.createIncognitoBrowserContext();
     await context.overridePermissions(config.frontendUrl, ['notifications']);
     page = await context.newPage();
@@ -395,7 +602,8 @@ async function testPushNotifications() {
       console.warn('⚠️ 토큰을 찾지 못했습니다. 일부 API 테스트가 제한될 수 있습니다.');
     }
 
-    // 하자 등록 푸시
+    // 하자 등록 푸시 (관리자에게 전송)
+    console.log('🔔 하자 등록 알림 테스트 (관리자에게 전송)...');
     await sendFrontendPush(
       page,
       'defect-registered',
@@ -437,7 +645,8 @@ async function testPushNotifications() {
       results
     );
 
-    // 점검원 승인/거부 푸시 (관리자 토큰 필요)
+    // 점검원 승인/거부 푸시 (점검원 신청 세대에게 전송)
+    console.log('🔔 점검원 승인 알림 테스트 (신청 세대에게 전송)...');
     try {
       const registrationId = await createInspectorRegistration(session);
       const adminToken = await loginAdmin();

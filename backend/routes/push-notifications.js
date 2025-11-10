@@ -36,70 +36,141 @@ router.get('/vapid-key', (req, res) => {
 router.post('/subscribe', authenticateToken, async (req, res) => {
   try {
     const { subscription, userAgent, timestamp } = req.body;
-    const { householdId, user_type } = req.user;
+    const { householdId, user_type, isAdmin, adminId, name: adminName } = req.user;
 
     if (!subscription) {
       return res.status(400).json({ error: 'Subscription data is required' });
     }
 
-    // JWT 토큰에서 개인정보가 제거되었으므로 DB에서 조회 (암호화된 필드 포함)
-    const householdResult = await pool.query(
-      `SELECT h.complex_id, h.dong, h.ho, h.resident_name, h.resident_name_encrypted, 
-              h.phone, h.phone_encrypted, c.name as complex_name
-       FROM household h
-       JOIN complex c ON h.complex_id = c.id
-       WHERE h.id = $1`,
-      [householdId]
-    );
+    let householdIdToUse = householdId;
+    let complexId = null;
+    let dong = null;
+    let ho = null;
+    let name = null;
+    let userType = user_type || 'resident';
 
-    if (householdResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Household not found' });
+    // 관리자 계정인 경우
+    if (isAdmin && adminId) {
+      // 관리자 정보 조회
+      const adminResult = await pool.query(
+        'SELECT id, name, email, role FROM admin_user WHERE id = $1 AND is_active = true',
+        [adminId]
+      );
+
+      if (adminResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Admin user not found' });
+      }
+
+      const admin = adminResult.rows[0];
+      name = admin.name;
+      userType = admin.role === 'super_admin' ? 'super_admin' : 'admin';
+      
+      // 관리자 계정의 경우 household_id는 NULL로 설정
+      // push_subscription 테이블의 household_id를 NULL 허용하도록 수정 필요
+      // 일단 임시로 0을 사용 (나중에 스키마 수정 필요)
+      householdIdToUse = null;
+    } else {
+      // 일반 사용자 계정인 경우
+      if (!householdId) {
+        return res.status(400).json({ error: 'Household ID is required for non-admin users' });
+      }
+
+      // JWT 토큰에서 개인정보가 제거되었으므로 DB에서 조회 (암호화된 필드 포함)
+      const householdResult = await pool.query(
+        `SELECT h.complex_id, h.dong, h.ho, h.resident_name, h.resident_name_encrypted, 
+                h.phone, h.phone_encrypted, c.name as complex_name
+         FROM household h
+         JOIN complex c ON h.complex_id = c.id
+         WHERE h.id = $1`,
+        [householdId]
+      );
+
+      if (householdResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Household not found' });
+      }
+
+      const householdRaw = householdResult.rows[0];
+      // 암호화된 필드가 있으면 복호화, 없으면 평문 사용 (호환성)
+      const household = {
+        ...householdRaw,
+        resident_name: householdRaw.resident_name_encrypted 
+          ? decrypt(householdRaw.resident_name_encrypted) 
+          : householdRaw.resident_name,
+        complex_name: householdRaw.complex_name
+      };
+
+      complexId = household.complex_id;
+      dong = household.dong;
+      ho = household.ho;
+      name = household.resident_name;
     }
 
-    const householdRaw = householdResult.rows[0];
-    // 암호화된 필드가 있으면 복호화, 없으면 평문 사용 (호환성)
-    const household = {
-      ...householdRaw,
-      resident_name: householdRaw.resident_name_encrypted 
-        ? decrypt(householdRaw.resident_name_encrypted) 
-        : householdRaw.resident_name,
-      complex_name: householdRaw.complex_name
-    };
-
-    // 구독 정보 저장
-    const query = `
-      INSERT INTO push_subscription (
-        household_id, complex_id, dong, ho, name, user_type,
-        endpoint, p256dh, auth, user_agent, created_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-      ON CONFLICT (household_id, endpoint) 
-      DO UPDATE SET 
-        p256dh = EXCLUDED.p256dh,
-        auth = EXCLUDED.auth,
-        user_agent = EXCLUDED.user_agent,
-        updated_at = now()
-    `;
-
-    const values = [
-      householdId,
-      household.complex_id,
-      household.dong,
-      household.ho,
-      household.resident_name,
-      user_type,
-      subscription.endpoint,
-      subscription.keys.p256dh,
-      subscription.keys.auth,
-      userAgent || 'Unknown',
-      timestamp || new Date().toISOString()
-    ];
-
-    await pool.query(query, values);
+    // 구독 정보 저장 (household_id가 NULL인 경우를 처리)
+    // 관리자 계정과 일반 사용자 계정을 분리하여 처리
+    if (householdIdToUse === null) {
+      // 관리자 계정: endpoint만으로 UNIQUE 제약 조건 처리
+      const adminQuery = `
+        INSERT INTO push_subscription (
+          household_id, complex_id, dong, ho, name, user_type,
+          endpoint, p256dh, auth, user_agent, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        ON CONFLICT (endpoint) 
+        DO UPDATE SET 
+          p256dh = EXCLUDED.p256dh,
+          auth = EXCLUDED.auth,
+          user_agent = EXCLUDED.user_agent,
+          name = EXCLUDED.name,
+          user_type = EXCLUDED.user_type,
+          updated_at = now()
+      `;
+      
+      await pool.query(adminQuery, [
+        householdIdToUse,
+        complexId,
+        dong || '관리자',
+        ho || '관리자',
+        name,
+        userType,
+        subscription.endpoint,
+        subscription.keys.p256dh,
+        subscription.keys.auth,
+        userAgent || 'Unknown',
+        timestamp || new Date().toISOString()
+      ]);
+    } else {
+      // 일반 사용자 계정: (household_id, endpoint)로 UNIQUE 제약 조건 처리
+      const userQuery = `
+        INSERT INTO push_subscription (
+          household_id, complex_id, dong, ho, name, user_type,
+          endpoint, p256dh, auth, user_agent, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        ON CONFLICT (household_id, endpoint) 
+        DO UPDATE SET 
+          p256dh = EXCLUDED.p256dh,
+          auth = EXCLUDED.auth,
+          user_agent = EXCLUDED.user_agent,
+          updated_at = now()
+      `;
+      
+      await pool.query(userQuery, [
+        householdIdToUse,
+        complexId,
+        dong,
+        ho,
+        name,
+        userType,
+        subscription.endpoint,
+        subscription.keys.p256dh,
+        subscription.keys.auth,
+        userAgent || 'Unknown',
+        timestamp || new Date().toISOString()
+      ]);
+    }
 
     safeLog('info', 'Push subscription registered', {
-      householdId,
+      householdId: householdIdToUse,
       name,
-      user_type,
+      userType,
       endpoint: subscription.endpoint.substring(0, 50) + '...'
     });
 
