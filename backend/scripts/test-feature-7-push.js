@@ -294,7 +294,7 @@ async function loginAdmin() {
 }
 
 async function setupAdminPushSubscription(browser, results) {
-  console.log('👤 관리자 계정 푸시 구독 설정 중...');
+  console.log('👤 관리자 계정 푸시 구독 설정 중 (대시보드 수동 활성화)...');
   const context = await browser.createIncognitoBrowserContext();
   await context.overridePermissions(config.frontendUrl, ['notifications']);
   const adminPage = await context.newPage();
@@ -304,114 +304,181 @@ async function setupAdminPushSubscription(browser, results) {
   );
 
   try {
-    // 관리자 로그인하여 토큰 획득
-    const adminToken = await loginAdmin();
+    // 관리자 페이지로 이동
+    await adminPage.goto(`${config.frontendUrl}/admin`, { waitUntil: 'networkidle0', timeout: config.waitTimeout });
+    await adminPage.waitForTimeout(3000);
+
+    // 페이지 구조 디버깅
+    const pageStructure = await adminPage.evaluate(() => {
+      return {
+        loginScreen: !!document.getElementById('login-screen'),
+        dashboard: !!document.getElementById('screen-dashboard'),
+        adminDashboard: !!document.getElementById('admin-dashboard'),
+        bodyHTML: document.body.innerHTML.substring(0, 500)
+      };
+    });
+    console.log('📊 페이지 구조:', JSON.stringify(pageStructure, null, 2));
+
+    // 로그인 화면이 보이는지 확인
+    const loginScreen = await adminPage.$('#login-screen');
+    const adminDashboard = await adminPage.$('#admin-dashboard');
     
-    // 메인 앱 페이지로 이동 (Service Worker가 등록된 페이지)
-    await adminPage.goto(config.frontendUrl, { waitUntil: 'networkidle0', timeout: config.waitTimeout });
+    if (!loginScreen && !adminDashboard) {
+      // 스크린샷 저장
+      await takeScreenshot(adminPage, 'admin-page-debug', '관리자 페이지 디버그');
+      throw new Error('로그인 화면과 관리자 대시보드를 모두 찾을 수 없습니다.');
+    }
+
+    if (adminDashboard) {
+      console.log('✅ 관리자 대시보드 컨테이너를 찾았습니다.');
+      // admin-dashboard가 hidden 클래스를 가지고 있는지 확인
+      const isHidden = await adminPage.evaluate(() => {
+        const el = document.getElementById('admin-dashboard');
+        return el ? el.classList.contains('hidden') : true;
+      });
+      
+      if (isHidden) {
+        console.log('ℹ️ 관리자 대시보드가 숨겨져 있습니다. 로그인이 필요합니다.');
+      } else {
+        console.log('✅ 관리자 대시보드가 표시되어 있습니다.');
+      }
+    }
+
+    // 관리자 로그인 (로그인 화면이 있는 경우에만)
+    if (loginScreen) {
+      console.log('🔐 관리자 로그인 진행...');
+      // 로그인 폼 요소 대기
+      await adminPage.waitForSelector('#admin-email', { timeout: 5000 });
+      await adminPage.waitForSelector('#admin-password', { timeout: 5000 });
+      
+      const emailInput = await adminPage.$('#admin-email');
+      const passwordInput = await adminPage.$('#admin-password');
+      
+      if (!emailInput || !passwordInput) {
+        throw new Error('관리자 로그인 폼을 찾을 수 없습니다.');
+      }
+
+      // 로그인 버튼 찾기 (onclick 속성으로 찾기)
+      let loginButton = await adminPage.$('button[onclick="adminLogin()"]');
+      if (!loginButton) {
+        // 대체 방법: 버튼 텍스트로 찾기
+        const buttons = await adminPage.$$('button');
+        for (const button of buttons) {
+          const text = await adminPage.evaluate((el) => el.textContent, button);
+          if (text && text.includes('로그인')) {
+            loginButton = button;
+            break;
+          }
+        }
+      }
+
+      if (!loginButton) {
+        throw new Error('로그인 버튼을 찾을 수 없습니다.');
+      }
+
+      await emailInput.click({ clickCount: 3 });
+      await emailInput.type(adminCredentials.email, { delay: 80 });
+      await adminPage.waitForTimeout(200);
+
+      await passwordInput.click({ clickCount: 3 });
+      await passwordInput.type(adminCredentials.password, { delay: 80 });
+      await adminPage.waitForTimeout(200);
+
+      await loginButton.click();
+      await adminPage.waitForTimeout(3000);
+
+      // 대시보드 로드 대기
+      await adminPage.waitForSelector('#screen-dashboard', { timeout: 10000 });
+    } else if (adminDashboard) {
+      // 이미 로그인되어 있을 수 있음 - 대시보드가 표시되는지 확인
+      const isHidden = await adminPage.evaluate(() => {
+        const el = document.getElementById('admin-dashboard');
+        return el ? el.classList.contains('hidden') : true;
+      });
+      
+      if (isHidden) {
+        throw new Error('관리자 대시보드가 숨겨져 있습니다. 로그인이 필요합니다.');
+      }
+      
+      // 대시보드가 표시되어 있으면 바로 진행
+      await adminPage.waitForSelector('#screen-dashboard', { timeout: 5000 });
+    }
+
+    // 대시보드 화면 확인
+    const dashboardScreen = await adminPage.$('#screen-dashboard');
+    if (!dashboardScreen) {
+      throw new Error('대시보드 화면을 찾을 수 없습니다.');
+    }
+
     await adminPage.waitForTimeout(2000);
 
-    // Service Worker 등록 대기 (타임아웃 추가)
-    try {
-      await Promise.race([
-        adminPage.evaluate(() => {
-          return navigator.serviceWorker.ready;
-        }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Service Worker 등록 타임아웃')), 10000))
-      ]);
-    } catch (error) {
-      console.warn('⚠️ Service Worker 등록 실패, 계속 진행:', error.message);
-      // Service Worker가 없어도 푸시 구독은 시도할 수 있음
+    // 푸시 알림 상태 확인 카드 찾기
+    const pushStatusCard = await adminPage.$('#push-notification-status');
+    if (!pushStatusCard) {
+      throw new Error('푸시 알림 상태 카드를 찾을 수 없습니다.');
     }
 
-    // 푸시 구독 생성 (타임아웃 추가)
-    let subscription;
-    try {
-      subscription = await Promise.race([
-        adminPage.evaluate(async () => {
-          if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-            throw new Error('푸시 알림을 지원하지 않습니다.');
-          }
-
-          // urlBase64ToUint8Array 함수 정의
-          function urlBase64ToUint8Array(base64String) {
-            const padding = '='.repeat((4 - base64String.length % 4) % 4);
-            const base64 = (base64String + padding)
-              .replace(/\-/g, '+')
-              .replace(/_/g, '/');
-            const rawData = window.atob(base64);
-            const outputArray = new Uint8Array(rawData.length);
-            for (let i = 0; i < rawData.length; ++i) {
-              outputArray[i] = rawData.charCodeAt(i);
-            }
-            return outputArray;
-          }
-
-          // Service Worker 등록 확인
-          if (!navigator.serviceWorker.controller) {
-            // Service Worker 등록 시도
-            const registration = await navigator.serviceWorker.register('/sw.js');
-            await registration.update();
-          }
-
-          const registration = await navigator.serviceWorker.ready;
-          const existingSubscription = await registration.pushManager.getSubscription();
-          
-          if (existingSubscription) {
-            return existingSubscription.toJSON();
-          }
-
-          // VAPID 공개키 가져오기
-          const backendUrl = window.location.origin.includes('localhost') ? 'http://localhost:3000' : 'https://mobile-app-new.onrender.com';
-          const vapidKeyResponse = await fetch(`${backendUrl}/api/push/vapid-key`);
-          const { publicKey } = await vapidKeyResponse.json();
-
-          // 푸시 구독 생성
-          const newSubscription = await registration.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: urlBase64ToUint8Array(publicKey)
-          });
-
-          return newSubscription.toJSON();
-        }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('푸시 구독 생성 타임아웃 (15초)')), 15000))
-      ]);
-    } catch (error) {
-      throw new Error(`푸시 구독 생성 실패: ${error.message}`);
+    // 상태 확인 버튼 클릭
+    const checkStatusButton = await adminPage.$('#btn-check-push-status');
+    if (checkStatusButton) {
+      await checkStatusButton.click();
+      await adminPage.waitForTimeout(2000);
     }
 
-    // 푸시 구독을 백엔드에 등록
-    const subscribeResponse = await fetch(`${config.backendUrl}/api/push/subscribe`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${adminToken}`
-      },
-      body: JSON.stringify({
-        subscription,
-        userAgent: 'Puppeteer Test',
-        timestamp: new Date().toISOString()
-      })
+    // 푸시 알림 상태 확인
+    const statusText = await adminPage.evaluate(() => {
+      const statusEl = document.getElementById('push-notification-status');
+      return statusEl ? statusEl.textContent : '';
     });
 
-    if (!subscribeResponse.ok) {
-      const errorText = await subscribeResponse.text();
-      throw new Error(`푸시 구독 등록 실패: HTTP ${subscribeResponse.status} ${errorText}`);
+    console.log('📊 푸시 알림 상태:', statusText);
+
+    // 활성화 버튼이 있으면 클릭
+    const activateButton = await adminPage.$('button[onclick="enableAdminPushNotifications()"]');
+    if (activateButton) {
+      console.log('🔔 푸시 알림 활성화 버튼 클릭...');
+      await activateButton.click();
+      await adminPage.waitForTimeout(3000);
+
+      // 알림 권한 요청 대기 (브라우저 팝업)
+      await adminPage.waitForTimeout(2000);
     }
 
-    const screenshot = await takeScreenshot(adminPage, 'admin-push-enabled', '관리자 계정 푸시 구독 활성화');
+    // 최종 상태 확인
+    await adminPage.waitForTimeout(2000);
+    const finalStatus = await adminPage.evaluate(() => {
+      const statusEl = document.getElementById('push-notification-status');
+      return statusEl ? statusEl.textContent : '';
+    });
+
+    const screenshot = await takeScreenshot(adminPage, 'admin-push-status', '관리자 대시보드 푸시 알림 상태');
+
+    // 상태에 따라 성공/실패 판단
+    const isActive = finalStatus.includes('활성화됨') || finalStatus.includes('활성화되어 있습니다');
+    
     results.push({
-      scenario: '관리자 푸시 구독',
-      success: true,
-      message: '관리자 계정의 푸시 구독을 활성화했습니다.',
+      scenario: '관리자 푸시 구독 (대시보드 수동 활성화)',
+      success: isActive,
+      message: isActive 
+        ? '관리자 대시보드에서 푸시 알림이 활성화되었습니다.'
+        : `푸시 알림 상태: ${finalStatus.substring(0, 100)}`,
       screenshots: [screenshot]
     });
+
+    if (isActive) {
+      console.log('✅ 관리자 푸시 구독 활성화 성공');
+    } else {
+      console.warn('⚠️ 관리자 푸시 구독이 활성화되지 않았습니다. 상태:', finalStatus);
+    }
+
   } catch (error) {
     console.warn('⚠️ 관리자 푸시 구독 설정 실패:', error.message);
+    const errorScreenshot = await takeScreenshot(adminPage, 'admin-push-error', '관리자 푸시 구독 설정 실패');
     results.push({
-      scenario: '관리자 푸시 구독',
+      scenario: '관리자 푸시 구독 (대시보드 수동 활성화)',
       success: false,
-      message: `관리자 푸시 구독 설정 실패: ${error.message}`
+      message: `관리자 푸시 구독 설정 실패: ${error.message}`,
+      screenshots: [errorScreenshot]
     });
   } finally {
     await adminPage.close();
@@ -555,7 +622,7 @@ async function testPushNotifications() {
 
     browser = await puppeteer.launch(launchOptions);
 
-    // 1. 관리자 계정 푸시 구독 설정
+    // 1. 관리자 계정 푸시 구독 설정 (대시보드 수동 활성화)
     await setupAdminPushSubscription(browser, results);
 
     // 2. 점검원 신청 세대 계정 푸시 구독 설정

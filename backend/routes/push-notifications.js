@@ -321,7 +321,13 @@ router.post('/defect-registered', authenticateToken, async (req, res) => {
     // 관리자 계정은 household_id가 NULL일 수 있으므로 LEFT JOIN 사용
     const adminQuery = `
       SELECT ps.endpoint, ps.p256dh, ps.auth, 
-             COALESCE(h.name, ps.name) as name, 
+             COALESCE(
+               CASE 
+                 WHEN h.resident_name_encrypted IS NOT NULL THEN NULL
+                 ELSE h.resident_name
+               END,
+               ps.name
+             ) as name, 
              COALESCE(h.dong, ps.dong) as dong, 
              COALESCE(h.ho, ps.ho) as ho
       FROM push_subscription ps
@@ -375,7 +381,10 @@ router.post('/defect-registered', authenticateToken, async (req, res) => {
         };
         
         await webpush.sendNotification(pushSubscription, payload);
-        safeLog('info', 'Defect notification sent to admin', { adminName: admin.name });
+        safeLog('info', 'Defect notification sent to admin', { 
+          adminName: admin.name || '관리자',
+          endpoint: admin.endpoint.substring(0, 50) + '...'
+        });
       } catch (error) {
         safeLog('error', 'Failed to send to admin', { adminName: admin.name, error: error.message });
       }
