@@ -168,6 +168,48 @@
 
 ## ⚙️ 시스템 관리
 
+### AI 판정 설정
+
+#### AI 판정 모드 설정
+1. 사이드바에서 **"🤖 AI 판정 설정"** 메뉴 선택
+2. AI 판정 모드 선택:
+   - **로컬 규칙 기반**: 이미지 통계 분석 (빠르고 무료)
+   - **Azure OpenAI**: GPT-4 Vision 활용 (고급 분석, 유료)
+   - **Hugging Face**: 오픈소스 AI 모델 (무료/유료)
+   - **하이브리드**: 로컬 분석 후 신뢰도가 낮으면 클라우드 AI로 전환
+
+#### AI 판정 상세 설정
+
+##### 로컬 규칙 기반 설정
+- **활성화**: 로컬 규칙 기반 분석 사용 여부
+- **기본 신뢰도**: 0.0 ~ 1.0 (기본값: 0.65)
+- **규칙**: 이미지 통계 기반 판정 규칙 (JSON 형식)
+
+##### Azure OpenAI 설정
+- **활성화**: Azure OpenAI 사용 여부
+- **Fallback 임계값**: 로컬 신뢰도가 이 값 이하일 때 Azure 호출 (기본값: 0.8)
+- **최대 감지 개수**: 한 번에 감지할 최대 하자 개수 (기본값: 3)
+
+##### Hugging Face 설정
+- **활성화**: Hugging Face API 사용 여부
+- **모델명**: 사용할 모델 (예: `microsoft/resnet-50`)
+- **작업 유형**: 
+  - `image-classification`: 이미지 분류
+  - `object-detection`: 객체 감지 (YOLO 등)
+  - `image-to-text`: 이미지 설명 생성
+  - `visual-question-answering`: 시각적 질문 답변
+- **프롬프트**: 범용 모델 사용 시 질문 프롬프트 (예: "Describe any building defects such as cracks, water leaks, mold, or safety issues in this photo.")
+
+#### AI 판정 설정 저장
+1. 모든 설정을 입력한 후 **"저장"** 버튼 클릭
+2. 설정이 즉시 적용됩니다.
+3. 다음 하자 등록부터 새로운 AI 판정 설정이 사용됩니다.
+
+> **참고**: 
+> - Hugging Face API를 사용하려면 `HUGGINGFACE_API_TOKEN` 환경변수가 설정되어 있어야 합니다.
+> - Azure OpenAI를 사용하려면 Azure OpenAI API 키가 설정되어 있어야 합니다.
+> - 자세한 설정 방법은 `AZURE_OPENAI_SETUP.md` 참조
+
 ### 환경 설정
 
 #### VAPID 키 설정 (푸시 알림)
@@ -287,7 +329,10 @@ ORDER BY ordinal_position;
 - 2단계 인증 활성화 (향후 구현)
 
 ### 사용자 데이터 보호
-- 개인정보는 암호화하여 저장
+- **개인정보 암호화**: AES-256-CBC 알고리즘으로 암호화하여 저장
+  - 암호화 대상: 이름, 전화번호, 이메일, 점검원 이름
+  - 암호화 키: `ENCRYPTION_KEY` 환경변수로 관리
+  - 자동 암호화/복호화: API 레벨에서 자동 처리
 - 데이터 접근 권한 관리
 - 정기적인 보안 감사 (향후 구현)
 
@@ -375,6 +420,19 @@ curl https://mobile-app-new.onrender.com/api/push/vapid-key
 - YouTube API 키가 올바르게 설정되었는지 확인하세요.
 - YouTube API 할당량을 확인하세요 (일일 10,000 단위)
 - 백엔드 로그에서 API 응답을 확인하세요.
+- 하자명이 정확한지 확인하세요 (하자명 기반으로 자동 검색됩니다).
+
+### AI 판정이 작동하지 않을 때
+- **로컬 규칙 기반**: 항상 작동 (설정 불필요)
+- **Azure OpenAI**: 
+  - `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY` 환경변수 확인
+  - Azure OpenAI 리소스가 활성화되어 있는지 확인
+- **Hugging Face**: 
+  - `HUGGINGFACE_API_TOKEN` 환경변수 확인
+  - 모델명이 올바른지 확인 (예: `microsoft/resnet-50`)
+  - 모델 접근 권한이 있는지 확인 (일부 모델은 Inference Endpoint 필요)
+- 관리자 페이지에서 AI 판정 설정 확인
+- 백엔드 로그에서 AI 판정 에러 확인
 
 ---
 
@@ -396,14 +454,23 @@ curl https://mobile-app-new.onrender.com/api/push/vapid-key
 
 ## 📝 버전 정보
 
-- **현재 버전**: v3.0.1
+- **현재 버전**: v4.0.0
 - **최종 업데이트**: 2025년 11월
-- **관리자 페이지 URL**: https://insighti.vercel.app/admin.html
+- **관리자 페이지 URL**: https://insighti.vercel.app/admin
 - **주요 업데이트**:
   - 푸시 알림 시스템 완전 구현
   - Service Worker Push 이벤트 지원
   - 데이터베이스 push_subscription 테이블 생성
   - VAPID 키 기반 푸시 알림 설정 완료
+  - AI 판정 시스템 다중 엔진 지원
+    - 로컬 규칙 기반 분석
+    - Azure OpenAI GPT-4 Vision
+    - Hugging Face 오픈소스 모델
+    - 하이브리드 모드 (자동 전환)
+  - 관리자 AI 판정 설정 화면 추가
+  - 관리자 대시보드 푸시 알림 수동 활성화 기능
+  - 개인정보 암호화 저장 (AES-256-CBC)
+  - YouTube 실시간 검색 (하자명 기반)
 
 ---
 
@@ -413,10 +480,12 @@ curl https://mobile-app-new.onrender.com/api/push/vapid-key
 - 사용자 관리 (조회, 유형 변경, 비활성화)
 - 하자 관리 (조회, 상세 정보, 상태 변경)
 - 점검원 관리 (신청 목록, 승인/거부)
-- 대시보드 (전체 현황, 통계)
+- 대시보드 (전체 현황, 통계, 푸시 알림 상태)
+- AI 판정 설정 (로컬/Azure/Hugging Face/하이브리드 모드)
 - 시스템 로그 확인
-- 푸시 알림 시스템 (구독 관리, 알림 발송)
+- 푸시 알림 시스템 (구독 관리, 알림 발송, 관리자 수동 활성화)
 - YouTube 실시간 검색 (하자명 기반 동영상 자동 검색)
+- 개인정보 암호화 저장
 
 ### 🔄 향후 구현 예정
 - 통계 차트
