@@ -723,16 +723,24 @@ async function loadAISettings() {
     // 다시 확인
     const newStyle = window.getComputedStyle(screenEl);
     const newRect = screenEl.getBoundingClientRect();
+    const parentRect = adminDashboard.getBoundingClientRect();
+    
     console.log('✅ 수정 후 상태:', {
       display: newStyle.display,
       visibility: newStyle.visibility,
       position: newStyle.position,
       offsetParent: screenEl.offsetParent !== null,
-      boundingRect: {
+      screenRect: {
         top: newRect.top,
         left: newRect.left,
         width: newRect.width,
         height: newRect.height
+      },
+      parentRect: {
+        top: parentRect.top,
+        left: parentRect.left,
+        width: parentRect.width,
+        height: parentRect.height
       }
     });
     
@@ -741,6 +749,37 @@ async function loadAISettings() {
       console.log('✅ 화면이 실제로 렌더링되고 있습니다!');
     } else {
       console.error('❌ 화면 크기가 0입니다. 레이아웃 문제가 있을 수 있습니다.');
+      
+      // 강제로 크기 설정 시도
+      console.log('🔧 화면 크기를 강제로 설정합니다...');
+      const mainContent = screenEl.closest('.main-content');
+      if (mainContent) {
+        const mcRect = mainContent.getBoundingClientRect();
+        console.log('📐 main-content 크기:', {
+          width: mcRect.width,
+          height: mcRect.height,
+          display: window.getComputedStyle(mainContent).display
+        });
+        
+        // main-content가 보이지 않으면 강제로 표시
+        if (mcRect.width === 0 || mcRect.height === 0) {
+          console.log('🔧 main-content 크기가 0입니다. 강제로 설정합니다.');
+          mainContent.style.display = 'block';
+          mainContent.style.width = '100%';
+          mainContent.style.minHeight = '100vh';
+        }
+      }
+      
+      // screen 요소도 강제로 크기 설정
+      screenEl.style.width = '100%';
+      screenEl.style.minHeight = '500px';
+      
+      // 다시 확인
+      const finalRect = screenEl.getBoundingClientRect();
+      console.log('🔍 최종 크기:', {
+        width: finalRect.width,
+        height: finalRect.height
+      });
     }
   }
 
