@@ -178,7 +178,8 @@ async function enableAdminPushNotifications() {
 
   } catch (error) {
     console.error('❌ 관리자 푸시 알림 활성화 실패:', error);
-    updatePushNotificationStatus('error', `활성화 실패: ${error.message}`);
+    const errorMessage = error.message || '알 수 없는 오류가 발생했습니다.';
+    updatePushNotificationStatus('error', `활성화 실패: ${errorMessage}`);
     // 실패해도 로그인은 계속 진행되도록 에러를 무시
   }
 }
@@ -297,8 +298,9 @@ async function sendAdminSubscriptionToServer(subscription) {
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || '구독 등록 실패');
+      const errorData = await response.json().catch(() => ({ error: '구독 등록 실패' }));
+      const errorMessage = errorData.error || errorData.message || '구독 등록 실패';
+      throw new Error(errorMessage);
     }
 
     console.log('✅ 관리자 푸시 구독이 서버에 등록되었습니다.');

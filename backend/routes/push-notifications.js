@@ -188,8 +188,36 @@ router.post('/subscribe', authenticateToken, async (req, res) => {
     });
 
   } catch (error) {
-    safeLog('error', 'Push subscription error', { error: error.message });
-    res.status(500).json({ error: 'Failed to register push subscription' });
+    console.error('Push subscription error:', error);
+    safeLog('error', 'Push subscription error', { 
+      error: error.message,
+      stack: error.stack,
+      code: error.code,
+      constraint: error.constraint
+    });
+    
+    // 데이터베이스 제약 조건 위반 에러 처리
+    if (error.code === '23505') { // unique_violation
+      const errorMessage = error.constraint === 'push_subscription_endpoint_unique'
+        ? '이미 등록된 푸시 구독입니다. 기존 구독을 업데이트했습니다.'
+        : '중복된 푸시 구독입니다.';
+      return res.status(409).json({ error: errorMessage });
+    }
+    
+    // 외래 키 제약 조건 위반
+    if (error.code === '23503') { // foreign_key_violation
+      return res.status(400).json({ error: '유효하지 않은 사용자 정보입니다.' });
+    }
+    
+    // 기타 데이터베이스 에러
+    if (error.code && error.code.startsWith('23')) {
+      return res.status(400).json({ error: `데이터베이스 오류: ${error.message}` });
+    }
+    
+    res.status(500).json({ 
+      error: 'Failed to register push subscription',
+      message: error.message 
+    });
   }
 });
 
