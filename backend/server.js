@@ -6,22 +6,34 @@ const morgan = require('morgan');
 const path = require('path');
 const config = require('./config');
 
-// Import routes
-const authRoutes = require('./routes/auth');
-const casesRoutes = require('./routes/cases');
-const defectsRoutes = require('./routes/defects');
-const defectCategoriesRoutes = require('./routes/defect-categories');
-const inspectionsRoutes = require('./routes/inspections'); // NEW: Equipment inspections
-const inspectorRegistrationRoutes = require('./routes/inspector-registration'); // NEW: Inspector registration
-const pushNotificationRoutes = require('./routes/push-notifications'); // NEW: Push notifications
-const youtubeSearchRoutes = require('./routes/youtube-search'); // NEW: YouTube 실시간 검색
-const aiLearningRoutes = require('./routes/ai-learning');
-const azureAIRoutes = require('./routes/azure-ai'); // NEW: Azure OpenAI
-const aiDetectionRoutes = require('./routes/ai-detection'); // NEW: 하이브리드 AI 감지
-const uploadRoutes = require('./routes/upload');
-const reportsRoutes = require('./routes/reports');
-const smsRoutes = require('./routes/sms');
-const adminRoutes = require('./routes/admin'); // NEW: Admin functions
+// Import routes with error handling
+let authRoutes, casesRoutes, defectsRoutes, defectCategoriesRoutes;
+let inspectionsRoutes, inspectorRegistrationRoutes, pushNotificationRoutes;
+let youtubeSearchRoutes, aiLearningRoutes, azureAIRoutes, aiDetectionRoutes;
+let uploadRoutes, reportsRoutes, smsRoutes, adminRoutes;
+
+try {
+  authRoutes = require('./routes/auth');
+  casesRoutes = require('./routes/cases');
+  defectsRoutes = require('./routes/defects');
+  defectCategoriesRoutes = require('./routes/defect-categories');
+  inspectionsRoutes = require('./routes/inspections');
+  inspectorRegistrationRoutes = require('./routes/inspector-registration');
+  pushNotificationRoutes = require('./routes/push-notifications');
+  youtubeSearchRoutes = require('./routes/youtube-search');
+  aiLearningRoutes = require('./routes/ai-learning');
+  azureAIRoutes = require('./routes/azure-ai');
+  aiDetectionRoutes = require('./routes/ai-detection');
+  uploadRoutes = require('./routes/upload');
+  reportsRoutes = require('./routes/reports');
+  smsRoutes = require('./routes/sms');
+  adminRoutes = require('./routes/admin');
+  console.log('✅ All routes loaded successfully');
+} catch (error) {
+  console.error('❌ Failed to load routes:', error);
+  console.error('Error stack:', error.stack);
+  process.exit(1);
+}
 
 const app = express();
 
@@ -187,16 +199,27 @@ app.use('*', (req, res) => {
 });
 
 // Start server
-const PORT = config.port;
+const PORT = config.port || process.env.PORT || 3000;
+
+console.log(`🔧 Starting server on port ${PORT}...`);
+console.log(`📊 NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
+console.log(`📊 DATABASE_URL: ${process.env.DATABASE_URL ? 'Set' : 'Not set'}`);
 
 // Start server with error handling
-const server = app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📚 API Documentation: http://localhost:${PORT}/api`);
-  console.log(`🏥 Health Check: http://localhost:${PORT}/health`);
-  console.log(`✅ Server is ready to accept connections`);
-  console.log(`🌐 Server listening on 0.0.0.0:${PORT}`);
-});
+let server;
+try {
+  server = app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`📚 API Documentation: http://localhost:${PORT}/api`);
+    console.log(`🏥 Health Check: http://localhost:${PORT}/health`);
+    console.log(`✅ Server is ready to accept connections`);
+    console.log(`🌐 Server listening on 0.0.0.0:${PORT}`);
+  });
+} catch (error) {
+  console.error('❌ Failed to start server:', error);
+  console.error('Error stack:', error.stack);
+  process.exit(1);
+}
 
 // Handle server errors
 server.on('error', (error) => {
