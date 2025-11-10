@@ -142,6 +142,7 @@ class AiDetectionSettingsService {
 
   async ensureTable() {
     try {
+      // 테이블 생성
       await pool.query(`
         CREATE TABLE IF NOT EXISTS ai_detection_settings (
           id INTEGER PRIMARY KEY DEFAULT 1,
@@ -165,25 +166,58 @@ class AiDetectionSettingsService {
       throw error;
     }
 
-    await pool.query(`ALTER TABLE ai_detection_settings ADD COLUMN IF NOT EXISTS mode TEXT NOT NULL DEFAULT 'hybrid';`);
-    await pool.query(`ALTER TABLE ai_detection_settings ADD COLUMN IF NOT EXISTS provider TEXT NOT NULL DEFAULT 'azure';`);
-    await pool.query(`ALTER TABLE ai_detection_settings ADD COLUMN IF NOT EXISTS azure_enabled BOOLEAN NOT NULL DEFAULT true;`);
-    await pool.query(`ALTER TABLE ai_detection_settings ADD COLUMN IF NOT EXISTS local_enabled BOOLEAN NOT NULL DEFAULT true;`);
-    await pool.query(`ALTER TABLE ai_detection_settings ADD COLUMN IF NOT EXISTS azure_fallback_threshold REAL NOT NULL DEFAULT 0.8;`);
-    await pool.query(`ALTER TABLE ai_detection_settings ADD COLUMN IF NOT EXISTS local_base_confidence REAL NOT NULL DEFAULT 0.65;`);
-    await pool.query(`ALTER TABLE ai_detection_settings ADD COLUMN IF NOT EXISTS max_detections INTEGER NOT NULL DEFAULT 3;`);
-    await pool.query(`ALTER TABLE ai_detection_settings ADD COLUMN IF NOT EXISTS huggingface_enabled BOOLEAN NOT NULL DEFAULT false;`);
-    await pool.query(`ALTER TABLE ai_detection_settings ADD COLUMN IF NOT EXISTS huggingface_model TEXT DEFAULT 'microsoft/resnet-50';`);
-    await pool.query(`ALTER TABLE ai_detection_settings ADD COLUMN IF NOT EXISTS huggingface_task TEXT DEFAULT 'image-classification';`);
-    await pool.query(`ALTER TABLE ai_detection_settings ADD COLUMN IF NOT EXISTS huggingface_prompt TEXT;`);
-    await pool.query(`ALTER TABLE ai_detection_settings ADD COLUMN IF NOT EXISTS rules JSONB;`);
-    await pool.query(`ALTER TABLE ai_detection_settings ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();`);
+    // 컬럼 추가 (안전하게 처리)
+    const columnsToAdd = [
+      { name: 'mode', def: `TEXT NOT NULL DEFAULT 'hybrid'` },
+      { name: 'provider', def: `TEXT NOT NULL DEFAULT 'azure'` },
+      { name: 'azure_enabled', def: `BOOLEAN NOT NULL DEFAULT true` },
+      { name: 'local_enabled', def: `BOOLEAN NOT NULL DEFAULT true` },
+      { name: 'azure_fallback_threshold', def: `REAL NOT NULL DEFAULT 0.8` },
+      { name: 'local_base_confidence', def: `REAL NOT NULL DEFAULT 0.65` },
+      { name: 'max_detections', def: `INTEGER NOT NULL DEFAULT 3` },
+      { name: 'huggingface_enabled', def: `BOOLEAN NOT NULL DEFAULT false` },
+      { name: 'huggingface_model', def: `TEXT DEFAULT 'microsoft/resnet-50'` },
+      { name: 'huggingface_task', def: `TEXT DEFAULT 'image-classification'` },
+      { name: 'huggingface_prompt', def: `TEXT` },
+      { name: 'rules', def: `JSONB` },
+      { name: 'updated_at', def: `TIMESTAMP DEFAULT NOW()` }
+    ];
 
-    await pool.query(`
-      INSERT INTO ai_detection_settings (id)
-      VALUES (1)
-      ON CONFLICT (id) DO NOTHING;
-    `);
+    for (const col of columnsToAdd) {
+      try {
+        // 컬럼 존재 여부 확인
+        const checkResult = await pool.query(`
+          SELECT column_name 
+          FROM information_schema.columns 
+          WHERE table_name = 'ai_detection_settings' 
+          AND column_name = $1
+        `, [col.name]);
+
+        if (checkResult.rows.length === 0) {
+          console.log(`➕ 컬럼 추가: ${col.name}`);
+          await pool.query(`ALTER TABLE ai_detection_settings ADD COLUMN ${col.name} ${col.def};`);
+        }
+      } catch (error) {
+        // 컬럼이 이미 존재하거나 다른 이유로 실패한 경우 무시
+        if (error.code !== '42701' && !error.message.includes('already exists')) {
+          console.warn(`⚠️ 컬럼 ${col.name} 추가 중 경고:`, error.message);
+        }
+      }
+    }
+
+    // 기본 레코드 삽입
+    try {
+      await pool.query(`
+        INSERT INTO ai_detection_settings (id)
+        VALUES (1)
+        ON CONFLICT (id) DO NOTHING;
+      `);
+    } catch (error) {
+      // 이미 존재하는 경우 무시
+      if (error.code !== '23505') {
+        console.warn('⚠️ 기본 레코드 삽입 경고:', error.message);
+      }
+    }
   }
 }
 
