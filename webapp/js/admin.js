@@ -353,7 +353,11 @@ function showScreen(screenName) {
   console.log(`🖥️ 화면 전환: ${screenName}`);
   
   // 모든 화면 숨기기
-  $$('.screen').forEach(s => s.classList.add('hidden'));
+  $$('.screen').forEach(s => {
+    s.classList.add('hidden');
+    // CSS도 강제로 숨김 (혹시 모를 경우 대비)
+    s.style.display = 'none';
+  });
   
   // 선택된 화면 표시
   const targetScreen = $(`#screen-${screenName}`);
@@ -362,18 +366,43 @@ function showScreen(screenName) {
     return;
   }
   
+  // hidden 클래스 제거
   targetScreen.classList.remove('hidden');
+  
+  // CSS도 강제로 표시 (important 우선순위 문제 해결)
+  targetScreen.style.display = 'block';
+  targetScreen.style.visibility = 'visible';
+  targetScreen.style.opacity = '1';
+  
+  console.log(`🔧 화면 CSS 강제 설정:`, {
+    className: targetScreen.className,
+    display: targetScreen.style.display,
+    hasHidden: targetScreen.classList.contains('hidden')
+  });
   
   // admin-dashboard가 숨겨져 있으면 표시
   const adminDashboard = $('#admin-dashboard');
   if (adminDashboard && adminDashboard.classList.contains('hidden')) {
     console.log('⚠️ admin-dashboard가 숨겨져 있습니다. 표시합니다.');
     adminDashboard.classList.remove('hidden');
+    adminDashboard.style.display = 'flex';
   }
+  
+  // 즉시 확인
+  const computedStyle = window.getComputedStyle(targetScreen);
+  const rect = targetScreen.getBoundingClientRect();
   
   console.log(`✅ 화면 표시됨: screen-${screenName}`, {
     hasHidden: targetScreen.classList.contains('hidden'),
+    inlineDisplay: targetScreen.style.display,
+    computedDisplay: computedStyle.display,
     visible: targetScreen.offsetParent !== null,
+    rect: {
+      width: rect.width,
+      height: rect.height,
+      top: rect.top,
+      left: rect.left
+    },
     parentVisible: adminDashboard ? !adminDashboard.classList.contains('hidden') : 'N/A',
     parentOffsetParent: adminDashboard ? adminDashboard.offsetParent !== null : 'N/A'
   });
