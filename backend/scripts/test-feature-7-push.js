@@ -418,31 +418,73 @@ async function setupAdminPushSubscription(browser, results) {
       throw new Error('푸시 알림 상태 카드를 찾을 수 없습니다.');
     }
 
-    // 상태 확인 버튼 클릭
-    const checkStatusButton = await adminPage.$('#btn-check-push-status');
-    if (checkStatusButton) {
-      await checkStatusButton.click();
-      await adminPage.waitForTimeout(2000);
+    // 푸시 알림 상태 확인 및 활성화 시도
+    console.log('🔔 관리자 푸시 알림 활성화 시도...');
+    
+    // 직접 enableAdminPushNotifications 함수 호출 시도
+    const pushActivated = await adminPage.evaluate(async () => {
+      try {
+        // enableAdminPushNotifications 함수가 있는지 확인
+        if (typeof enableAdminPushNotifications === 'function') {
+          await enableAdminPushNotifications();
+          return true;
+        }
+        // 또는 checkPushNotificationStatus 함수 호출
+        if (typeof checkPushNotificationStatus === 'function') {
+          checkPushNotificationStatus();
+        }
+        return false;
+      } catch (error) {
+        console.error('푸시 활성화 오류:', error);
+        return false;
+      }
+    });
+
+    if (pushActivated) {
+      console.log('✅ 푸시 알림 활성화 함수 호출 완료');
+    }
+
+    // 상태 확인 버튼 클릭 (있는 경우)
+    try {
+      const checkStatusButton = await adminPage.$('#btn-check-push-status');
+      if (checkStatusButton) {
+        await adminPage.evaluate((btn) => {
+          if (btn && typeof btn.click === 'function') {
+            btn.click();
+          }
+        }, checkStatusButton);
+        await adminPage.waitForTimeout(2000);
+      }
+    } catch (error) {
+      console.warn('⚠️ 상태 확인 버튼 클릭 실패:', error.message);
+    }
+
+    // 활성화 버튼 클릭 시도 (있는 경우)
+    try {
+      const activateButton = await adminPage.$('button[onclick*="enableAdminPushNotifications"]');
+      if (activateButton) {
+        console.log('🔔 푸시 알림 활성화 버튼 클릭...');
+        await adminPage.evaluate((btn) => {
+          if (btn && typeof btn.click === 'function') {
+            btn.click();
+          } else if (btn && typeof enableAdminPushNotifications === 'function') {
+            enableAdminPushNotifications();
+          }
+        }, activateButton);
+        await adminPage.waitForTimeout(3000);
+      }
+    } catch (error) {
+      console.warn('⚠️ 활성화 버튼 클릭 실패:', error.message);
     }
 
     // 푸시 알림 상태 확인
+    await adminPage.waitForTimeout(2000);
     const statusText = await adminPage.evaluate(() => {
       const statusEl = document.getElementById('push-notification-status');
       return statusEl ? statusEl.textContent : '';
     });
 
-    console.log('📊 푸시 알림 상태:', statusText);
-
-    // 활성화 버튼이 있으면 클릭
-    const activateButton = await adminPage.$('button[onclick="enableAdminPushNotifications()"]');
-    if (activateButton) {
-      console.log('🔔 푸시 알림 활성화 버튼 클릭...');
-      await activateButton.click();
-      await adminPage.waitForTimeout(3000);
-
-      // 알림 권한 요청 대기 (브라우저 팝업)
-      await adminPage.waitForTimeout(2000);
-    }
+    console.log('📊 푸시 알림 상태:', statusText.substring(0, 200));
 
     // 최종 상태 확인
     await adminPage.waitForTimeout(2000);
