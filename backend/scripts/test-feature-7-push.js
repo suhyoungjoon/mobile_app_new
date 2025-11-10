@@ -307,55 +307,78 @@ async function setupAdminPushSubscription(browser, results) {
     // 관리자 로그인하여 토큰 획득
     const adminToken = await loginAdmin();
     
-    // 관리자 페이지로 이동하여 Service Worker 등록
-    await adminPage.goto(`${config.frontendUrl}/admin`, { waitUntil: 'networkidle0', timeout: config.waitTimeout });
+    // 메인 앱 페이지로 이동 (Service Worker가 등록된 페이지)
+    await adminPage.goto(config.frontendUrl, { waitUntil: 'networkidle0', timeout: config.waitTimeout });
     await adminPage.waitForTimeout(2000);
 
-    // Service Worker 등록 대기
-    await adminPage.evaluate(() => {
-      return navigator.serviceWorker.ready;
-    });
+    // Service Worker 등록 대기 (타임아웃 추가)
+    try {
+      await Promise.race([
+        adminPage.evaluate(() => {
+          return navigator.serviceWorker.ready;
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Service Worker 등록 타임아웃')), 10000))
+      ]);
+    } catch (error) {
+      console.warn('⚠️ Service Worker 등록 실패, 계속 진행:', error.message);
+      // Service Worker가 없어도 푸시 구독은 시도할 수 있음
+    }
 
-    // 푸시 구독 생성
-    const subscription = await adminPage.evaluate(async () => {
-      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-        throw new Error('푸시 알림을 지원하지 않습니다.');
-      }
+    // 푸시 구독 생성 (타임아웃 추가)
+    let subscription;
+    try {
+      subscription = await Promise.race([
+        adminPage.evaluate(async () => {
+          if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+            throw new Error('푸시 알림을 지원하지 않습니다.');
+          }
 
-      // urlBase64ToUint8Array 함수 정의
-      function urlBase64ToUint8Array(base64String) {
-        const padding = '='.repeat((4 - base64String.length % 4) % 4);
-        const base64 = (base64String + padding)
-          .replace(/\-/g, '+')
-          .replace(/_/g, '/');
-        const rawData = window.atob(base64);
-        const outputArray = new Uint8Array(rawData.length);
-        for (let i = 0; i < rawData.length; ++i) {
-          outputArray[i] = rawData.charCodeAt(i);
-        }
-        return outputArray;
-      }
+          // urlBase64ToUint8Array 함수 정의
+          function urlBase64ToUint8Array(base64String) {
+            const padding = '='.repeat((4 - base64String.length % 4) % 4);
+            const base64 = (base64String + padding)
+              .replace(/\-/g, '+')
+              .replace(/_/g, '/');
+            const rawData = window.atob(base64);
+            const outputArray = new Uint8Array(rawData.length);
+            for (let i = 0; i < rawData.length; ++i) {
+              outputArray[i] = rawData.charCodeAt(i);
+            }
+            return outputArray;
+          }
 
-      const registration = await navigator.serviceWorker.ready;
-      const existingSubscription = await registration.pushManager.getSubscription();
-      
-      if (existingSubscription) {
-        return existingSubscription.toJSON();
-      }
+          // Service Worker 등록 확인
+          if (!navigator.serviceWorker.controller) {
+            // Service Worker 등록 시도
+            const registration = await navigator.serviceWorker.register('/sw.js');
+            await registration.update();
+          }
 
-      // VAPID 공개키 가져오기
-      const backendUrl = window.location.origin.includes('localhost') ? 'http://localhost:3000' : 'https://mobile-app-new.onrender.com';
-      const vapidKeyResponse = await fetch(`${backendUrl}/api/push/vapid-key`);
-      const { publicKey } = await vapidKeyResponse.json();
+          const registration = await navigator.serviceWorker.ready;
+          const existingSubscription = await registration.pushManager.getSubscription();
+          
+          if (existingSubscription) {
+            return existingSubscription.toJSON();
+          }
 
-      // 푸시 구독 생성
-      const newSubscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(publicKey)
-      });
+          // VAPID 공개키 가져오기
+          const backendUrl = window.location.origin.includes('localhost') ? 'http://localhost:3000' : 'https://mobile-app-new.onrender.com';
+          const vapidKeyResponse = await fetch(`${backendUrl}/api/push/vapid-key`);
+          const { publicKey } = await vapidKeyResponse.json();
 
-      return newSubscription.toJSON();
-    });
+          // 푸시 구독 생성
+          const newSubscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(publicKey)
+          });
+
+          return newSubscription.toJSON();
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('푸시 구독 생성 타임아웃 (15초)')), 15000))
+      ]);
+    } catch (error) {
+      throw new Error(`푸시 구독 생성 실패: ${error.message}`);
+    }
 
     // 푸시 구독을 백엔드에 등록
     const subscribeResponse = await fetch(`${config.backendUrl}/api/push/subscribe`, {
