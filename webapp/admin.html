@@ -452,6 +452,17 @@
         </div>
       </div>
       
+      <!-- 푸시 알림 상태 카드 -->
+      <div class="card" style="margin-top: 20px;">
+        <div class="card-header">
+          <span>🔔 푸시 알림 설정</span>
+          <button id="btn-check-push-status" class="btn btn-secondary btn-small" onclick="checkPushNotificationStatus()" style="margin-left: 10px;">상태 확인</button>
+        </div>
+        <div id="push-notification-status" style="padding: 20px;">
+          <p class="text-muted">확인 중...</p>
+        </div>
+      </div>
+      
       <div class="card">
         <div class="card-header">최근 등록 하자</div>
         <div id="recent-defects">

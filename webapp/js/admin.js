@@ -106,6 +106,7 @@ async function enableAdminPushNotifications() {
   // 푸시 알림이 지원되지 않으면 스킵
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
     console.log('⚠️ 푸시 알림을 지원하지 않는 브라우저입니다.');
+    updatePushNotificationStatus('not-supported', '브라우저가 푸시 알림을 지원하지 않습니다.');
     return;
   }
 
@@ -127,6 +128,7 @@ async function enableAdminPushNotifications() {
       // 이미 구독되어 있으면 서버에 전송만
       await sendAdminSubscriptionToServer(existingSubscription);
       console.log('✅ 기존 푸시 구독 확인됨');
+      updatePushNotificationStatus('active', '푸시 알림이 활성화되어 있습니다.');
       return;
     }
 
@@ -134,10 +136,16 @@ async function enableAdminPushNotifications() {
     const vapidKeyResponse = await fetch(`${API_BASE}/api/push/vapid-key`);
     const { publicKey } = await vapidKeyResponse.json();
 
-    // 알림 권한 요청
-    const permission = await Notification.requestPermission();
+    // 알림 권한 확인
+    let permission = Notification.permission;
+    if (permission === 'default') {
+      // 권한이 아직 요청되지 않았으면 요청
+      permission = await Notification.requestPermission();
+    }
+    
     if (permission !== 'granted') {
       console.log('⚠️ 알림 권한이 거부되었습니다.');
+      updatePushNotificationStatus('permission-denied', '알림 권한이 필요합니다. 브라우저 설정에서 알림 권한을 허용해주세요.');
       return;
     }
 
@@ -166,11 +174,110 @@ async function enableAdminPushNotifications() {
     // 서버에 구독 정보 전송
     await sendAdminSubscriptionToServer(subscription);
     console.log('✅ 관리자 푸시 알림이 자동으로 활성화되었습니다.');
+    updatePushNotificationStatus('active', '푸시 알림이 활성화되었습니다.');
 
   } catch (error) {
     console.error('❌ 관리자 푸시 알림 활성화 실패:', error);
+    updatePushNotificationStatus('error', `활성화 실패: ${error.message}`);
     // 실패해도 로그인은 계속 진행되도록 에러를 무시
   }
+}
+
+// 푸시 알림 상태 확인
+async function checkPushNotificationStatus() {
+  const statusEl = document.getElementById('push-notification-status');
+  if (!statusEl) return;
+
+  statusEl.innerHTML = '<p class="text-muted">확인 중...</p>';
+
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    updatePushNotificationStatus('not-supported', '브라우저가 푸시 알림을 지원하지 않습니다.');
+    return;
+  }
+
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.getSubscription();
+    const permission = Notification.permission;
+
+    if (subscription && permission === 'granted') {
+      // 서버에 구독 정보 전송 (확인)
+      await sendAdminSubscriptionToServer(subscription);
+      updatePushNotificationStatus('active', '푸시 알림이 활성화되어 있습니다.');
+    } else if (permission === 'denied') {
+      updatePushNotificationStatus('permission-denied', '알림 권한이 거부되었습니다. 브라우저 설정에서 알림 권한을 허용해주세요.');
+    } else {
+      updatePushNotificationStatus('inactive', '푸시 알림이 활성화되지 않았습니다.');
+    }
+  } catch (error) {
+    console.error('푸시 알림 상태 확인 실패:', error);
+    updatePushNotificationStatus('error', `상태 확인 실패: ${error.message}`);
+  }
+}
+
+// 푸시 알림 상태 UI 업데이트
+function updatePushNotificationStatus(status, message) {
+  const statusEl = document.getElementById('push-notification-status');
+  if (!statusEl) return;
+
+  let html = '';
+  let buttonHtml = '';
+
+  switch (status) {
+    case 'active':
+      html = `
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+          <span style="color: #27ae60; font-size: 20px;">✅</span>
+          <span style="color: #27ae60; font-weight: bold;">활성화됨</span>
+        </div>
+        <p style="color: #666; margin: 0;">${message}</p>
+      `;
+      buttonHtml = '<button class="btn btn-secondary btn-small" onclick="checkPushNotificationStatus()">새로고침</button>';
+      break;
+    case 'inactive':
+      html = `
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+          <span style="color: #e74c3c; font-size: 20px;">❌</span>
+          <span style="color: #e74c3c; font-weight: bold;">비활성화됨</span>
+        </div>
+        <p style="color: #666; margin: 0 0 15px 0;">${message}</p>
+      `;
+      buttonHtml = '<button class="btn btn-primary btn-small" onclick="enableAdminPushNotifications()">푸시 알림 활성화</button>';
+      break;
+    case 'permission-denied':
+      html = `
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+          <span style="color: #f39c12; font-size: 20px;">⚠️</span>
+          <span style="color: #f39c12; font-weight: bold;">권한 필요</span>
+        </div>
+        <p style="color: #666; margin: 0 0 15px 0;">${message}</p>
+      `;
+      buttonHtml = '<button class="btn btn-primary btn-small" onclick="enableAdminPushNotifications()">다시 시도</button>';
+      break;
+    case 'not-supported':
+      html = `
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+          <span style="color: #95a5a6; font-size: 20px;">ℹ️</span>
+          <span style="color: #95a5a6; font-weight: bold;">지원 안 됨</span>
+        </div>
+        <p style="color: #666; margin: 0;">${message}</p>
+      `;
+      break;
+    case 'error':
+      html = `
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+          <span style="color: #e74c3c; font-size: 20px;">❌</span>
+          <span style="color: #e74c3c; font-weight: bold;">오류</span>
+        </div>
+        <p style="color: #666; margin: 0 0 15px 0;">${message}</p>
+      `;
+      buttonHtml = '<button class="btn btn-primary btn-small" onclick="enableAdminPushNotifications()">다시 시도</button>';
+      break;
+    default:
+      html = `<p class="text-muted">${message}</p>`;
+  }
+
+  statusEl.innerHTML = html + (buttonHtml ? `<div style="margin-top: 15px;">${buttonHtml}</div>` : '');
 }
 
 // 관리자 푸시 구독 정보를 서버에 전송
@@ -812,8 +919,15 @@ window.addEventListener('DOMContentLoaded', async () => {
     
     loadDashboardStats();
     
-    // 관리자 푸시 알림 자동 활성화
-    await enableAdminPushNotifications();
+    // 관리자 푸시 알림 자동 활성화 (백그라운드에서 시도)
+    enableAdminPushNotifications().catch(err => {
+      console.error('푸시 알림 자동 활성화 실패:', err);
+    });
+    
+    // 푸시 알림 상태 확인
+    setTimeout(() => {
+      checkPushNotificationStatus();
+    }, 1000);
   }
   
   // Enter 키로 로그인
