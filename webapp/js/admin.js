@@ -380,7 +380,10 @@ function showScreen(screenName) {
   } else if (screenName === 'defects') {
     loadDefects();
   } else if (screenName === 'ai-settings') {
-    loadAISettings();
+    // 화면이 완전히 표시된 후 설정 로드
+    setTimeout(() => {
+      loadAISettings();
+    }, 50);
   }
 }
 
@@ -599,8 +602,19 @@ async function loadDefects() {
 
 // AI 설정 로드
 async function loadAISettings() {
+  // 화면이 보이는지 확인하고, 안 보이면 잠시 대기
+  const screenEl = document.getElementById('screen-ai-settings');
+  if (!screenEl || screenEl.classList.contains('hidden')) {
+    console.log('⏳ AI 설정 화면이 아직 보이지 않습니다. 잠시 후 다시 시도...');
+    setTimeout(() => loadAISettings(), 100);
+    return;
+  }
+
   const modeSelect = document.getElementById('ai-mode');
-  if (!modeSelect) return;
+  if (!modeSelect) {
+    console.error('❌ AI 설정 화면 요소를 찾을 수 없습니다.');
+    return;
+  }
 
   try {
     console.log('🔍 AI 설정 로드 시작...');
@@ -614,21 +628,39 @@ async function loadAISettings() {
     }
 
     const settings = result.settings || {};
+    console.log('📋 설정 값:', settings);
 
-    $('#ai-mode').value = settings.mode || 'hybrid';
-    $('#ai-provider').value = settings.provider || 'azure';
-    $('#ai-local-enabled').value = String(settings.localEnabled ?? true);
-    $('#ai-azure-enabled').value = String(settings.azureEnabled ?? true);
+    // 각 요소가 존재하는지 확인하고 값 설정
+    const setValue = (selector, value) => {
+      const el = $(selector);
+      if (el) {
+        el.value = value;
+        console.log(`✅ ${selector} = ${value}`);
+      } else {
+        console.warn(`⚠️ 요소를 찾을 수 없습니다: ${selector}`);
+      }
+    };
+
+    setValue('#ai-mode', settings.mode || 'hybrid');
+    setValue('#ai-provider', settings.provider || 'azure');
+    setValue('#ai-local-enabled', String(settings.localEnabled ?? true));
+    setValue('#ai-azure-enabled', String(settings.azureEnabled ?? true));
     const hfEnabled = settings.huggingfaceEnabled;
-    $('#ai-hf-enabled').value = String(hfEnabled ?? (settings.provider === 'huggingface'));
-    $('#ai-hf-model').value = settings.huggingfaceModel || 'microsoft/resnet-50';
-    $('#ai-azure-threshold').value = (settings.azureFallbackThreshold ?? 0.8).toFixed(2);
-    $('#ai-local-confidence').value = (settings.localBaseConfidence ?? 0.65).toFixed(2);
-    $('#ai-max-detections').value = settings.maxDetections ?? 3;
-    $('#ai-hf-task').value = settings.huggingfaceTask || 'image-classification';
-    $('#ai-hf-prompt').value =
+    setValue('#ai-hf-enabled', String(hfEnabled ?? (settings.provider === 'huggingface')));
+    setValue('#ai-hf-model', settings.huggingfaceModel || 'microsoft/resnet-50');
+    setValue('#ai-azure-threshold', (settings.azureFallbackThreshold ?? 0.8).toFixed(2));
+    setValue('#ai-local-confidence', (settings.localBaseConfidence ?? 0.65).toFixed(2));
+    setValue('#ai-max-detections', settings.maxDetections ?? 3);
+    setValue('#ai-hf-task', settings.huggingfaceTask || 'image-classification');
+    setValue('#ai-hf-prompt', 
       settings.huggingfacePrompt ||
-      'Describe any building defects such as cracks, water leaks, mold, or safety issues in this photo.';
+      'Describe any building defects such as cracks, water leaks, mold, or safety issues in this photo.');
+
+    // 이벤트 트리거하여 UI 업데이트
+    const modeEl = $('#ai-mode');
+    if (modeEl) {
+      modeEl.dispatchEvent(new Event('change', { bubbles: true }));
+    }
 
     updateAIProviderVisibility();
     renderAIRulesSummary(settings);
@@ -636,6 +668,8 @@ async function loadAISettings() {
     if (window.hybridDetector) {
       window.hybridDetector.settings = settings;
     }
+
+    console.log('✅ AI 설정 로드 완료');
   } catch (error) {
     console.error('❌ AI 설정 로드 실패:', {
       message: error.message,
