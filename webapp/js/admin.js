@@ -352,11 +352,18 @@ function adminLogout() {
 function showScreen(screenName) {
   console.log(`🖥️ 화면 전환: ${screenName}`);
   
-  // 모든 화면 숨기기 (확실하게)
+  const targetScreenId = `screen-${screenName}`;
+  
+  // 선택된 화면을 제외하고 모든 화면 숨기기
   const allScreens = $$('.screen');
   console.log(`📋 총 ${allScreens.length}개의 화면 발견`);
   
   allScreens.forEach(s => {
+    // 선택된 화면은 제외
+    if (s.id === targetScreenId) {
+      return;
+    }
+    
     const screenId = s.id;
     // hidden 클래스 추가
     s.classList.add('hidden');
@@ -372,9 +379,9 @@ function showScreen(screenName) {
   });
   
   // 선택된 화면 표시
-  const targetScreen = $(`#screen-${screenName}`);
+  const targetScreen = $(`#${targetScreenId}`);
   if (!targetScreen) {
-    console.error(`❌ 화면을 찾을 수 없습니다: screen-${screenName}`);
+    console.error(`❌ 화면을 찾을 수 없습니다: ${targetScreenId}`);
     return;
   }
   
@@ -397,20 +404,21 @@ function showScreen(screenName) {
   
   // 다른 화면이 여전히 보이는지 확인
   const visibleScreens = Array.from($$('.screen')).filter(s => {
+    if (s.id === targetScreenId) return false; // 선택된 화면은 제외
     const style = window.getComputedStyle(s);
     return style.display !== 'none' && !s.classList.contains('hidden');
   });
   
-  if (visibleScreens.length > 1) {
-    console.warn(`⚠️ ${visibleScreens.length}개의 화면이 동시에 보입니다:`, 
+  if (visibleScreens.length > 0) {
+    console.warn(`⚠️ ${visibleScreens.length}개의 다른 화면이 여전히 보입니다:`, 
       visibleScreens.map(s => s.id));
     // 강제로 숨김
     visibleScreens.forEach(s => {
-      if (s.id !== `screen-${screenName}`) {
-        s.classList.add('hidden');
-        s.style.display = 'none';
-        console.log(`🔒 추가로 숨김: ${s.id}`);
-      }
+      s.classList.add('hidden');
+      s.style.display = 'none';
+      s.style.visibility = 'hidden';
+      s.style.opacity = '0';
+      console.log(`🔒 추가로 숨김: ${s.id}`);
     });
   }
   
