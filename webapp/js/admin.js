@@ -660,15 +660,47 @@ async function loadAISettings() {
   
   // 부모 요소도 확인
   if (screenEl.offsetParent === null && adminDashboard) {
-    console.warn('⚠️ 화면이 보이지 않습니다. 부모 요소 확인:', {
+    const screenStyle = window.getComputedStyle(screenEl);
+    const mainContent = screenEl.closest('.main-content');
+    const mainContentStyle = mainContent ? window.getComputedStyle(mainContent) : null;
+    
+    console.warn('⚠️ 화면이 보이지 않습니다. CSS 상태 확인:', {
       screenHidden: screenEl.classList.contains('hidden'),
+      screenDisplay: screenStyle.display,
+      screenVisibility: screenStyle.visibility,
+      screenPosition: screenStyle.position,
+      screenOpacity: screenStyle.opacity,
       parentHidden: adminDashboard.classList.contains('hidden'),
-      parentDisplay: window.getComputedStyle(adminDashboard).display
+      parentDisplay: window.getComputedStyle(adminDashboard).display,
+      mainContentDisplay: mainContentStyle?.display,
+      mainContentVisibility: mainContentStyle?.visibility
     });
+    
+    // CSS 강제 설정
+    if (screenStyle.display === 'none') {
+      console.log('🔧 display: none을 block으로 변경');
+      screenEl.style.display = 'block';
+    }
+    if (screenStyle.visibility === 'hidden') {
+      console.log('🔧 visibility: hidden을 visible로 변경');
+      screenEl.style.visibility = 'visible';
+    }
+    if (screenStyle.opacity === '0') {
+      console.log('🔧 opacity: 0을 1로 변경');
+      screenEl.style.opacity = '1';
+    }
     
     // 강제로 표시
     adminDashboard.classList.remove('hidden');
     screenEl.classList.remove('hidden');
+    
+    // 다시 확인
+    const newStyle = window.getComputedStyle(screenEl);
+    console.log('✅ 수정 후 상태:', {
+      display: newStyle.display,
+      visibility: newStyle.visibility,
+      offsetParent: screenEl.offsetParent !== null
+    });
   }
 
   const modeSelect = document.getElementById('ai-mode');
