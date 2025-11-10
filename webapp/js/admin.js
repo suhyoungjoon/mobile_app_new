@@ -92,9 +92,112 @@ async function adminLogin() {
     loadDashboardStats();
     loadAISettings();
     
+    // 관리자 푸시 알림 자동 활성화
+    await enableAdminPushNotifications();
+    
   } catch (error) {
     console.error('Login error:', error);
     toast(error.message || '로그인 실패', 'error');
+  }
+}
+
+// 관리자 푸시 알림 자동 활성화
+async function enableAdminPushNotifications() {
+  // 푸시 알림이 지원되지 않으면 스킵
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    console.log('⚠️ 푸시 알림을 지원하지 않는 브라우저입니다.');
+    return;
+  }
+
+  try {
+    // Service Worker 등록 (메인 앱의 Service Worker 사용)
+    let registration;
+    try {
+      registration = await navigator.serviceWorker.register('/sw.js');
+      console.log('✅ Service Worker 등록 완료');
+    } catch (error) {
+      // 이미 등록되어 있으면 기존 등록 사용
+      registration = await navigator.serviceWorker.ready;
+      console.log('ℹ️ 기존 Service Worker 사용');
+    }
+
+    // 기존 구독 확인
+    const existingSubscription = await registration.pushManager.getSubscription();
+    if (existingSubscription) {
+      // 이미 구독되어 있으면 서버에 전송만
+      await sendAdminSubscriptionToServer(existingSubscription);
+      console.log('✅ 기존 푸시 구독 확인됨');
+      return;
+    }
+
+    // VAPID 공개키 가져오기
+    const vapidKeyResponse = await fetch(`${API_BASE}/api/push/vapid-key`);
+    const { publicKey } = await vapidKeyResponse.json();
+
+    // 알림 권한 요청
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') {
+      console.log('⚠️ 알림 권한이 거부되었습니다.');
+      return;
+    }
+
+    // urlBase64ToUint8Array 함수
+    function urlBase64ToUint8Array(base64String) {
+      const padding = '='.repeat((4 - base64String.length % 4) % 4);
+      const base64 = (base64String + padding)
+        .replace(/-/g, '+')
+        .replace(/_/g, '/');
+      const rawData = window.atob(base64);
+      const outputArray = new Uint8Array(rawData.length);
+      for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+      }
+      return outputArray;
+    }
+
+    // 푸시 구독 생성
+    const subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(publicKey)
+    });
+
+    console.log('✅ 푸시 구독 생성 완료');
+
+    // 서버에 구독 정보 전송
+    await sendAdminSubscriptionToServer(subscription);
+    console.log('✅ 관리자 푸시 알림이 자동으로 활성화되었습니다.');
+
+  } catch (error) {
+    console.error('❌ 관리자 푸시 알림 활성화 실패:', error);
+    // 실패해도 로그인은 계속 진행되도록 에러를 무시
+  }
+}
+
+// 관리자 푸시 구독 정보를 서버에 전송
+async function sendAdminSubscriptionToServer(subscription) {
+  try {
+    const response = await fetch(`${API_BASE}/api/push/subscribe`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${AdminState.token}`
+      },
+      body: JSON.stringify({
+        subscription: subscription.toJSON(),
+        userAgent: navigator.userAgent,
+        timestamp: new Date().toISOString()
+      })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || '구독 등록 실패');
+    }
+
+    console.log('✅ 관리자 푸시 구독이 서버에 등록되었습니다.');
+  } catch (error) {
+    console.error('❌ 서버에 구독 정보 전송 실패:', error);
+    throw error;
   }
 }
 
@@ -694,7 +797,7 @@ async function saveResolution() {
 }
 
 // 초기화
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
   // 저장된 토큰 확인
   const savedToken = localStorage.getItem('admin_token');
   const savedAdmin = localStorage.getItem('admin_info');
@@ -708,6 +811,9 @@ window.addEventListener('DOMContentLoaded', () => {
     $('#admin-name').textContent = AdminState.admin.name;
     
     loadDashboardStats();
+    
+    // 관리자 푸시 알림 자동 활성화
+    await enableAdminPushNotifications();
   }
   
   // Enter 키로 로그인
