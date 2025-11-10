@@ -935,8 +935,39 @@ async function loadAISettings() {
         hasHidden: screenEl.classList.contains('hidden'),
         inlineDisplay: screenEl.style.display,
         computedDisplay: window.getComputedStyle(screenEl).display,
-        rect: screenEl.getBoundingClientRect()
+        rect: screenEl.getBoundingClientRect(),
+        parentElement: parent ? {
+          tagName: parent.tagName,
+          id: parent.id,
+          className: parent.className
+        } : 'null'
       });
+      
+      // screen-ai-settings가 다른 screen 요소 안에 있는지 확인
+      const parentScreen = screenEl.closest('.screen');
+      if (parentScreen && parentScreen.id !== 'screen-ai-settings') {
+        console.error(`❌ screen-ai-settings가 다른 screen 요소 (${parentScreen.id}) 안에 있습니다!`);
+        console.log('🔧 screen-ai-settings를 .main-content로 직접 이동합니다.');
+        const mainContent = document.querySelector('.main-content');
+        if (mainContent && parentScreen) {
+          // screen-ai-settings를 parentScreen에서 분리
+          const aiSettingsClone = screenEl.cloneNode(true);
+          screenEl.remove();
+          mainContent.appendChild(aiSettingsClone);
+          console.log('✅ screen-ai-settings를 .main-content로 이동했습니다.');
+          // 새로운 요소 참조로 업데이트
+          const newScreenEl = document.getElementById('screen-ai-settings');
+          if (newScreenEl) {
+            newScreenEl.classList.remove('hidden');
+            newScreenEl.style.display = 'block';
+            newScreenEl.style.visibility = 'visible';
+            newScreenEl.style.opacity = '1';
+            newScreenEl.style.width = '100%';
+            newScreenEl.style.minHeight = '500px';
+            console.log('✅ 새로운 위치에서 화면 표시 완료');
+          }
+        }
+      }
       
       while (parent && level < 5) {
         const pStyle = window.getComputedStyle(parent);
@@ -949,13 +980,11 @@ async function loadAISettings() {
           hasHidden: parent.classList ? parent.classList.contains('hidden') : false
         });
         
-        // 부모가 hidden이면 강제로 표시
-        if (parent.classList && parent.classList.contains('hidden')) {
+        // 부모가 screen이고 hidden이면 강제로 표시하지 않음 (다른 화면이므로)
+        if (parent.classList && parent.classList.contains('hidden') && !parent.classList.contains('screen')) {
           console.log(`🔧 부모 요소 ${level}가 hidden입니다. 강제로 표시합니다.`);
           parent.classList.remove('hidden');
-          if (parent.classList.contains('screen')) {
-            parent.style.display = 'block';
-          } else if (parent.classList.contains('main-content')) {
+          if (parent.classList.contains('main-content')) {
             parent.style.display = 'block';
           } else if (parent.id === 'admin-dashboard') {
             parent.style.display = 'flex';
