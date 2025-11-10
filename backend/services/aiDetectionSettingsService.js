@@ -33,6 +33,14 @@ class AiDetectionSettingsService {
       return this.cache;
     }
 
+    // 테이블이 없으면 먼저 생성
+    try {
+      await this.ensureTable();
+    } catch (error) {
+      console.error('❌ ai_detection_settings 테이블 생성 실패:', error);
+      throw new Error(`테이블 생성 실패: ${error.message}`);
+    }
+
     let result;
     try {
       result = await pool.query(
@@ -54,29 +62,12 @@ class AiDetectionSettingsService {
          LIMIT 1`
       );
     } catch (error) {
-      if (error.code === '42P01') {
-        await this.ensureTable();
-        result = await pool.query(
-          `SELECT mode,
-                  provider,
-                  azure_enabled AS "azureEnabled",
-                  local_enabled AS "localEnabled",
-                  azure_fallback_threshold AS "azureFallbackThreshold",
-                  local_base_confidence AS "localBaseConfidence",
-                  max_detections AS "maxDetections",
-                  huggingface_enabled AS "huggingfaceEnabled",
-                  huggingface_model AS "huggingfaceModel",
-                  huggingface_task AS "huggingfaceTask",
-                  huggingface_prompt AS "huggingfacePrompt",
-                  rules,
-                  updated_at AS "updatedAt"
-           FROM ai_detection_settings
-           ORDER BY id DESC
-           LIMIT 1`
-        );
-      } else {
-        throw error;
-      }
+      console.error('❌ AI 설정 조회 쿼리 실패:', {
+        code: error.code,
+        message: error.message,
+        constraint: error.constraint
+      });
+      throw error;
     }
 
     let settings;
@@ -150,24 +141,29 @@ class AiDetectionSettingsService {
   }
 
   async ensureTable() {
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS ai_detection_settings (
-        id INTEGER PRIMARY KEY DEFAULT 1,
-        mode TEXT NOT NULL DEFAULT 'hybrid',
-        provider TEXT NOT NULL DEFAULT 'azure',
-        azure_enabled BOOLEAN NOT NULL DEFAULT true,
-        local_enabled BOOLEAN NOT NULL DEFAULT true,
-        azure_fallback_threshold REAL NOT NULL DEFAULT 0.8,
-        local_base_confidence REAL NOT NULL DEFAULT 0.65,
-        max_detections INTEGER NOT NULL DEFAULT 3,
-        huggingface_enabled BOOLEAN NOT NULL DEFAULT false,
-        huggingface_model TEXT DEFAULT 'microsoft/resnet-50',
-        huggingface_task TEXT DEFAULT 'image-classification',
-        huggingface_prompt TEXT,
-        rules JSONB,
-        updated_at TIMESTAMP DEFAULT NOW()
-      );
-    `);
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS ai_detection_settings (
+          id INTEGER PRIMARY KEY DEFAULT 1,
+          mode TEXT NOT NULL DEFAULT 'hybrid',
+          provider TEXT NOT NULL DEFAULT 'azure',
+          azure_enabled BOOLEAN NOT NULL DEFAULT true,
+          local_enabled BOOLEAN NOT NULL DEFAULT true,
+          azure_fallback_threshold REAL NOT NULL DEFAULT 0.8,
+          local_base_confidence REAL NOT NULL DEFAULT 0.65,
+          max_detections INTEGER NOT NULL DEFAULT 3,
+          huggingface_enabled BOOLEAN NOT NULL DEFAULT false,
+          huggingface_model TEXT DEFAULT 'microsoft/resnet-50',
+          huggingface_task TEXT DEFAULT 'image-classification',
+          huggingface_prompt TEXT,
+          rules JSONB,
+          updated_at TIMESTAMP DEFAULT NOW()
+        );
+      `);
+    } catch (error) {
+      console.error('❌ ai_detection_settings 테이블 생성 실패:', error);
+      throw error;
+    }
 
     await pool.query(`ALTER TABLE ai_detection_settings ADD COLUMN IF NOT EXISTS mode TEXT NOT NULL DEFAULT 'hybrid';`);
     await pool.query(`ALTER TABLE ai_detection_settings ADD COLUMN IF NOT EXISTS provider TEXT NOT NULL DEFAULT 'azure';`);

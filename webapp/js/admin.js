@@ -27,17 +27,38 @@ async function apiCall(endpoint, options = {}) {
     headers['Authorization'] = `Bearer ${AdminState.token}`;
   }
   
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers
-  });
-  
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'API 요청 실패');
+  try {
+    const response = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers
+    });
+    
+    if (!response.ok) {
+      let errorData;
+      try {
+        errorData = await response.json();
+      } catch (e) {
+        errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
+      }
+      
+      const errorMessage = errorData.error || errorData.details || errorData.message || 'API 요청 실패';
+      console.error('❌ API 호출 실패:', {
+        endpoint,
+        status: response.status,
+        statusText: response.statusText,
+        error: errorMessage
+      });
+      throw new Error(errorMessage);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    if (error.message) {
+      throw error;
+    }
+    console.error('❌ API 호출 중 예외 발생:', error);
+    throw new Error('네트워크 오류가 발생했습니다.');
   }
-  
-  return response.json();
 }
 
 // Toast 메시지
@@ -582,9 +603,14 @@ async function loadAISettings() {
   if (!modeSelect) return;
 
   try {
+    console.log('🔍 AI 설정 로드 시작...');
     const result = await apiCall('/api/ai-detection/settings');
+    console.log('📥 AI 설정 응답:', result);
+    
     if (!result || !result.success) {
-      throw new Error(result?.error || '설정 정보를 불러오지 못했습니다.');
+      const errorMsg = result?.error || result?.details || '설정 정보를 불러오지 못했습니다.';
+      console.error('❌ AI 설정 로드 실패:', errorMsg);
+      throw new Error(errorMsg);
     }
 
     const settings = result.settings || {};
@@ -611,8 +637,20 @@ async function loadAISettings() {
       window.hybridDetector.settings = settings;
     }
   } catch (error) {
-    console.error('AI 설정 로드 실패:', error);
-    toast('AI 설정을 불러오지 못했습니다', 'error');
+    console.error('❌ AI 설정 로드 실패:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    const errorMessage = error.message || 'AI 설정을 불러오지 못했습니다.';
+    toast(errorMessage, 'error');
+    
+    // 에러 상세 정보를 콘솔에 출력
+    if (error.message.includes('관리자 권한')) {
+      console.warn('⚠️ 관리자 권한이 필요합니다. 로그인 상태를 확인하세요.');
+    } else if (error.message.includes('테이블')) {
+      console.warn('⚠️ 데이터베이스 테이블이 없습니다. 서버 로그를 확인하세요.');
+    }
   }
 }
 

@@ -34,19 +34,34 @@ router.post('/detect', authenticateToken, async (req, res) => {
  */
 router.get('/settings', authenticateToken, async (req, res) => {
   try {
+    console.log('🔍 AI 설정 조회 요청:', {
+      user: req.user ? { isAdmin: req.user.isAdmin, adminId: req.user.adminId } : 'no user',
+      hasToken: !!req.headers.authorization
+    });
+
     if (!req.user || !req.user.isAdmin) {
+      console.warn('⚠️ 관리자 권한 없음:', req.user);
       return res.status(403).json({ error: '관리자 권한이 필요합니다.' });
     }
 
     const settings = await aiDetectionSettingsService.getSettings();
+    console.log('✅ AI 설정 조회 성공:', { mode: settings.mode, provider: settings.provider });
 
     res.json({
       success: true,
       settings
     });
   } catch (error) {
-    console.error('❌ AI 설정 조회 실패:', error);
-    res.status(500).json({ error: 'AI 설정 조회에 실패했습니다.' });
+    console.error('❌ AI 설정 조회 실패:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code,
+      constraint: error.constraint
+    });
+    res.status(500).json({ 
+      error: 'AI 설정 조회에 실패했습니다.',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
