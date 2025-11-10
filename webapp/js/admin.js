@@ -350,11 +350,23 @@ function adminLogout() {
 
 // 화면 전환
 function showScreen(screenName) {
+  console.log(`🖥️ 화면 전환: ${screenName}`);
+  
   // 모든 화면 숨기기
   $$('.screen').forEach(s => s.classList.add('hidden'));
   
   // 선택된 화면 표시
-  $(`#screen-${screenName}`).classList.remove('hidden');
+  const targetScreen = $(`#screen-${screenName}`);
+  if (!targetScreen) {
+    console.error(`❌ 화면을 찾을 수 없습니다: screen-${screenName}`);
+    return;
+  }
+  
+  targetScreen.classList.remove('hidden');
+  console.log(`✅ 화면 표시됨: screen-${screenName}`, {
+    hasHidden: targetScreen.classList.contains('hidden'),
+    visible: targetScreen.offsetParent !== null
+  });
   
   // 메뉴 활성화
   $$('.menu-item').forEach(m => m.classList.remove('active'));
@@ -602,17 +614,42 @@ async function loadDefects() {
 
 // AI 설정 로드
 async function loadAISettings() {
+  console.log('🔍 loadAISettings() 호출됨');
+  
   // 화면이 보이는지 확인하고, 안 보이면 잠시 대기
   const screenEl = document.getElementById('screen-ai-settings');
-  if (!screenEl || screenEl.classList.contains('hidden')) {
-    console.log('⏳ AI 설정 화면이 아직 보이지 않습니다. 잠시 후 다시 시도...');
-    setTimeout(() => loadAISettings(), 100);
+  console.log('📺 화면 요소:', screenEl ? '존재' : '없음');
+  
+  if (!screenEl) {
+    console.error('❌ screen-ai-settings 요소를 찾을 수 없습니다.');
     return;
+  }
+  
+  if (screenEl.classList.contains('hidden')) {
+    console.log('⏳ AI 설정 화면이 아직 숨겨져 있습니다. 잠시 후 다시 시도...');
+    // 최대 10번까지 재시도 (1초)
+    if (!loadAISettings.retryCount) {
+      loadAISettings.retryCount = 0;
+    }
+    if (loadAISettings.retryCount < 10) {
+      loadAISettings.retryCount++;
+      setTimeout(() => loadAISettings(), 100);
+      return;
+    } else {
+      console.error('❌ 화면이 너무 오래 숨겨져 있습니다. 강제로 표시합니다.');
+      screenEl.classList.remove('hidden');
+    }
   }
 
   const modeSelect = document.getElementById('ai-mode');
+  console.log('📋 modeSelect 요소:', modeSelect ? '존재' : '없음');
+  
   if (!modeSelect) {
     console.error('❌ AI 설정 화면 요소를 찾을 수 없습니다.');
+    console.error('🔍 현재 DOM 상태:', {
+      screenVisible: !screenEl.classList.contains('hidden'),
+      screenHTML: screenEl.innerHTML.substring(0, 200)
+    });
     return;
   }
 
@@ -641,6 +678,8 @@ async function loadAISettings() {
       }
     };
 
+    // 설정 값 적용
+    console.log('📝 설정 값 적용 시작...');
     setValue('#ai-mode', settings.mode || 'hybrid');
     setValue('#ai-provider', settings.provider || 'azure');
     setValue('#ai-local-enabled', String(settings.localEnabled ?? true));
@@ -655,6 +694,13 @@ async function loadAISettings() {
     setValue('#ai-hf-prompt', 
       settings.huggingfacePrompt ||
       'Describe any building defects such as cracks, water leaks, mold, or safety issues in this photo.');
+    
+    // 값이 제대로 설정되었는지 확인
+    console.log('🔍 설정 값 확인:', {
+      mode: $('#ai-mode')?.value,
+      provider: $('#ai-provider')?.value,
+      localEnabled: $('#ai-local-enabled')?.value
+    });
 
     // 이벤트 트리거하여 UI 업데이트
     const modeEl = $('#ai-mode');
