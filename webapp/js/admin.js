@@ -673,17 +673,32 @@ async function loadAISettings() {
   }
   
   // 강제로 표시 (showScreen에서 설정했지만 다시 확인)
-  screenEl.classList.remove('hidden');
-  screenEl.style.display = 'block';
-  screenEl.style.visibility = 'visible';
-  screenEl.style.opacity = '1';
-  screenEl.style.width = '100%';
-  screenEl.style.minHeight = '500px';
+  // 먼저 모든 .screen 요소를 확인하고 hidden 제거
+  $$('.screen').forEach(s => {
+    if (s.id === 'screen-ai-settings') {
+      s.classList.remove('hidden');
+      s.style.display = 'block';
+      s.style.visibility = 'visible';
+      s.style.opacity = '1';
+      s.style.width = '100%';
+      s.style.minHeight = '500px';
+      console.log('✅ screen-ai-settings 강제 표시 완료');
+    } else {
+      // 다른 화면은 확실히 숨김
+      s.classList.add('hidden');
+      s.style.display = 'none';
+    }
+  });
   
   console.log('🔧 loadAISettings에서 화면 강제 표시:', {
     hasHidden: screenEl.classList.contains('hidden'),
     inlineDisplay: screenEl.style.display,
-    computedDisplay: window.getComputedStyle(screenEl).display
+    computedDisplay: window.getComputedStyle(screenEl).display,
+    allScreens: Array.from($$('.screen')).map(s => ({
+      id: s.id,
+      hasHidden: s.classList.contains('hidden'),
+      display: window.getComputedStyle(s).display
+    }))
   });
   
   // 부모 요소도 확인
@@ -831,14 +846,39 @@ async function loadAISettings() {
       // 부모 요소들도 확인
       let parent = screenEl.parentElement;
       let level = 0;
+      console.log('🔍 screen-ai-settings 직접 확인:', {
+        id: screenEl.id,
+        className: screenEl.className,
+        hasHidden: screenEl.classList.contains('hidden'),
+        inlineDisplay: screenEl.style.display,
+        computedDisplay: window.getComputedStyle(screenEl).display,
+        rect: screenEl.getBoundingClientRect()
+      });
+      
       while (parent && level < 5) {
         const pStyle = window.getComputedStyle(parent);
         const pRect = parent.getBoundingClientRect();
-        console.log(`📦 부모 요소 ${level} (${parent.tagName}.${parent.className}):`, {
+        console.log(`📦 부모 요소 ${level} (${parent.tagName}.${parent.className || '(no class)'}):`, {
+          id: parent.id || '(no id)',
           display: pStyle.display,
           width: pRect.width,
-          height: pRect.height
+          height: pRect.height,
+          hasHidden: parent.classList ? parent.classList.contains('hidden') : false
         });
+        
+        // 부모가 hidden이면 강제로 표시
+        if (parent.classList && parent.classList.contains('hidden')) {
+          console.log(`🔧 부모 요소 ${level}가 hidden입니다. 강제로 표시합니다.`);
+          parent.classList.remove('hidden');
+          if (parent.classList.contains('screen')) {
+            parent.style.display = 'block';
+          } else if (parent.classList.contains('main-content')) {
+            parent.style.display = 'block';
+          } else if (parent.id === 'admin-dashboard') {
+            parent.style.display = 'flex';
+          }
+        }
+        
         parent = parent.parentElement;
         level++;
       }
