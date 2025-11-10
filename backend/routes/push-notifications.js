@@ -310,11 +310,15 @@ router.post('/defect-registered', authenticateToken, async (req, res) => {
       : householdRaw.resident_name;
 
     // 관리자들에게 알림 발송
+    // 관리자 계정은 household_id가 NULL일 수 있으므로 LEFT JOIN 사용
     const adminQuery = `
-      SELECT ps.endpoint, ps.p256dh, ps.auth, h.name, h.dong, h.ho
+      SELECT ps.endpoint, ps.p256dh, ps.auth, 
+             COALESCE(h.name, ps.name) as name, 
+             COALESCE(h.dong, ps.dong) as dong, 
+             COALESCE(h.ho, ps.ho) as ho
       FROM push_subscription ps
-      JOIN household h ON ps.household_id = h.id
-      WHERE h.user_type IN ('admin', 'super_admin')
+      LEFT JOIN household h ON ps.household_id = h.id
+      WHERE ps.user_type IN ('admin', 'super_admin')
     `;
     
     const adminResult = await pool.query(adminQuery);

@@ -671,7 +671,23 @@ async function testPushNotifications() {
     // 점검원 승인/거부 푸시 (점검원 신청 세대에게 전송)
     console.log('🔔 점검원 승인 알림 테스트 (신청 세대에게 전송)...');
     try {
-      const registrationId = await createInspectorRegistration(session);
+      let registrationId;
+      try {
+        registrationId = await createInspectorRegistration(session);
+      } catch (error) {
+        // 이미 등록이 있는 경우 기존 등록 ID 사용
+        if (error.message.includes('이미 등록 신청이 진행 중입니다')) {
+          const match = error.message.match(/"registration_id":(\d+)/);
+          if (match) {
+            registrationId = parseInt(match[1]);
+            console.log(`ℹ️ 기존 등록 ID 사용: ${registrationId}`);
+          } else {
+            throw error;
+          }
+        } else {
+          throw error;
+        }
+      }
       const adminToken = await loginAdmin();
       const decisionResponse = await sendInspectorDecision({ registrationId, adminToken });
 
