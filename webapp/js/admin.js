@@ -394,6 +394,9 @@ function showScreen(screenName) {
   targetScreen.style.opacity = '1';
   targetScreen.style.width = '100%';
   targetScreen.style.minHeight = '500px';
+  targetScreen.style.position = 'relative';
+  targetScreen.style.top = '0';
+  targetScreen.style.left = '0';
   
   console.log(`🔧 화면 CSS 강제 설정:`, {
     id: targetScreen.id,
@@ -401,6 +404,15 @@ function showScreen(screenName) {
     display: targetScreen.style.display,
     hasHidden: targetScreen.classList.contains('hidden')
   });
+  
+  // 화면을 보이도록 스크롤
+  setTimeout(() => {
+    const rect = targetScreen.getBoundingClientRect();
+    if (rect.top < 0 || rect.top > window.innerHeight) {
+      console.log('🔍 화면이 보이지 않는 위치에 있습니다. 스크롤합니다.');
+      targetScreen.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, 100);
   
   // 다른 화면이 여전히 보이는지 확인
   const visibleScreens = Array.from($$('.screen')).filter(s => {
@@ -928,15 +940,37 @@ async function loadAISettings() {
       // 다시 확인
       setTimeout(() => {
         const finalRect = screenEl.getBoundingClientRect();
+        const viewportHeight = window.innerHeight;
+        const viewportWidth = window.innerWidth;
+        
         console.log('🔍 최종 크기 (100ms 후):', {
           width: finalRect.width,
           height: finalRect.height,
           top: finalRect.top,
-          left: finalRect.left
+          left: finalRect.left,
+          viewport: {
+            width: viewportWidth,
+            height: viewportHeight
+          },
+          isVisible: finalRect.top >= 0 && finalRect.top < viewportHeight && 
+                    finalRect.left >= 0 && finalRect.left < viewportWidth
         });
         
         if (finalRect.width > 0 && finalRect.height > 0) {
           console.log('✅ 강제 설정 후 화면이 렌더링되었습니다!');
+          
+          // 화면이 뷰포트 밖에 있으면 스크롤
+          if (finalRect.top < 0 || finalRect.top > viewportHeight || 
+              finalRect.left < 0 || finalRect.left > viewportWidth) {
+            console.log('🔍 화면이 뷰포트 밖에 있습니다. 스크롤합니다.');
+            screenEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            
+            // main-content도 스크롤
+            const mainContent = screenEl.closest('.main-content');
+            if (mainContent) {
+              mainContent.scrollTop = 0;
+            }
+          }
         } else {
           console.error('❌ 여전히 화면 크기가 0입니다. 추가 조사가 필요합니다.');
         }
