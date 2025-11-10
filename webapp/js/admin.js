@@ -363,9 +363,19 @@ function showScreen(screenName) {
   }
   
   targetScreen.classList.remove('hidden');
+  
+  // admin-dashboard가 숨겨져 있으면 표시
+  const adminDashboard = $('#admin-dashboard');
+  if (adminDashboard && adminDashboard.classList.contains('hidden')) {
+    console.log('⚠️ admin-dashboard가 숨겨져 있습니다. 표시합니다.');
+    adminDashboard.classList.remove('hidden');
+  }
+  
   console.log(`✅ 화면 표시됨: screen-${screenName}`, {
     hasHidden: targetScreen.classList.contains('hidden'),
-    visible: targetScreen.offsetParent !== null
+    visible: targetScreen.offsetParent !== null,
+    parentVisible: adminDashboard ? !adminDashboard.classList.contains('hidden') : 'N/A',
+    parentOffsetParent: adminDashboard ? adminDashboard.offsetParent !== null : 'N/A'
   });
   
   // 메뉴 활성화
@@ -616,6 +626,13 @@ async function loadDefects() {
 async function loadAISettings() {
   console.log('🔍 loadAISettings() 호출됨');
   
+  // admin-dashboard가 숨겨져 있으면 표시
+  const adminDashboard = $('#admin-dashboard');
+  if (adminDashboard && adminDashboard.classList.contains('hidden')) {
+    console.log('⚠️ admin-dashboard가 숨겨져 있습니다. 표시합니다.');
+    adminDashboard.classList.remove('hidden');
+  }
+  
   // 화면이 보이는지 확인하고, 안 보이면 잠시 대기
   const screenEl = document.getElementById('screen-ai-settings');
   console.log('📺 화면 요소:', screenEl ? '존재' : '없음');
@@ -639,6 +656,19 @@ async function loadAISettings() {
       console.error('❌ 화면이 너무 오래 숨겨져 있습니다. 강제로 표시합니다.');
       screenEl.classList.remove('hidden');
     }
+  }
+  
+  // 부모 요소도 확인
+  if (screenEl.offsetParent === null && adminDashboard) {
+    console.warn('⚠️ 화면이 보이지 않습니다. 부모 요소 확인:', {
+      screenHidden: screenEl.classList.contains('hidden'),
+      parentHidden: adminDashboard.classList.contains('hidden'),
+      parentDisplay: window.getComputedStyle(adminDashboard).display
+    });
+    
+    // 강제로 표시
+    adminDashboard.classList.remove('hidden');
+    screenEl.classList.remove('hidden');
   }
 
   const modeSelect = document.getElementById('ai-mode');
