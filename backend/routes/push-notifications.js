@@ -1,16 +1,14 @@
 // Push Notification API Routes
 const express = require('express');
 const webpush = require('web-push');
-const { Pool } = require('pg');
 const { authenticateToken } = require('../middleware/auth');
 const { safeLog } = require('../utils/logger');
 const { decrypt } = require('../utils/encryption');
 
 const router = express.Router();
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
-});
+
+// Database pool - database.js에서 가져오기
+const pool = require('../database');
 
 // VAPID 키 설정 (환경변수에서 가져오기)
 const vapidKeys = {
@@ -18,12 +16,22 @@ const vapidKeys = {
   privateKey: process.env.VAPID_PRIVATE_KEY || 'p256dh=...' // 실제 키로 교체 필요
 };
 
-// Web Push 설정
-webpush.setVapidDetails(
-  'mailto:admin@insighti.com',
-  vapidKeys.publicKey,
-  vapidKeys.privateKey
-);
+// Web Push 설정 (VAPID 키가 유효할 때만)
+try {
+  if (vapidKeys.publicKey && vapidKeys.privateKey && vapidKeys.privateKey !== 'p256dh=...') {
+    webpush.setVapidDetails(
+      'mailto:admin@insighti.com',
+      vapidKeys.publicKey,
+      vapidKeys.privateKey
+    );
+    console.log('✅ VAPID keys configured for push notifications');
+  } else {
+    console.warn('⚠️ VAPID keys not configured. Push notifications will not work.');
+  }
+} catch (error) {
+  console.error('❌ Failed to set VAPID details:', error.message);
+  // VAPID 설정 실패해도 서버는 계속 실행되도록 함
+}
 
 // VAPID 공개키 반환
 router.get('/vapid-key', (req, res) => {
