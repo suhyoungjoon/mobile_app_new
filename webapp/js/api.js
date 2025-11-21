@@ -250,7 +250,24 @@ class APIClient {
   
   // YouTube 동영상 검색
   async searchYouTubeVideos(query, maxResults = 5) {
-    return await this.request(`/youtube/search/${encodeURIComponent(query)}?maxResults=${maxResults}`);
+    try {
+      const response = await this.request(`/youtube/search/${encodeURIComponent(query)}?maxResults=${maxResults}`);
+      return response;
+    } catch (error) {
+      // 에러 응답에서 상세 정보 추출
+      const errorResponse = {
+        success: false,
+        error: error.message || 'YouTube 검색 실패',
+        details: error.details || '',
+        status: error.status || 500
+      };
+      
+      // 에러를 다시 throw하여 호출자가 처리할 수 있도록 함
+      const enhancedError = new Error(errorResponse.error);
+      enhancedError.details = errorResponse.details;
+      enhancedError.status = errorResponse.status;
+      throw enhancedError;
+    }
   }
 
   // YouTube 동영상 상세 정보 조회
