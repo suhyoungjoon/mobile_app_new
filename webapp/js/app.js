@@ -942,34 +942,39 @@ async function loadDefectDescription() {
       // 상세한 에러 로깅
       const errorMessage = youtubeError.message || '알 수 없는 오류';
       const errorDetails = youtubeError.details || '';
+      const errorCode = youtubeError.error || youtubeError.status;
       
       console.warn('⚠️ YouTube 검색 실패:', {
         message: errorMessage,
         details: errorDetails,
         status: youtubeError.status,
-        error: youtubeError
+        error: errorCode
       });
       
-      // 사용자에게 에러 메시지 표시 (조용히 실패하지 않고)
-      if (youtubeError.status === 403) {
-        // 할당량 초과 등 - 사용자에게 알림
-        console.warn('⚠️ YouTube API 할당량 초과 또는 접근 거부');
-        // 조용히 실패 (사용자에게는 표시하지 않음)
-      } else if (youtubeError.status === 500 && errorDetails?.includes('API 키')) {
-        // API 키 미설정 - 개발자에게만 알림
-        console.error('❌ YouTube API 키가 설정되지 않았습니다.');
+      // 에러 유형별 처리 (사용자 경험을 해치지 않도록 조용히 처리)
+      if (errorCode === 'YouTube API key not configured' || errorDetails?.includes('API 키')) {
+        // API 키 미설정 - 조용히 실패
+        console.warn('⚠️ YouTube API 키가 설정되지 않았습니다. 기존 동영상을 사용합니다.');
+      } else if (youtubeError.status === 403) {
+        // 할당량 초과 또는 접근 거부 - 조용히 실패
+        console.warn('⚠️ YouTube API 접근 제한. 기존 동영상을 사용합니다.');
+      } else if (youtubeError.status === 503) {
+        // 서비스 불가 - 조용히 실패
+        console.warn('⚠️ YouTube 검색 서비스를 사용할 수 없습니다. 기존 동영상을 사용합니다.');
       } else {
         // 기타 에러 - 조용히 실패
         console.warn('⚠️ YouTube 검색 실패, 기존 동영상 사용');
       }
       
-      // YouTube 검색 실패 시 기존 동영상 사용
+      // YouTube 검색 실패 시 기존 동영상 사용 (graceful degradation)
       if (categoryDetail.videos && categoryDetail.videos.length > 0) {
         const primaryVideo = categoryDetail.videos.find(v => v.is_primary) || categoryDetail.videos[0];
         loadYouTubeVideo(primaryVideo);
         videoSection.classList.remove('hidden');
+        console.log('✅ 기존 동영상을 사용합니다.');
       } else {
         videoSection.classList.add('hidden');
+        console.log('⚠️ 사용 가능한 동영상이 없습니다.');
       }
     }
     

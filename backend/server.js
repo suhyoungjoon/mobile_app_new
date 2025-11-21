@@ -179,19 +179,9 @@ app.get('/api', (req, res) => {
   });
 });
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error('Error:', err);
-  
-  if (err.code === 'LIMIT_FILE_SIZE') {
-    return res.status(400).json({ error: 'File too large' });
-  }
-  
-  res.status(500).json({ 
-    error: 'Internal server error',
-    message: config.nodeEnv === 'development' ? err.message : 'Something went wrong'
-  });
-});
+// Error handling middleware (중앙화된 에러 핸들러 사용)
+const { errorHandler } = require('./utils/errorHandler');
+app.use(errorHandler);
 
 // 404 handler
 app.use('*', (req, res) => {

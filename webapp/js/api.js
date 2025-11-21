@@ -68,9 +68,19 @@ class APIClient {
             throw err;
           }
           
-          const err = new Error(`HTTP ${resp.status}: ${text}`);
-          err.status = resp.status;
-          throw err;
+        // JSON 응답 시도
+        let errorData;
+        try {
+          errorData = JSON.parse(text);
+        } catch {
+          errorData = { message: text || `HTTP ${resp.status}` };
+        }
+        
+        const err = new Error(errorData.message || errorData.error || `HTTP ${resp.status}`);
+        err.status = resp.status;
+        err.details = errorData.details;
+        err.error = errorData.error;
+        throw err;
         }
         return await resp.json();
       } catch (err) {

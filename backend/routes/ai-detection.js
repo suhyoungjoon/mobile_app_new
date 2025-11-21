@@ -3,20 +3,26 @@ const { authenticateToken } = require('../middleware/auth');
 const aiDetectionService = require('../services/aiDetectionService');
 const aiDetectionSettingsService = require('../services/aiDetectionSettingsService');
 const localVisionService = require('../services/localVisionService');
+const { asyncHandler, createSafeErrorResponse } = require('../utils/errorHandler');
+const config = require('../config');
 
 const router = express.Router();
 
 /**
  * 이미지 하자 분석 (하이브리드)
  */
-router.post('/detect', authenticateToken, async (req, res) => {
+router.post('/detect', authenticateToken, asyncHandler(async (req, res) => {
+  const { imageBase64, photoType = 'near' } = req.body;
+
+  if (!imageBase64) {
+    return res.status(400).json({ 
+      success: false,
+      error: 'validation_error',
+      message: '이미지 데이터가 필요합니다.' 
+    });
+  }
+
   try {
-    const { imageBase64, photoType = 'near' } = req.body;
-
-    if (!imageBase64) {
-      return res.status(400).json({ error: '이미지 데이터가 필요합니다.' });
-    }
-
     const result = await aiDetectionService.analyze({ imageBase64, photoType });
 
     res.json({
@@ -25,9 +31,22 @@ router.post('/detect', authenticateToken, async (req, res) => {
     });
   } catch (error) {
     console.error('❌ AI 분석 실패:', error);
-    res.status(500).json({ error: 'AI 분석에 실패했습니다.', details: error.message });
+    
+    // 에러 타입별 처리
+    const errorResponse = createSafeErrorResponse(
+      error, 
+      'AI 분석에 실패했습니다. 수동으로 하자를 등록해주세요.'
+    );
+    
+    // AI 분석 실패는 치명적이지 않으므로 200으로 응답 (graceful degradation)
+    res.status(200).json({
+      success: false,
+      ...errorResponse,
+      fallback: true,
+      message: 'AI 분석에 실패했습니다. 수동으로 하자를 등록해주세요.'
+    });
   }
-});
+}));
 
 /**
  * AI 판정 설정 조회 (관리자용)
@@ -58,9 +77,11 @@ router.get('/settings', authenticateToken, async (req, res) => {
       code: error.code,
       constraint: error.constraint
     });
-    res.status(500).json({ 
-      error: 'AI 설정 조회에 실패했습니다.',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    
+    const errorResponse = createSafeErrorResponse(error, 'AI 설정 조회에 실패했습니다.');
+    res.status(500).json({
+      success: false,
+      ...errorResponse
     });
   }
 });
@@ -113,7 +134,12 @@ router.put('/settings', authenticateToken, async (req, res) => {
     });
   } catch (error) {
     console.error('❌ AI 설정 업데이트 실패:', error);
-    res.status(500).json({ error: 'AI 설정 업데이트에 실패했습니다.' });
+    
+    const errorResponse = createSafeErrorResponse(error, 'AI 설정 업데이트에 실패했습니다.');
+    res.status(500).json({
+      success: false,
+      ...errorResponse
+    });
   }
 });
 

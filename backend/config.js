@@ -1,5 +1,7 @@
-// Simple configuration management
-module.exports = {
+// Simple configuration management with validation
+const { checkEnvironmentVariables } = require('./utils/errorHandler');
+
+const config = {
   port: process.env.PORT || 3000,
   nodeEnv: process.env.NODE_ENV || 'development',
   
@@ -46,3 +48,18 @@ module.exports = {
   // YouTube Data API v3
   youtubeApiKey: process.env.YOUTUBE_API_KEY
 };
+
+// 서버 시작 시 환경변수 체크
+if (require.main === module || process.env.CHECK_ENV !== 'false') {
+  try {
+    const envCheck = checkEnvironmentVariables();
+    if (envCheck.hasErrors) {
+      console.error('❌ 필수 환경변수가 설정되지 않았습니다. 서버가 정상 작동하지 않을 수 있습니다.');
+    }
+  } catch (error) {
+    // 에러 핸들러가 아직 로드되지 않았을 수 있으므로 조용히 실패
+    console.warn('⚠️ 환경변수 체크를 건너뜁니다.');
+  }
+}
+
+module.exports = config;
