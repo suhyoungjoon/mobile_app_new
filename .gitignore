@@ -12,3 +12,6 @@ build/
 .env.*
 azure/azure-resources.json
 .vercel
+
+# Test screenshots
+test-screenshots/
