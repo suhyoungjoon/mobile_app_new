@@ -141,7 +141,7 @@ app.get('/', (req, res) => {
     status: 'OK', 
     message: 'InsightI API Server is running',
     timestamp: new Date().toISOString(),
-    version: '1.0.0'
+    version: '4.0.1'
   });
 });
 
@@ -150,7 +150,7 @@ app.get('/health', (req, res) => {
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
-    version: '1.0.0'
+    version: '4.0.1'
   });
 });
 
@@ -158,7 +158,7 @@ app.get('/health', (req, res) => {
 app.get('/api', (req, res) => {
   res.json({
     name: 'InsightI Pre/Post Inspection API',
-    version: '2.5.0', // Updated version for YouTube integration
+    version: '4.0.1', // Error handling improvements
     endpoints: {
       auth: '/api/auth',
       cases: '/api/cases',
