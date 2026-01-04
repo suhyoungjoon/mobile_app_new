@@ -1,5 +1,5 @@
-// PDF generation service using Puppeteer (better Korean font support)
-const puppeteer = require('puppeteer');
+// PDF generation service using html-pdf with base64 embedded Korean fonts
+const pdf = require('html-pdf');
 const fs = require('fs');
 const path = require('path');
 const handlebars = require('handlebars');
@@ -106,61 +106,45 @@ class PDFGenerator {
         });
       }
 
-      // Generate PDF using Puppeteer (better Korean font support)
-      const browser = await puppeteer.launch({
-        headless: 'new',
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-accelerated-2d-canvas',
-          '--no-first-run',
-          '--no-zygote',
-          '--disable-gpu'
-        ]
+      // PDF options for html-pdf
+      const pdfOptions = {
+        format: format,
+        border: {
+          top: margin.top,
+          right: margin.right,
+          bottom: margin.bottom,
+          left: margin.left
+        },
+        type: 'pdf',
+        quality: '75',
+        renderDelay: 3000, // 한글 폰트 로딩을 위해 증가
+        timeout: 30000
+      };
+
+      // Generate PDF using html-pdf
+      pdf.create(html, pdfOptions).toBuffer((err, buffer) => {
+        if (err) {
+          console.error('PDF generation error:', err);
+          reject(new Error(`PDF generation failed: ${err.message}`));
+          return;
+        }
+
+        try {
+          // Save to file
+          const outputPath = path.join(this.outputDir, filename);
+          fs.writeFileSync(outputPath, buffer);
+
+          resolve({
+            filename,
+            path: outputPath,
+            url: `/reports/${filename}`,
+            size: buffer.length
+          });
+        } catch (fileError) {
+          console.error('File save error:', fileError);
+          reject(new Error(`Failed to save PDF file: ${fileError.message}`));
+        }
       });
-
-      try {
-        const page = await browser.newPage();
-        
-        // Set content with proper encoding
-        await page.setContent(html, {
-          waitUntil: 'networkidle0',
-          timeout: 30000
-        });
-
-        // Wait a bit for fonts to load
-        await page.waitForTimeout(1000);
-
-        // Generate PDF
-        const pdfBuffer = await page.pdf({
-          format: format,
-          margin: {
-            top: margin.top,
-            right: margin.right,
-            bottom: margin.bottom,
-            left: margin.left
-          },
-          printBackground: true,
-          preferCSSPageSize: false
-        });
-
-        // Save to file
-        const outputPath = path.join(this.outputDir, filename);
-        fs.writeFileSync(outputPath, pdfBuffer);
-
-        resolve({
-          filename,
-          path: outputPath,
-          url: `/reports/${filename}`,
-          size: pdfBuffer.length
-        });
-      } catch (browserError) {
-        console.error('Browser error:', browserError);
-        reject(new Error(`PDF generation failed: ${browserError.message}`));
-      } finally {
-        await browser.close();
-      }
     } catch (error) {
       console.error('PDF generation error:', error);
       reject(new Error(`PDF generation failed: ${error.message}`));

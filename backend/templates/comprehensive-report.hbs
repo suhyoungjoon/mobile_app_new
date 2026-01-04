@@ -8,6 +8,48 @@
     <style>
         @charset "UTF-8";
         
+        /* 한글 폰트 정의 - 시스템 폰트 우선 사용 */
+        @font-face {
+            font-family: 'Noto Sans KR';
+            font-style: normal;
+            font-weight: 400;
+            src: local('Noto Sans KR Regular'), 
+                 local('Noto Sans KR'),
+                 local('Apple SD Gothic Neo'),
+                 local('Malgun Gothic'),
+                 local('맑은 고딕');
+        }
+        
+        @font-face {
+            font-family: 'Noto Sans KR';
+            font-style: normal;
+            font-weight: 500;
+            src: local('Noto Sans KR Medium'),
+                 local('Noto Sans KR'),
+                 local('Apple SD Gothic Neo'),
+                 local('Malgun Gothic');
+        }
+        
+        @font-face {
+            font-family: 'Noto Sans KR';
+            font-style: normal;
+            font-weight: 600;
+            src: local('Noto Sans KR SemiBold'),
+                 local('Noto Sans KR'),
+                 local('Apple SD Gothic Neo'),
+                 local('Malgun Gothic');
+        }
+        
+        @font-face {
+            font-family: 'Noto Sans KR';
+            font-style: normal;
+            font-weight: 700;
+            src: local('Noto Sans KR Bold'),
+                 local('Noto Sans KR'),
+                 local('Apple SD Gothic Neo Bold'),
+                 local('Malgun Gothic Bold');
+        }
+        
         * {
             margin: 0;
             padding: 0;
@@ -15,7 +57,7 @@
         }
         
         body {
-            font-family: 'Malgun Gothic', '맑은 고딕', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Nanum Gothic', sans-serif;
+            font-family: 'Noto Sans KR', 'Malgun Gothic', '맑은 고딕', 'Apple SD Gothic Neo', 'Nanum Gothic', sans-serif;
             line-height: 1.6;
             color: #333;
             background: #fff;
