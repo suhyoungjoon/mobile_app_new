@@ -214,11 +214,45 @@ class APIClient {
     });
   }
 
-  async sendReport(caseId) {
+  async sendReport(caseId, phoneNumber = null) {
     return await this.request('/reports/send', {
       method: 'POST',
-      body: JSON.stringify({ case_id: caseId })
+      body: JSON.stringify({ 
+        case_id: caseId,
+        phone_number: phoneNumber
+      })
     });
+  }
+
+  async downloadReport(filename) {
+    // PDF 다운로드는 blob으로 받아야 함
+    const url = `${this.baseURL}/reports/download/${filename}`;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${this.token}`
+      }
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: `HTTP ${response.status}` }));
+      throw new Error(error.message || error.error || `HTTP ${response.status}`);
+    }
+
+    // Blob으로 변환
+    const blob = await response.blob();
+    
+    // 다운로드 링크 생성
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(downloadUrl);
+
+    return { success: true, filename };
   }
 
   // SMS

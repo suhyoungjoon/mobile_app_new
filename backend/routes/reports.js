@@ -2,8 +2,10 @@
 const express = require('express');
 const pool = require('../database');
 const { authenticateToken } = require('../middleware/auth');
-// const pdfGenerator = require('../utils/pdfGenerator'); // PDF 기능 임시 비활성화
+const pdfGenerator = require('../utils/pdfGenerator');
 const smsService = require('../utils/smsService');
+const fs = require('fs');
+const path = require('path');
 
 const router = express.Router();
 
@@ -198,39 +200,143 @@ router.get('/preview', authenticateToken, async (req, res) => {
 // Generate PDF report
 router.post('/generate', authenticateToken, async (req, res) => {
   try {
-    const { case_id, template = 'simple-report' } = req.body;
+    const { case_id, template = 'comprehensive-report' } = req.body;
     const { householdId, complex, dong, ho, name } = req.user;
 
-    if (!case_id) {
-      return res.status(400).json({ error: 'case_id is required' });
+    // Get case_id from request or use latest case
+    let targetCaseId = case_id;
+
+    // If no case_id provided, get latest case
+    if (!targetCaseId) {
+      const latestCaseQuery = `
+        SELECT id FROM case_header 
+        WHERE household_id = $1 
+        ORDER BY created_at DESC 
+        LIMIT 1
+      `;
+      const latestCaseResult = await pool.query(latestCaseQuery, [householdId]);
+      if (latestCaseResult.rows.length === 0) {
+        return res.status(404).json({ error: 'No cases found' });
+      }
+      targetCaseId = latestCaseResult.rows[0].id;
     }
 
-    // Mock data for development
-    const mockCaseData = {
-      id: case_id,
-      type: '하자접수',
-      created_at: new Date().toISOString(),
-      defects: [
-        {
-          id: 'DEF-1',
-          location: '거실',
-          trade: '바닥재',
-          content: '마루판 들뜸',
-          memo: '현장 특이사항',
-          created_at: new Date().toISOString()
-        },
-        {
-          id: 'DEF-2',
-          location: '주방',
-          trade: '타일',
-          content: '타일 균열',
-          memo: '',
-          created_at: new Date().toISOString()
-        }
-      ]
-    };
+    // Get case data with defects
+    const caseQuery = `
+      SELECT c.id, c.type, c.created_at,
+             json_agg(
+               json_build_object(
+                 'id', d.id,
+                 'location', d.location,
+                 'trade', d.trade,
+                 'content', d.content,
+                 'memo', d.memo,
+                 'created_at', d.created_at
+               )
+             ) FILTER (WHERE d.id IS NOT NULL) as defects
+      FROM case_header c
+      LEFT JOIN defect d ON c.id = d.case_id
+      WHERE c.id = $1 AND c.household_id = $2
+      GROUP BY c.id, c.type, c.created_at
+    `;
 
-    const defects = mockCaseData.defects || [];
+    const caseResult = await pool.query(caseQuery, [targetCaseId, householdId]);
+    
+    if (caseResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Case not found' });
+    }
+
+    const caseData = caseResult.rows[0];
+    const defects = caseData.defects || [];
+
+    // Get equipment inspection data
+    const equipmentQuery = `
+      SELECT 
+        ii.type,
+        ii.location,
+        ii.trade,
+        ii.note,
+        ii.result,
+        ii.created_at,
+        am.tvoc,
+        am.hcho,
+        am.co2,
+        am.unit_tvoc,
+        am.unit_hcho,
+        rm.radon,
+        rm.unit_radon,
+        lm.left_mm,
+        lm.right_mm,
+        (
+          SELECT json_agg(
+            json_build_object(
+              'file_url', tp.file_url,
+              'caption', tp.caption,
+              'shot_at', tp.shot_at
+            )
+          )
+          FROM thermal_photo tp WHERE tp.item_id = ii.id
+        ) as photos
+      FROM inspection_item ii
+      LEFT JOIN air_measure am ON ii.id = am.item_id
+      LEFT JOIN radon_measure rm ON ii.id = rm.item_id
+      LEFT JOIN level_measure lm ON ii.id = lm.item_id
+      WHERE ii.case_id = $1
+      ORDER BY ii.created_at ASC
+    `;
+
+    const equipmentResult = await pool.query(equipmentQuery, [targetCaseId]);
+    const equipmentData = equipmentResult.rows;
+
+    // Process equipment data
+    const airMeasurements = [];
+    const radonMeasurements = [];
+    const levelMeasurements = [];
+    const thermalInspections = [];
+
+    equipmentData.forEach(item => {
+      const baseData = {
+        location: item.location,
+        trade: item.trade,
+        note: item.note,
+        result: item.result,
+        result_text: getResultText(item.result),
+        created_at: item.created_at
+      };
+
+      switch (item.type) {
+        case 'air':
+          airMeasurements.push({
+            ...baseData,
+            tvoc: item.tvoc,
+            hcho: item.hcho,
+            co2: item.co2,
+            unit_tvoc: item.unit_tvoc,
+            unit_hcho: item.unit_hcho
+          });
+          break;
+        case 'radon':
+          radonMeasurements.push({
+            ...baseData,
+            radon: item.radon,
+            unit: item.unit_radon
+          });
+          break;
+        case 'level':
+          levelMeasurements.push({
+            ...baseData,
+            left_mm: item.left_mm,
+            right_mm: item.right_mm
+          });
+          break;
+        case 'thermal':
+          thermalInspections.push({
+            ...baseData,
+            photos: item.photos || []
+          });
+          break;
+      }
+    });
 
     // Prepare data for PDF generation
     const reportData = {
@@ -238,75 +344,118 @@ router.post('/generate', authenticateToken, async (req, res) => {
       dong,
       ho,
       name,
-      created_at: mockCaseData.created_at,
+      type: caseData.type,
+      created_at: caseData.created_at,
+      generated_at: new Date().toISOString(),
+      total_defects: defects.length,
+      total_thermal: thermalInspections.length,
+      total_air: airMeasurements.length,
+      total_radon: radonMeasurements.length,
+      total_level: levelMeasurements.length,
+      total_equipment: thermalInspections.length + airMeasurements.length + radonMeasurements.length + levelMeasurements.length,
+      has_equipment_data: (thermalInspections.length + airMeasurements.length + radonMeasurements.length + levelMeasurements.length) > 0,
       defects: defects.map((defect, index) => ({
         ...defect,
         index: index + 1
-      }))
+      })),
+      air_measurements: airMeasurements,
+      radon_measurements: radonMeasurements,
+      level_measurements: levelMeasurements,
+      thermal_inspections: thermalInspections
     };
 
-    // Generate PDF
-    const pdfResult = await pdfGenerator.generateSimpleReportPDF(reportData, defects, {
-      filename: `report-${case_id}-${Date.now()}.pdf`
+    // Generate PDF using comprehensive template
+    const pdfResult = await pdfGenerator.generatePDF('comprehensive-report', reportData, {
+      filename: `report-${targetCaseId}-${Date.now()}.pdf`
     });
 
     res.json({
+      success: true,
       message: 'PDF generated successfully',
       filename: pdfResult.filename,
       url: pdfResult.url,
-      size: pdfResult.size
+      download_url: `/api/reports/download/${pdfResult.filename}`,
+      size: pdfResult.size,
+      case_id: targetCaseId
     });
 
   } catch (error) {
     console.error('PDF generation error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ 
+      success: false,
+      error: 'PDF generation failed',
+      message: error.message 
+    });
   }
 });
 
 // Send report (with PDF generation)
 router.post('/send', authenticateToken, async (req, res) => {
   try {
-    const { case_id } = req.body;
-    const { householdId, phone, complex, dong, ho, name } = req.user;
+    const { case_id, phone_number } = req.body;
+    const { householdId, phone: userPhone, complex, dong, ho, name } = req.user;
 
-    if (!case_id) {
-      return res.status(400).json({ error: 'case_id is required' });
+    // Get case_id from request or use latest case
+    let targetCaseId = case_id;
+    const targetPhone = phone_number || userPhone;
+
+    if (!targetPhone) {
+      return res.status(400).json({ error: 'Phone number is required' });
     }
 
-    // Mock data for development
-    const mockCaseData = {
-      id: case_id,
-      type: '하자접수',
-      created_at: new Date().toISOString(),
-      defects: [
-        {
-          id: 'DEF-1',
-          location: '거실',
-          trade: '바닥재',
-          content: '마루판 들뜸',
-          memo: '현장 특이사항',
-          created_at: new Date().toISOString()
-        },
-        {
-          id: 'DEF-2',
-          location: '주방',
-          trade: '타일',
-          content: '타일 균열',
-          memo: '',
-          created_at: new Date().toISOString()
-        }
-      ]
-    };
+    // If no case_id provided, get latest case
+    if (!targetCaseId) {
+      const latestCaseQuery = `
+        SELECT id FROM case_header 
+        WHERE household_id = $1 
+        ORDER BY created_at DESC 
+        LIMIT 1
+      `;
+      const latestCaseResult = await pool.query(latestCaseQuery, [householdId]);
+      if (latestCaseResult.rows.length === 0) {
+        return res.status(404).json({ error: 'No cases found' });
+      }
+      targetCaseId = latestCaseResult.rows[0].id;
+    }
 
-    const defects = mockCaseData.defects || [];
+    // Get case data (same as generate endpoint)
+    const caseQuery = `
+      SELECT c.id, c.type, c.created_at,
+             json_agg(
+               json_build_object(
+                 'id', d.id,
+                 'location', d.location,
+                 'trade', d.trade,
+                 'content', d.content,
+                 'memo', d.memo,
+                 'created_at', d.created_at
+               )
+             ) FILTER (WHERE d.id IS NOT NULL) as defects
+      FROM case_header c
+      LEFT JOIN defect d ON c.id = d.case_id
+      WHERE c.id = $1 AND c.household_id = $2
+      GROUP BY c.id, c.type, c.created_at
+    `;
 
-    // Prepare data for PDF generation
+    const caseResult = await pool.query(caseQuery, [targetCaseId, householdId]);
+    
+    if (caseResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Case not found' });
+    }
+
+    const caseData = caseResult.rows[0];
+    const defects = caseData.defects || [];
+
+    // Prepare data for PDF generation (simplified for SMS)
     const reportData = {
       complex,
       dong,
       ho,
       name,
-      created_at: mockCaseData.created_at,
+      type: caseData.type,
+      created_at: caseData.created_at,
+      generated_at: new Date().toISOString(),
+      total_defects: defects.length,
       defects: defects.map((defect, index) => ({
         ...defect,
         index: index + 1
@@ -315,16 +464,7 @@ router.post('/send', authenticateToken, async (req, res) => {
 
     // Generate PDF
     const pdfResult = await pdfGenerator.generateSimpleReportPDF(reportData, defects, {
-      filename: `report-${case_id}-${Date.now()}.pdf`
-    });
-
-    // Mock report record insertion
-    console.log('Mock: Report record would be inserted:', {
-      householdId,
-      case_id,
-      pdf_url: pdfResult.url,
-      status: 'sent',
-      sent_to: phone
+      filename: `report-${targetCaseId}-${Date.now()}.pdf`
     });
 
     // Send SMS notification
@@ -336,25 +476,71 @@ router.post('/send', authenticateToken, async (req, res) => {
       defectCount: defects.length
     };
 
-    const smsResult = await smsService.sendReportNotification(phone, pdfResult.url, caseInfo);
+    // Construct full URL for SMS
+    const baseUrl = process.env.BACKEND_URL || 'https://mobile-app-new.onrender.com';
+    const fullPdfUrl = `${baseUrl}${pdfResult.url}`;
+
+    const smsResult = await smsService.sendReportNotification(targetPhone, fullPdfUrl, caseInfo);
     
     if (!smsResult.success && !smsResult.mock) {
       console.warn('SMS notification failed:', smsResult.error);
     }
 
     res.json({
+      success: true,
       message: 'Report generated and sent successfully',
       filename: pdfResult.filename,
       pdf_url: pdfResult.url,
-      sent_to: phone,
+      download_url: `/api/reports/download/${pdfResult.filename}`,
+      sent_to: targetPhone,
       size: pdfResult.size,
       sms_sent: smsResult.success,
-      sms_mock: smsResult.mock || false
+      sms_mock: smsResult.mock || false,
+      case_id: targetCaseId
     });
 
   } catch (error) {
     console.error('Send report error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to send report',
+      message: error.message 
+    });
+  }
+});
+
+// Download PDF report
+router.get('/download/:filename', authenticateToken, async (req, res) => {
+  try {
+    const { filename } = req.params;
+    const { householdId } = req.user;
+
+    // Validate filename to prevent directory traversal
+    if (!filename || filename.includes('..') || filename.includes('/')) {
+      return res.status(400).json({ error: 'Invalid filename' });
+    }
+
+    const reportPath = pdfGenerator.getReportPath(filename);
+    
+    // Check if file exists
+    if (!fs.existsSync(reportPath)) {
+      return res.status(404).json({ error: 'Report not found' });
+    }
+
+    // Set headers for file download
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    
+    // Send file
+    res.sendFile(path.resolve(reportPath));
+
+  } catch (error) {
+    console.error('PDF download error:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to download PDF',
+      message: error.message 
+    });
   }
 });
 

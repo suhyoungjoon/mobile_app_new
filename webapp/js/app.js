@@ -714,19 +714,51 @@ async function sendReportAsSMS() {
   
   setLoading(true);
   try {
-    await api.sendSMSReport(caseId, phoneNumber);
-    toast('SMS로 보고서가 발송되었습니다', 'success');
+    const result = await api.sendReport(caseId, phoneNumber);
+    if (result.success) {
+      toast('SMS로 보고서가 발송되었습니다', 'success');
+    } else {
+      throw new Error(result.message || '보고서 발송에 실패했습니다');
+    }
   } catch (error) {
-    showError(error);
+    handleAPIError(error, '보고서 발송');
   } finally {
     setLoading(false);
   }
 }
 
 // PDF 다운로드
-function downloadReportAsPdf() {
-  toast('PDF 다운로드 기능은 향후 구현 예정입니다', 'info');
-  // TODO: PDF 생성 및 다운로드 기능 구현
+async function downloadReportAsPdf() {
+  if (!checkAuth()) return;
+  
+  const caseId = AppState.currentCaseId;
+  if (!caseId) {
+    toast('케이스를 먼저 선택해주세요', 'error');
+    return;
+  }
+
+  setLoading(true);
+  try {
+    // 1. PDF 생성
+    toast('PDF 생성 중...', 'info');
+    const generateResult = await api.generateReport(caseId);
+    
+    if (!generateResult.success) {
+      throw new Error(generateResult.message || 'PDF 생성에 실패했습니다');
+    }
+
+    // 2. PDF 다운로드
+    toast('PDF 다운로드 중...', 'info');
+    await api.downloadReport(generateResult.filename);
+    
+    toast('PDF 다운로드가 완료되었습니다', 'success');
+    
+  } catch (error) {
+    console.error('PDF 다운로드 오류:', error);
+    handleAPIError(error, 'PDF 다운로드');
+  } finally {
+    setLoading(false);
+  }
 }
 
 // Utility functions
