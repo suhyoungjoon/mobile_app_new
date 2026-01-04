@@ -667,7 +667,15 @@ async function onPreviewReport(){
     const cont = $('#report-preview');
     cont.innerHTML = '';
     
+    // PDF 버튼 그룹 요소 찾기
+    const buttonGroup = document.querySelector('#report .button-group');
+    
     if (reportData.defects && reportData.defects.length > 0) {
+      // 하자가 있는 경우: 버튼 표시
+      if (buttonGroup) {
+        buttonGroup.style.display = 'flex';
+      }
+      
       reportData.defects.forEach((d, index) => {
         const card = document.createElement('div');
         card.className = 'card';
@@ -683,9 +691,15 @@ async function onPreviewReport(){
         cont.appendChild(card);
       });
     } else {
+      // 하자가 없는 경우: 버튼 숨김
+      if (buttonGroup) {
+        buttonGroup.style.display = 'none';
+      }
+      
       cont.innerHTML = `
         <div class="card" style="text-align: center; padding: 40px;">
           <div style="color: #666;">등록된 하자가 없습니다.</div>
+          <div style="color: #999; font-size: 12px; margin-top: 10px;">하자를 등록하면 PDF 보고서를 생성할 수 있습니다.</div>
         </div>
       `;
     }
@@ -728,6 +742,39 @@ async function sendReportAsSMS() {
 }
 
 // PDF 다운로드
+async function previewReportAsPdf() {
+  if (!checkAuth()) return;
+  
+  const caseId = AppState.currentCaseId;
+  if (!caseId) {
+    toast('케이스를 먼저 선택해주세요', 'error');
+    return;
+  }
+
+  setLoading(true);
+  try {
+    // 1. PDF 생성
+    toast('PDF 생성 중...', 'info');
+    const generateResult = await api.generateReport(caseId);
+    
+    if (!generateResult.success) {
+      throw new Error(generateResult.message || 'PDF 생성에 실패했습니다');
+    }
+
+    // 2. PDF 미리보기
+    toast('PDF 미리보기를 여는 중...', 'info');
+    await api.previewReport(generateResult.filename);
+    
+    toast('PDF 미리보기 창이 열렸습니다', 'success');
+    
+  } catch (error) {
+    console.error('PDF 미리보기 오류:', error);
+    handleAPIError(error, 'PDF 미리보기');
+  } finally {
+    setLoading(false);
+  }
+}
+
 async function downloadReportAsPdf() {
   if (!checkAuth()) return;
   

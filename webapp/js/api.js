@@ -224,6 +224,46 @@ class APIClient {
     });
   }
 
+  async previewReport(filename) {
+    // PDF 미리보기: Blob으로 받아서 새 창에서 열기
+    const url = `${this.baseURL}/reports/preview-pdf/${filename}`;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${this.token}`
+      }
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: `HTTP ${response.status}` }));
+      throw new Error(error.message || error.error || `HTTP ${response.status}`);
+    }
+
+    // Blob으로 변환
+    const blob = await response.blob();
+    
+    // Blob URL 생성
+    const blobUrl = window.URL.createObjectURL(blob);
+    
+    // 새 창에서 PDF 미리보기
+    const previewWindow = window.open(blobUrl, '_blank', 'width=1000,height=800,scrollbars=yes');
+    
+    if (!previewWindow) {
+      window.URL.revokeObjectURL(blobUrl);
+      throw new Error('팝업이 차단되었습니다. 팝업 차단을 해제해주세요.');
+    }
+    
+    // 창이 닫히면 Blob URL 해제
+    const checkClosed = setInterval(() => {
+      if (previewWindow.closed) {
+        window.URL.revokeObjectURL(blobUrl);
+        clearInterval(checkClosed);
+      }
+    }, 1000);
+    
+    return { success: true, filename };
+  }
+
   async downloadReport(filename) {
     // PDF 다운로드는 blob으로 받아야 함
     const url = `${this.baseURL}/reports/download/${filename}`;

@@ -70,6 +70,40 @@ class PDFGenerator {
 
       // Generate HTML
       const html = template(data);
+      
+      // 디버깅: 데이터 및 HTML 확인
+      console.log('📊 PDF 생성 데이터 확인:', {
+        complex: data.complex,
+        dong: data.dong,
+        ho: data.ho,
+        name: data.name,
+        type: data.type,
+        total_defects: data.total_defects,
+        has_complex: !!data.complex,
+        has_dong: !!data.dong,
+        has_ho: !!data.ho,
+        has_name: !!data.name
+      });
+      
+      // HTML에서 데이터 확인
+      const htmlCheck = {
+        has_complex: html.includes(data.complex || ''),
+        has_dong: html.includes(data.dong || ''),
+        has_ho: html.includes(data.ho || ''),
+        has_name: html.includes(data.name || ''),
+        html_length: html.length
+      };
+      console.log('📄 HTML 데이터 포함 확인:', htmlCheck);
+      
+      // 데이터가 없으면 경고
+      if (!data.complex || !data.dong || !data.ho || !data.name) {
+        console.warn('⚠️ PDF 생성 데이터 누락:', {
+          complex: data.complex || 'MISSING',
+          dong: data.dong || 'MISSING',
+          ho: data.ho || 'MISSING',
+          name: data.name || 'MISSING'
+        });
+      }
 
       // PDF options for html-pdf
       const pdfOptions = {
@@ -82,8 +116,15 @@ class PDFGenerator {
         },
         type: 'pdf',
         quality: '75',
-        renderDelay: 1000, // Wait for any dynamic content
-        timeout: 30000
+        renderDelay: 2000, // Wait for any dynamic content (한글 폰트 로딩을 위해 증가)
+        timeout: 30000,
+        // 한글 폰트 지원을 위한 옵션
+        phantomPath: process.env.PHANTOMJS_PATH,
+        // 한글 인코딩 설정
+        'phantomjs-options': {
+          'web-security': false,
+          'load-images': true
+        }
       };
 
       // Generate PDF using html-pdf

@@ -243,12 +243,25 @@ router.post('/generate', authenticateToken, async (req, res) => {
     
     const household = householdResult.rows[0];
     // Decrypt if encrypted, otherwise use plain text (for compatibility)
-    const complex = household.complex_name;
-    const dong = household.dong;
-    const ho = household.ho;
+    const complex = household.complex_name || '';
+    const dong = household.dong || '';
+    const ho = household.ho || '';
     const name = household.resident_name_encrypted 
       ? decrypt(household.resident_name_encrypted)
-      : household.resident_name;
+      : (household.resident_name || '');
+    
+    // 데이터 검증 로그
+    console.log('📊 Household 데이터 (PDF 생성):', {
+      complex_name: household.complex_name,
+      dong: household.dong,
+      ho: household.ho,
+      resident_name: household.resident_name,
+      has_encrypted: !!household.resident_name_encrypted,
+      final_complex: complex,
+      final_dong: dong,
+      final_ho: ho,
+      final_name: name
+    });
 
     // Get case_id from request or use latest case
     let targetCaseId = case_id;
@@ -387,11 +400,11 @@ router.post('/generate', authenticateToken, async (req, res) => {
 
     // Prepare data for PDF generation
     const reportData = {
-      complex,
-      dong,
-      ho,
-      name,
-      type: caseData.type,
+      complex: complex || '',
+      dong: dong || '',
+      ho: ho || '',
+      name: name || '',
+      type: caseData.type || '',
       created_at: caseData.created_at,
       generated_at: new Date().toISOString(),
       total_defects: defects.length,
@@ -403,13 +416,27 @@ router.post('/generate', authenticateToken, async (req, res) => {
       has_equipment_data: (thermalInspections.length + airMeasurements.length + radonMeasurements.length + levelMeasurements.length) > 0,
       defects: defects.map((defect, index) => ({
         ...defect,
-        index: index + 1
+        index: index + 1,
+        location: defect.location || '',
+        trade: defect.trade || '',
+        content: defect.content || '',
+        memo: defect.memo || ''
       })),
       air_measurements: airMeasurements,
       radon_measurements: radonMeasurements,
       level_measurements: levelMeasurements,
       thermal_inspections: thermalInspections
     };
+    
+    // 디버깅: 데이터 확인
+    console.log('📊 PDF 생성 데이터:', {
+      complex: reportData.complex,
+      dong: reportData.dong,
+      ho: reportData.ho,
+      name: reportData.name,
+      type: reportData.type,
+      total_defects: reportData.total_defects
+    });
 
     // Generate PDF using comprehensive template
     const pdfResult = await pdfGenerator.generatePDF('comprehensive-report', reportData, {
@@ -578,6 +605,41 @@ router.post('/send', authenticateToken, async (req, res) => {
     res.status(500).json({ 
       success: false,
       error: 'Failed to send report',
+      message: error.message 
+    });
+  }
+});
+
+// Preview PDF report (browser view)
+router.get('/preview-pdf/:filename', authenticateToken, async (req, res) => {
+  try {
+    const { filename } = req.params;
+    const { householdId } = req.user;
+
+    // Validate filename to prevent directory traversal
+    if (!filename || filename.includes('..') || filename.includes('/')) {
+      return res.status(400).json({ error: 'Invalid filename' });
+    }
+
+    const reportPath = pdfGenerator.getReportPath(filename);
+    
+    // Check if file exists
+    if (!fs.existsSync(reportPath)) {
+      return res.status(404).json({ error: 'Report not found' });
+    }
+
+    // Set headers for browser preview (inline)
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+    
+    // Send file
+    res.sendFile(path.resolve(reportPath));
+
+  } catch (error) {
+    console.error('PDF preview error:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to preview PDF',
       message: error.message 
     });
   }

@@ -345,7 +345,10 @@
     <!-- REPORT -->
     <div id="report" class="screen hidden">
       <div id="report-preview"></div>
-      <button class="button" onclick="downloadReportAsPdf()">PDF 다운로드</button>
+      <div class="button-group" style="margin-top: 10px; display: flex; gap: 10px;">
+        <button class="button" onclick="previewReportAsPdf()">PDF 미리보기</button>
+        <button class="button" onclick="downloadReportAsPdf()">PDF 다운로드</button>
+      </div>
     </div>
 
     <!-- CASE DETAIL (하자 목록) -->
