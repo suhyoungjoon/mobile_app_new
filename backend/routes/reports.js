@@ -4,6 +4,7 @@ const pool = require('../database');
 const { authenticateToken } = require('../middleware/auth');
 const pdfGenerator = require('../utils/pdfGenerator');
 const smsService = require('../utils/smsService');
+const { decrypt } = require('../utils/encryption');
 const fs = require('fs');
 const path = require('path');
 
@@ -12,7 +13,30 @@ const router = express.Router();
 // Get report preview
 router.get('/preview', authenticateToken, async (req, res) => {
   try {
-    const { householdId, complex, dong, ho, name } = req.user;
+    const { householdId } = req.user;
+
+    // Get household information from database (personal info is not in JWT token)
+    const householdQuery = `
+      SELECT h.dong, h.ho, h.resident_name, h.resident_name_encrypted,
+             c.name as complex_name
+      FROM household h
+      JOIN complex c ON h.complex_id = c.id
+      WHERE h.id = $1
+    `;
+    const householdResult = await pool.query(householdQuery, [householdId]);
+    
+    if (householdResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Household not found' });
+    }
+    
+    const household = householdResult.rows[0];
+    // Decrypt if encrypted, otherwise use plain text (for compatibility)
+    const complex = household.complex_name;
+    const dong = household.dong;
+    const ho = household.ho;
+    const name = household.resident_name_encrypted 
+      ? decrypt(household.resident_name_encrypted)
+      : household.resident_name;
 
     // Get latest case with defects and equipment inspections from database
     const query = `
@@ -201,7 +225,30 @@ router.get('/preview', authenticateToken, async (req, res) => {
 router.post('/generate', authenticateToken, async (req, res) => {
   try {
     const { case_id, template = 'comprehensive-report' } = req.body;
-    const { householdId, complex, dong, ho, name } = req.user;
+    const { householdId } = req.user;
+
+    // Get household information from database (personal info is not in JWT token)
+    const householdQuery = `
+      SELECT h.dong, h.ho, h.resident_name, h.resident_name_encrypted,
+             c.name as complex_name
+      FROM household h
+      JOIN complex c ON h.complex_id = c.id
+      WHERE h.id = $1
+    `;
+    const householdResult = await pool.query(householdQuery, [householdId]);
+    
+    if (householdResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Household not found' });
+    }
+    
+    const household = householdResult.rows[0];
+    // Decrypt if encrypted, otherwise use plain text (for compatibility)
+    const complex = household.complex_name;
+    const dong = household.dong;
+    const ho = household.ho;
+    const name = household.resident_name_encrypted 
+      ? decrypt(household.resident_name_encrypted)
+      : household.resident_name;
 
     // Get case_id from request or use latest case
     let targetCaseId = case_id;
@@ -393,7 +440,34 @@ router.post('/generate', authenticateToken, async (req, res) => {
 router.post('/send', authenticateToken, async (req, res) => {
   try {
     const { case_id, phone_number } = req.body;
-    const { householdId, phone: userPhone, complex, dong, ho, name } = req.user;
+    const { householdId } = req.user;
+
+    // Get household information from database (personal info is not in JWT token)
+    const householdQuery = `
+      SELECT h.dong, h.ho, h.resident_name, h.resident_name_encrypted,
+             h.phone, h.phone_encrypted,
+             c.name as complex_name
+      FROM household h
+      JOIN complex c ON h.complex_id = c.id
+      WHERE h.id = $1
+    `;
+    const householdResult = await pool.query(householdQuery, [householdId]);
+    
+    if (householdResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Household not found' });
+    }
+    
+    const household = householdResult.rows[0];
+    // Decrypt if encrypted, otherwise use plain text (for compatibility)
+    const complex = household.complex_name;
+    const dong = household.dong;
+    const ho = household.ho;
+    const name = household.resident_name_encrypted 
+      ? decrypt(household.resident_name_encrypted)
+      : household.resident_name;
+    const userPhone = household.phone_encrypted
+      ? decrypt(household.phone_encrypted)
+      : household.phone;
 
     // Get case_id from request or use latest case
     let targetCaseId = case_id;
