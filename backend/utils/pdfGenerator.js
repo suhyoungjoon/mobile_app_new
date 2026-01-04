@@ -1,5 +1,5 @@
-// PDF generation service using html-pdf (lightweight alternative to Puppeteer)
-const pdf = require('html-pdf');
+// PDF generation service using Puppeteer (better Korean font support)
+const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
 const handlebars = require('handlebars');
@@ -62,6 +62,7 @@ class PDFGenerator {
       footerTemplate = ''
     } = options;
 
+    return new Promise(async (resolve, reject) => {
     try {
       // Load template
       const templatePath = path.join(this.templateDir, `${templateName}.hbs`);
@@ -105,59 +106,66 @@ class PDFGenerator {
         });
       }
 
-      // PDF options for html-pdf
-      const pdfOptions = {
-        format: format,
-        border: {
-          top: margin.top,
-          right: margin.right,
-          bottom: margin.bottom,
-          left: margin.left
-        },
-        type: 'pdf',
-        quality: '75',
-        renderDelay: 2000, // Wait for any dynamic content (한글 폰트 로딩을 위해 증가)
-        timeout: 30000,
-        // 한글 폰트 지원을 위한 옵션
-        phantomPath: process.env.PHANTOMJS_PATH,
-        // 한글 인코딩 설정
-        'phantomjs-options': {
-          'web-security': false,
-          'load-images': true
-        }
-      };
-
-      // Generate PDF using html-pdf
-      return new Promise((resolve, reject) => {
-        pdf.create(html, pdfOptions).toBuffer((err, buffer) => {
-          if (err) {
-            console.error('PDF generation error:', err);
-            reject(new Error(`PDF generation failed: ${err.message}`));
-            return;
-          }
-
-          try {
-            // Save to file
-            const outputPath = path.join(this.outputDir, filename);
-            fs.writeFileSync(outputPath, buffer);
-
-            resolve({
-              filename,
-              path: outputPath,
-              url: `/reports/${filename}`,
-              size: buffer.length
-            });
-          } catch (fileError) {
-            console.error('File save error:', fileError);
-            reject(new Error(`Failed to save PDF file: ${fileError.message}`));
-          }
-        });
+      // Generate PDF using Puppeteer (better Korean font support)
+      const browser = await puppeteer.launch({
+        headless: 'new',
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-accelerated-2d-canvas',
+          '--no-first-run',
+          '--no-zygote',
+          '--disable-gpu'
+        ]
       });
 
+      try {
+        const page = await browser.newPage();
+        
+        // Set content with proper encoding
+        await page.setContent(html, {
+          waitUntil: 'networkidle0',
+          timeout: 30000
+        });
+
+        // Wait a bit for fonts to load
+        await page.waitForTimeout(1000);
+
+        // Generate PDF
+        const pdfBuffer = await page.pdf({
+          format: format,
+          margin: {
+            top: margin.top,
+            right: margin.right,
+            bottom: margin.bottom,
+            left: margin.left
+          },
+          printBackground: true,
+          preferCSSPageSize: false
+        });
+
+        // Save to file
+        const outputPath = path.join(this.outputDir, filename);
+        fs.writeFileSync(outputPath, pdfBuffer);
+
+        resolve({
+          filename,
+          path: outputPath,
+          url: `/reports/${filename}`,
+          size: pdfBuffer.length
+        });
+      } catch (browserError) {
+        console.error('Browser error:', browserError);
+        reject(new Error(`PDF generation failed: ${browserError.message}`));
+      } finally {
+        await browser.close();
+      }
     } catch (error) {
       console.error('PDF generation error:', error);
-      throw new Error(`PDF generation failed: ${error.message}`);
+      reject(new Error(`PDF generation failed: ${error.message}`));
     }
+    });
   }
 
   async generateHTML(templateName, data) {
