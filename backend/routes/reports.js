@@ -2,7 +2,8 @@
 const express = require('express');
 const pool = require('../database');
 const { authenticateToken } = require('../middleware/auth');
-const pdfGenerator = require('../utils/pdfGenerator');
+// PDF 생성기: pdfmake 사용 (한글 폰트 지원)
+const pdfGenerator = require('../utils/pdfmakeGenerator');
 const smsService = require('../utils/smsService');
 const { decrypt } = require('../utils/encryption');
 const fs = require('fs');
