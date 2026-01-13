@@ -1468,6 +1468,25 @@ async function saveResolution() {
   }
 }
 
+// 토큰 유효성 검증
+async function verifyAdminToken(token) {
+  try {
+    // 간단한 API 호출로 토큰 유효성 검증
+    const response = await fetch(`${API_BASE}/api/admin/dashboard/stats`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    return response.ok; // 200이면 유효, 403/401이면 무효
+  } catch (error) {
+    console.error('토큰 검증 중 오류:', error);
+    return false;
+  }
+}
+
 // 초기화
 window.addEventListener('DOMContentLoaded', async () => {
   // 저장된 토큰 확인
@@ -1475,24 +1494,45 @@ window.addEventListener('DOMContentLoaded', async () => {
   const savedAdmin = localStorage.getItem('admin_info');
   
   if (savedToken && savedAdmin) {
-    AdminState.token = savedToken;
-    AdminState.admin = JSON.parse(savedAdmin);
+    // 토큰 유효성 검증
+    console.log('🔍 저장된 토큰 유효성 검증 중...');
+    const isValid = await verifyAdminToken(savedToken);
     
-    $('#login-screen').classList.add('hidden');
-    $('#admin-dashboard').classList.remove('hidden');
-    $('#admin-name').textContent = AdminState.admin.name;
-    
-    loadDashboardStats();
-    
-    // 관리자 푸시 알림 자동 활성화 (백그라운드에서 시도)
-    enableAdminPushNotifications().catch(err => {
-      console.error('푸시 알림 자동 활성화 실패:', err);
-    });
-    
-    // 푸시 알림 상태 확인
-    setTimeout(() => {
-      checkPushNotificationStatus();
-    }, 1000);
+    if (isValid) {
+      // 토큰이 유효한 경우
+      AdminState.token = savedToken;
+      AdminState.admin = JSON.parse(savedAdmin);
+      
+      $('#login-screen').classList.add('hidden');
+      $('#admin-dashboard').classList.remove('hidden');
+      $('#admin-name').textContent = AdminState.admin.name;
+      
+      loadDashboardStats();
+      
+      // 관리자 푸시 알림 자동 활성화 (백그라운드에서 시도)
+      enableAdminPushNotifications().catch(err => {
+        console.error('푸시 알림 자동 활성화 실패:', err);
+      });
+      
+      // 푸시 알림 상태 확인
+      setTimeout(() => {
+        checkPushNotificationStatus();
+      }, 1000);
+    } else {
+      // 토큰이 만료되었거나 유효하지 않은 경우
+      console.log('⚠️ 저장된 토큰이 만료되었거나 유효하지 않습니다. 로그인 화면을 표시합니다.');
+      localStorage.removeItem('admin_token');
+      localStorage.removeItem('admin_info');
+      AdminState.token = null;
+      AdminState.admin = null;
+      
+      $('#login-screen').classList.remove('hidden');
+      $('#admin-dashboard').classList.add('hidden');
+    }
+  } else {
+    // 저장된 토큰이 없는 경우
+    $('#login-screen').classList.remove('hidden');
+    $('#admin-dashboard').classList.add('hidden');
   }
   
   // Enter 키로 로그인
