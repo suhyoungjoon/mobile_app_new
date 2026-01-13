@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const pool = require('../database');
 const config = require('../config');
 const { authenticateToken } = require('../middleware/auth');
+const { decrypt } = require('../utils/encryption');
 
 const router = express.Router();
 
@@ -94,7 +95,9 @@ router.get('/users', authenticateToken, requireAdmin, async (req, res) => {
 
     let query = `
       SELECT 
-        h.id, h.dong, h.ho, h.resident_name, h.phone,
+        h.id, h.dong, h.ho, 
+        h.resident_name, h.resident_name_encrypted,
+        h.phone, h.phone_encrypted,
         c.id as complex_id, c.name as complex_name, c.address,
         COUNT(DISTINCT ch.id) as total_cases,
         COUNT(d.id) as total_defects
@@ -130,13 +133,24 @@ router.get('/users', authenticateToken, requireAdmin, async (req, res) => {
     }
 
     query += `
-      GROUP BY h.id, h.dong, h.ho, h.resident_name, h.phone, c.id, c.name, c.address
+      GROUP BY h.id, h.dong, h.ho, h.resident_name, h.resident_name_encrypted, h.phone, h.phone_encrypted, c.id, c.name, c.address
       ORDER BY h.id DESC
       LIMIT $${params.length + 1} OFFSET $${params.length + 2}
     `;
     params.push(limit, offset);
 
     const result = await pool.query(query, params);
+
+    // 암호화된 필드 복호화
+    const users = result.rows.map(row => ({
+      ...row,
+      resident_name: row.resident_name_encrypted 
+        ? decrypt(row.resident_name_encrypted) 
+        : row.resident_name,
+      phone: row.phone_encrypted 
+        ? decrypt(row.phone_encrypted) 
+        : row.phone
+    }));
 
     // 총 개수 조회
     let countQuery = 'SELECT COUNT(DISTINCT h.id) as total FROM household h JOIN complex c ON h.complex_id = c.id';
@@ -146,7 +160,7 @@ router.get('/users', authenticateToken, requireAdmin, async (req, res) => {
     const countResult = await pool.query(countQuery, params.slice(0, -2));
 
     res.json({
-      users: result.rows,
+      users: users,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
@@ -194,7 +208,16 @@ router.get('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    res.json(result.rows[0]);
+    const user = result.rows[0];
+    // 암호화된 필드 복호화
+    if (user.resident_name_encrypted) {
+      user.resident_name = decrypt(user.resident_name_encrypted);
+    }
+    if (user.phone_encrypted) {
+      user.phone = decrypt(user.phone_encrypted);
+    }
+
+    res.json(user);
 
   } catch (error) {
     console.error('Get user error:', error);
@@ -289,7 +312,9 @@ router.get('/defects', authenticateToken, requireAdmin, async (req, res) => {
         d.id, d.location, d.trade, d.content, d.memo, 
         d.photo_near, d.photo_far, d.created_at,
         ch.id as case_id, ch.type as case_type,
-        h.id as household_id, h.dong, h.ho, h.resident_name, h.phone,
+        h.id as household_id, h.dong, h.ho, 
+        h.resident_name, h.resident_name_encrypted,
+        h.phone, h.phone_encrypted,
         c.id as complex_id, c.name as complex_name,
         dr.id as resolution_id,
         dr.memo as resolution_memo,
@@ -335,8 +360,19 @@ router.get('/defects', authenticateToken, requireAdmin, async (req, res) => {
 
     const result = await pool.query(query, params);
 
+    // 암호화된 필드 복호화
+    const defects = result.rows.map(row => ({
+      ...row,
+      resident_name: row.resident_name_encrypted 
+        ? decrypt(row.resident_name_encrypted) 
+        : row.resident_name,
+      phone: row.phone_encrypted 
+        ? decrypt(row.phone_encrypted) 
+        : row.phone
+    }));
+
     res.json({
-      defects: result.rows,
+      defects: defects,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit)
