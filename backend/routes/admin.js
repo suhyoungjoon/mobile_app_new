@@ -11,7 +11,20 @@ const router = express.Router();
 
 // Middleware: Admin 권한 체크
 function requireAdmin(req, res, next) {
-  if (!req.user || !req.user.isAdmin) {
+  if (!req.user) {
+    console.log('❌ Admin 권한 체크 실패: req.user 없음', { path: req.path });
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  if (!req.user.isAdmin) {
+    console.log('❌ Admin 권한 체크 실패: isAdmin이 false', { 
+      path: req.path, 
+      user: { 
+        adminId: req.user.adminId, 
+        email: req.user.email, 
+        isAdmin: req.user.isAdmin,
+        role: req.user.role 
+      } 
+    });
     return res.status(403).json({ error: 'Admin access required' });
   }
   next();

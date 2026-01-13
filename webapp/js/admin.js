@@ -25,6 +25,8 @@ async function apiCall(endpoint, options = {}) {
   
   if (AdminState.token) {
     headers['Authorization'] = `Bearer ${AdminState.token}`;
+  } else {
+    console.warn('⚠️ AdminState.token이 없습니다:', endpoint);
   }
   
   try {
@@ -39,6 +41,29 @@ async function apiCall(endpoint, options = {}) {
         errorData = await response.json();
       } catch (e) {
         errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
+      }
+      
+      // 403 에러인 경우 토큰 만료 가능성 - 재로그인 유도
+      if (response.status === 403 && endpoint !== '/api/admin/login') {
+        console.error('❌ 인증 실패 (403): 토큰이 만료되었거나 유효하지 않습니다.', {
+          endpoint,
+          hasToken: !!AdminState.token,
+          tokenLength: AdminState.token?.length
+        });
+        
+        // 토큰 만료 시 로그인 화면으로 이동
+        if (errorData.error === 'Invalid or expired token' || 
+            errorData.error === 'Admin access required') {
+          AdminState.token = null;
+          AdminState.admin = null;
+          localStorage.removeItem('admin_token');
+          localStorage.removeItem('admin_info');
+          
+          $('#login-screen').classList.remove('hidden');
+          $('#admin-dashboard').classList.add('hidden');
+          toast('세션이 만료되었습니다. 다시 로그인해주세요.', 'error');
+          throw new Error('세션이 만료되었습니다. 다시 로그인해주세요.');
+        }
       }
       
       const errorMessage = errorData.error || errorData.details || errorData.message || 'API 요청 실패';
