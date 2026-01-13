@@ -670,6 +670,14 @@ async function onPreviewReport(){
     // PDF 버튼 그룹 요소 찾기
     const buttonGroup = document.querySelector('#report .button-group');
     
+    // 케이스 ID 설정 (PDF 생성에 필요)
+    if (reportData.case_id) {
+      AppState.currentCaseId = reportData.case_id;
+    } else if (AppState.cases && AppState.cases.length > 0) {
+      // reportData에 case_id가 없으면 첫 번째 케이스 사용
+      AppState.currentCaseId = AppState.cases[0].id;
+    }
+    
     if (reportData.defects && reportData.defects.length > 0) {
       // 하자가 있는 경우: 버튼 표시
       if (buttonGroup) {
@@ -757,8 +765,15 @@ async function previewReportAsPdf() {
     toast('PDF 생성 중...', 'info');
     const generateResult = await api.generateReport(caseId);
     
-    if (!generateResult.success) {
-      throw new Error(generateResult.message || 'PDF 생성에 실패했습니다');
+    console.log('PDF 생성 결과:', generateResult);
+    
+    if (!generateResult || !generateResult.success) {
+      const errorMsg = generateResult?.message || generateResult?.error || 'PDF 생성에 실패했습니다';
+      throw new Error(errorMsg);
+    }
+
+    if (!generateResult.filename) {
+      throw new Error('PDF 파일명을 받지 못했습니다. 서버 응답을 확인해주세요.');
     }
 
     // 2. PDF 미리보기
@@ -769,6 +784,11 @@ async function previewReportAsPdf() {
     
   } catch (error) {
     console.error('PDF 미리보기 오류:', error);
+    console.error('에러 상세:', {
+      message: error.message,
+      stack: error.stack,
+      response: error.response
+    });
     handleAPIError(error, 'PDF 미리보기');
   } finally {
     setLoading(false);
@@ -790,8 +810,15 @@ async function downloadReportAsPdf() {
     toast('PDF 생성 중...', 'info');
     const generateResult = await api.generateReport(caseId);
     
-    if (!generateResult.success) {
-      throw new Error(generateResult.message || 'PDF 생성에 실패했습니다');
+    console.log('PDF 생성 결과:', generateResult);
+    
+    if (!generateResult || !generateResult.success) {
+      const errorMsg = generateResult?.message || generateResult?.error || 'PDF 생성에 실패했습니다';
+      throw new Error(errorMsg);
+    }
+
+    if (!generateResult.filename) {
+      throw new Error('PDF 파일명을 받지 못했습니다. 서버 응답을 확인해주세요.');
     }
 
     // 2. PDF 다운로드
@@ -802,6 +829,11 @@ async function downloadReportAsPdf() {
     
   } catch (error) {
     console.error('PDF 다운로드 오류:', error);
+    console.error('에러 상세:', {
+      message: error.message,
+      stack: error.stack,
+      response: error.response
+    });
     handleAPIError(error, 'PDF 다운로드');
   } finally {
     setLoading(false);

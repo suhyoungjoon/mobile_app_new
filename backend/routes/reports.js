@@ -76,6 +76,9 @@ router.get('/preview', authenticateToken, async (req, res) => {
 
     const caseData = result.rows[0];
     const caseId = caseData.id;
+    
+    // case_id를 응답에 포함
+    const defects = caseData.defects || [];
 
     // Get equipment inspection data
     const equipmentQuery = `
