@@ -123,7 +123,50 @@ router.put('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Defect not found' });
     }
     
-    res.json(result.rows[0]);
+    const defect = result.rows[0];
+    
+    // 사진 업데이트 처리 (photo_near_key 또는 photo_far_key가 제공된 경우에만)
+    if (photo_near_key !== undefined && photo_near_key !== null) {
+      // 기존 near 사진 삭제
+      await pool.query('DELETE FROM photo WHERE defect_id = $1 AND kind = $2', [id, 'near']);
+      
+      // 새 near 사진이 제공된 경우에만 추가
+      if (photo_near_key) {
+        const photoId = `PHOTO-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+        await pool.query(
+          `INSERT INTO photo (id, defect_id, kind, url, taken_at) 
+           VALUES ($1, $2, 'near', $3, NOW())`,
+          [photoId, id, `/uploads/${photo_near_key}`]
+        );
+      }
+    }
+    
+    if (photo_far_key !== undefined && photo_far_key !== null) {
+      // 기존 far 사진 삭제
+      await pool.query('DELETE FROM photo WHERE defect_id = $1 AND kind = $2', [id, 'far']);
+      
+      // 새 far 사진이 제공된 경우에만 추가
+      if (photo_far_key) {
+        const photoId = `PHOTO-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+        await pool.query(
+          `INSERT INTO photo (id, defect_id, kind, url, taken_at) 
+           VALUES ($1, $2, 'far', $3, NOW())`,
+          [photoId, id, `/uploads/${photo_far_key}`]
+        );
+      }
+    }
+    
+    // 업데이트된 사진 정보 조회
+    const photoQuery = `
+      SELECT id, kind, url, thumb_url, taken_at
+      FROM photo
+      WHERE defect_id = $1
+      ORDER BY kind, taken_at
+    `;
+    const photoResult = await pool.query(photoQuery, [id]);
+    defect.photos = photoResult.rows;
+    
+    res.json(defect);
 
   } catch (error) {
     console.error('Update defect error:', error);
@@ -149,7 +192,19 @@ router.get('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Defect not found' });
     }
     
-    res.json(result.rows[0]);
+    const defect = result.rows[0];
+    
+    // Fetch photos for the defect
+    const photoQuery = `
+      SELECT id, kind, url, thumb_url, taken_at
+      FROM photo
+      WHERE defect_id = $1
+      ORDER BY kind, taken_at
+    `;
+    const photoResult = await pool.query(photoQuery, [id]);
+    defect.photos = photoResult.rows;
+    
+    res.json(defect);
     
   } catch (error) {
     console.error('Get defect error:', error);

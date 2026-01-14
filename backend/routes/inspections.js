@@ -105,7 +105,7 @@ router.post('/thermal/:itemId/photos', authenticateToken, requireEquipmentAccess
 // 공기질 측정 등록
 router.post('/air', authenticateToken, async (req, res) => {
   try {
-    const { caseId, location, trade, tvoc, hcho, co2, note, result = 'normal' } = req.body;
+    const { caseId, defectId, location, trade, tvoc, hcho, co2, note, result = 'normal' } = req.body;
     
     if (!caseId || !location) {
       return res.status(400).json({ error: '케이스 ID와 위치는 필수입니다' });
@@ -132,14 +132,14 @@ router.post('/air', authenticateToken, async (req, res) => {
     try {
       await client.query('BEGIN');
       
-      // 점검 항목 생성
+      // 점검 항목 생성 (defect_id 포함)
       const itemQuery = `
-        INSERT INTO inspection_item (id, case_id, type, location, trade, note, result)
-        VALUES ($1, $2, 'air', $3, $4, $5, $6)
+        INSERT INTO inspection_item (id, case_id, defect_id, type, location, trade, note, result)
+        VALUES ($1, $2, $3, 'air', $4, $5, $6, $7)
         RETURNING *
       `;
       
-      const itemResult = await client.query(itemQuery, [itemId, caseId, location, trade, note, result]);
+      const itemResult = await client.query(itemQuery, [itemId, caseId, defectId || null, location, trade, note, result]);
       
       // 공기질 측정값 저장
       const measureQuery = `
@@ -180,7 +180,7 @@ router.post('/air', authenticateToken, async (req, res) => {
 // 라돈 측정 등록
 router.post('/radon', authenticateToken, async (req, res) => {
   try {
-    const { caseId, location, trade, radon, unit_radon = 'Bq/m³', note, result = 'normal' } = req.body;
+    const { caseId, defectId, location, trade, radon, unit_radon = 'Bq/m³', note, result = 'normal' } = req.body;
     
     if (!caseId || !location) {
       return res.status(400).json({ error: '케이스 ID와 위치는 필수입니다' });
@@ -207,14 +207,14 @@ router.post('/radon', authenticateToken, async (req, res) => {
     try {
       await client.query('BEGIN');
       
-      // 점검 항목 생성
+      // 점검 항목 생성 (defect_id 포함)
       const itemQuery = `
-        INSERT INTO inspection_item (id, case_id, type, location, trade, note, result)
-        VALUES ($1, $2, 'radon', $3, $4, $5, $6)
+        INSERT INTO inspection_item (id, case_id, defect_id, type, location, trade, note, result)
+        VALUES ($1, $2, $3, 'radon', $4, $5, $6, $7)
         RETURNING *
       `;
       
-      const itemResult = await client.query(itemQuery, [itemId, caseId, location, trade, note, result]);
+      const itemResult = await client.query(itemQuery, [itemId, caseId, defectId || null, location, trade, note, result]);
       
       // 라돈 측정값 저장
       const measureQuery = `
@@ -250,7 +250,7 @@ router.post('/radon', authenticateToken, async (req, res) => {
 // 레벨기 측정 등록
 router.post('/level', authenticateToken, async (req, res) => {
   try {
-    const { caseId, location, trade, left_mm, right_mm, note, result = 'normal' } = req.body;
+    const { caseId, defectId, location, trade, left_mm, right_mm, note, result = 'normal' } = req.body;
     
     if (!caseId || !location) {
       return res.status(400).json({ error: '케이스 ID와 위치는 필수입니다' });
@@ -277,14 +277,14 @@ router.post('/level', authenticateToken, async (req, res) => {
     try {
       await client.query('BEGIN');
       
-      // 점검 항목 생성
+      // 점검 항목 생성 (defect_id 포함)
       const itemQuery = `
-        INSERT INTO inspection_item (id, case_id, type, location, trade, note, result)
-        VALUES ($1, $2, 'level', $3, $4, $5, $6)
+        INSERT INTO inspection_item (id, case_id, defect_id, type, location, trade, note, result)
+        VALUES ($1, $2, $3, 'level', $4, $5, $6, $7)
         RETURNING *
       `;
       
-      const itemResult = await client.query(itemQuery, [itemId, caseId, location, trade, note, result]);
+      const itemResult = await client.query(itemQuery, [itemId, caseId, defectId || null, location, trade, note, result]);
       
       // 레벨기 측정값 저장
       const measureQuery = `
@@ -362,6 +362,51 @@ router.get('/:caseId', authenticateToken, async (req, res) => {
     
   } catch (error) {
     console.error('점검 항목 조회 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다' });
+  }
+});
+
+// 하자별 점검 항목 조회
+router.get('/defects/:defectId', authenticateToken, async (req, res) => {
+  try {
+    const { defectId } = req.params;
+    
+    const query = `
+      SELECT 
+        ii.*,
+        am.tvoc, am.hcho, am.co2, am.unit_tvoc, am.unit_hcho,
+        rm.radon, rm.unit_radon,
+        lm.left_mm, lm.right_mm,
+        tp.file_url as thermal_photo_url, tp.caption as thermal_caption
+      FROM inspection_item ii
+      LEFT JOIN air_measure am ON ii.id = am.item_id
+      LEFT JOIN radon_measure rm ON ii.id = rm.item_id
+      LEFT JOIN level_measure lm ON ii.id = lm.item_id
+      LEFT JOIN thermal_photo tp ON ii.id = tp.item_id
+      WHERE ii.defect_id = $1
+      ORDER BY ii.created_at DESC
+    `;
+    
+    const result = await pool.query(query, [defectId]);
+    
+    // 결과를 타입별로 그룹화
+    const grouped = result.rows.reduce((acc, row) => {
+      if (!acc[row.type]) {
+        acc[row.type] = [];
+      }
+      acc[row.type].push(row);
+      return acc;
+    }, {});
+    
+    res.json({
+      success: true,
+      defectId: defectId,
+      inspections: grouped,
+      total: result.rows.length
+    });
+    
+  } catch (error) {
+    console.error('하자별 점검 항목 조회 오류:', error);
     res.status(500).json({ error: '서버 오류가 발생했습니다' });
   }
 });
