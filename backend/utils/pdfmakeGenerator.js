@@ -173,6 +173,42 @@ class PDFMakeGenerator {
           ul: defectInfo,
           margin: [20, 0, 0, 10]
         });
+
+        // 하자 사진 추가
+        if (defect.photos && defect.photos.length > 0) {
+          defect.photos.forEach((photo) => {
+            try {
+              // photo.url 형식: /uploads/filename.jpg
+              // 실제 파일 경로로 변환: backend/uploads/filename.jpg
+              const urlPath = photo.url.replace(/^\//, ''); // 앞의 / 제거
+              const photoPath = path.join(__dirname, '..', urlPath);
+              
+              // 파일이 존재하는지 확인
+              if (fs.existsSync(photoPath)) {
+                // pdfmake에서 이미지 포함
+                content.push({
+                  image: photoPath,
+                  width: 150,
+                  margin: [20, 5, 0, 5],
+                  alignment: 'left'
+                });
+                
+                // 사진 종류 표시 (near/far)
+                const photoKindText = photo.kind === 'near' ? '근접 사진' : 
+                                     photo.kind === 'far' ? '원거리 사진' : '사진';
+                content.push({
+                  text: `[${photoKindText}]`,
+                  style: 'photoCaption',
+                  margin: [20, 0, 0, 10]
+                });
+              } else {
+                console.warn(`⚠️ 사진 파일을 찾을 수 없습니다: ${photoPath}`);
+              }
+            } catch (error) {
+              console.error(`❌ 사진 처리 오류 (하자 #${defect.index || index + 1}):`, error.message);
+            }
+          });
+        }
       });
     } else {
       content.push({
@@ -349,6 +385,11 @@ class PDFMakeGenerator {
           color: '#666',
           italics: true,
           alignment: 'center'
+        },
+        photoCaption: {
+          fontSize: 8,
+          color: '#666',
+          italics: true
         },
         footerText: {
           fontSize: 10,

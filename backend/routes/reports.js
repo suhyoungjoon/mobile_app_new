@@ -285,23 +285,11 @@ router.post('/generate', authenticateToken, async (req, res) => {
       targetCaseId = latestCaseResult.rows[0].id;
     }
 
-    // Get case data with defects
+    // Get case data with defects (사진 정보 포함)
     const caseQuery = `
-      SELECT c.id, c.type, c.created_at,
-             json_agg(
-               json_build_object(
-                 'id', d.id,
-                 'location', d.location,
-                 'trade', d.trade,
-                 'content', d.content,
-                 'memo', d.memo,
-                 'created_at', d.created_at
-               )
-             ) FILTER (WHERE d.id IS NOT NULL) as defects
+      SELECT c.id, c.type, c.created_at
       FROM case_header c
-      LEFT JOIN defect d ON c.id = d.case_id
       WHERE c.id = $1 AND c.household_id = $2
-      GROUP BY c.id, c.type, c.created_at
     `;
 
     const caseResult = await pool.query(caseQuery, [targetCaseId, householdId]);
@@ -311,7 +299,28 @@ router.post('/generate', authenticateToken, async (req, res) => {
     }
 
     const caseData = caseResult.rows[0];
-    const defects = caseData.defects || [];
+    
+    // Get defects with photos
+    const defectsQuery = `
+      SELECT d.id, d.location, d.trade, d.content, d.memo, d.created_at
+      FROM defect d
+      WHERE d.case_id = $1
+      ORDER BY d.created_at DESC
+    `;
+    const defectsResult = await pool.query(defectsQuery, [targetCaseId]);
+    const defects = defectsResult.rows || [];
+    
+    // Fetch photos for each defect
+    for (const defect of defects) {
+      const photoQuery = `
+        SELECT id, kind, url, thumb_url, taken_at
+        FROM photo
+        WHERE defect_id = $1
+        ORDER BY kind, taken_at
+      `;
+      const photoResult = await pool.query(photoQuery, [defect.id]);
+      defect.photos = photoResult.rows || [];
+    }
 
     // Get equipment inspection data
     const equipmentQuery = `
@@ -525,21 +534,9 @@ router.post('/send', authenticateToken, async (req, res) => {
 
     // Get case data (same as generate endpoint)
     const caseQuery = `
-      SELECT c.id, c.type, c.created_at,
-             json_agg(
-               json_build_object(
-                 'id', d.id,
-                 'location', d.location,
-                 'trade', d.trade,
-                 'content', d.content,
-                 'memo', d.memo,
-                 'created_at', d.created_at
-               )
-             ) FILTER (WHERE d.id IS NOT NULL) as defects
+      SELECT c.id, c.type, c.created_at
       FROM case_header c
-      LEFT JOIN defect d ON c.id = d.case_id
       WHERE c.id = $1 AND c.household_id = $2
-      GROUP BY c.id, c.type, c.created_at
     `;
 
     const caseResult = await pool.query(caseQuery, [targetCaseId, householdId]);
@@ -549,7 +546,28 @@ router.post('/send', authenticateToken, async (req, res) => {
     }
 
     const caseData = caseResult.rows[0];
-    const defects = caseData.defects || [];
+    
+    // Get defects with photos
+    const defectsQuery = `
+      SELECT d.id, d.location, d.trade, d.content, d.memo, d.created_at
+      FROM defect d
+      WHERE d.case_id = $1
+      ORDER BY d.created_at DESC
+    `;
+    const defectsResult = await pool.query(defectsQuery, [targetCaseId]);
+    const defects = defectsResult.rows || [];
+    
+    // Fetch photos for each defect
+    for (const defect of defects) {
+      const photoQuery = `
+        SELECT id, kind, url, thumb_url, taken_at
+        FROM photo
+        WHERE defect_id = $1
+        ORDER BY kind, taken_at
+      `;
+      const photoResult = await pool.query(photoQuery, [defect.id]);
+      defect.photos = photoResult.rows || [];
+    }
 
     // Prepare data for PDF generation (simplified for SMS)
     const reportData = {
