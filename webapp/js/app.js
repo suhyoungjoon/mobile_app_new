@@ -422,82 +422,74 @@ async function viewCaseDefects(caseId) {
     
     if (titleEl) titleEl.textContent = `케이스 ${caseId} 상세`;
     
-    // 점검원 여부 확인 (complex가 "admin"인지)
-    const isInspector = AppState.session?.complex?.toLowerCase() === 'admin';
-    
     if (!defects || defects.length === 0) {
       container.innerHTML = `
         <div class="card" style="text-align: center; padding: 40px;">
           <div style="color: #666;">등록된 하자가 없습니다.</div>
         </div>
       `;
-        } else {
-          // 각 하자에 대한 측정값 조회
-          const defectsWithInspections = await Promise.all(
-            defects.map(async (defect) => {
-              try {
-                const inspections = await api.getDefectInspections(defect.id);
-                return { ...defect, inspections: inspections.inspections || {} };
-              } catch (error) {
-                console.warn(`하자 ${defect.id}의 측정값 조회 실패:`, error);
-                return { ...defect, inspections: {} };
-              }
-            })
-          );
-          
-          container.innerHTML = defectsWithInspections.map(defect => {
-            const hasInspections = Object.keys(defect.inspections || {}).length > 0;
-            const inspectionSummary = hasInspections 
-              ? Object.entries(defect.inspections).map(([type, items]) => {
-                  const typeNames = { air: '공기질', radon: '라돈', level: '레벨기', thermal: '열화상' };
-                  return `${typeNames[type] || type} ${items.length}건`;
-                }).join(', ')
-              : '';
-            
-            return `
-            <div class="card">
-              <div class="defect-header">
-                <strong>${escapeHTML(defect.location)} - ${escapeHTML(defect.trade)}</strong>
-                <span class="badge">${formatDate(defect.created_at)}</span>
-              </div>
-              <div class="defect-content">
-                <div class="label">내용:</div>
-                <p>${escapeHTML(defect.content)}</p>
-                ${defect.memo ? `
-                  <div class="label" style="margin-top:8px;">메모:</div>
-                  <p>${escapeHTML(defect.memo)}</p>
-                ` : ''}
-                ${hasInspections ? `
-                  <div class="label" style="margin-top:8px;">점검결과:</div>
-                  <p style="color: #27ae60; font-size: 14px;">${inspectionSummary}</p>
-                ` : ''}
-                ${defect.photos && defect.photos.length > 0 ? `
-                  <div class="label" style="margin-top:8px;">사진:</div>
-                  <div class="gallery" style="display:flex;gap:8px;margin-top:4px;">
-                    ${defect.photos.map(photo => `
-                      <div class="thumb has-image" 
-                           style="background-image:url('https://mobile-app-new.onrender.com${photo.url}');cursor:pointer;" 
-                           onclick="showImageModal('https://mobile-app-new.onrender.com${photo.url}')">
-                        ${photo.kind === 'near' ? '전체' : '근접'}
-                      </div>
-                    `).join('')}
-                  </div>
-                ` : ''}
-              </div>
-              <div class="hr"></div>
-              <div class="button-group">
-                <button class="button small" onclick="editDefect('${defect.id}')">✏️ 수정</button>
-                <button class="button small danger" onclick="deleteDefect('${defect.id}')">🗑️ 삭제</button>
-                ${isInspector ? `
-                  <button class="button small success inspector-only" onclick="openDefectInspection('${defect.id}', '${defect.case_id}')">
-                    📊 점검결과 입력
-                  </button>
-                ` : ''}
-              </div>
+    } else {
+      // 각 하자에 대한 측정값 조회 (점검결과 표시용)
+      const defectsWithInspections = await Promise.all(
+        defects.map(async (defect) => {
+          try {
+            const inspections = await api.getDefectInspections(defect.id);
+            return { ...defect, inspections: inspections.inspections || {} };
+          } catch (error) {
+            console.warn(`하자 ${defect.id}의 측정값 조회 실패:`, error);
+            return { ...defect, inspections: {} };
+          }
+        })
+      );
+      
+      container.innerHTML = defectsWithInspections.map(defect => {
+        const hasInspections = Object.keys(defect.inspections || {}).length > 0;
+        const inspectionSummary = hasInspections 
+          ? Object.entries(defect.inspections).map(([type, items]) => {
+              const typeNames = { air: '공기질', radon: '라돈', level: '레벨기', thermal: '열화상' };
+              return `${typeNames[type] || type} ${items.length}건`;
+            }).join(', ')
+          : '';
+        
+        return `
+          <div class="card">
+            <div class="defect-header">
+              <strong>${escapeHTML(defect.location)} - ${escapeHTML(defect.trade)}</strong>
+              <span class="badge">${formatDate(defect.created_at)}</span>
             </div>
-          `;
-          }).join('');
-        }
+            <div class="defect-content">
+              <div class="label">내용:</div>
+              <p>${escapeHTML(defect.content)}</p>
+              ${defect.memo ? `
+                <div class="label" style="margin-top:8px;">메모:</div>
+                <p>${escapeHTML(defect.memo)}</p>
+              ` : ''}
+              ${hasInspections ? `
+                <div class="label" style="margin-top:8px;">점검결과:</div>
+                <p style="color: #27ae60; font-size: 14px;">${inspectionSummary}</p>
+              ` : ''}
+              ${defect.photos && defect.photos.length > 0 ? `
+                <div class="label" style="margin-top:8px;">사진:</div>
+                <div class="gallery" style="display:flex;gap:8px;margin-top:4px;">
+                  ${defect.photos.map(photo => `
+                    <div class="thumb has-image" 
+                         style="background-image:url('https://mobile-app-new.onrender.com${photo.url}');cursor:pointer;" 
+                         onclick="showImageModal('https://mobile-app-new.onrender.com${photo.url}')">
+                      ${photo.kind === 'near' ? '전체' : '근접'}
+                    </div>
+                  `).join('')}
+                </div>
+              ` : ''}
+            </div>
+            <div class="hr"></div>
+            <div class="button-group">
+              <button class="button small" onclick="editDefect('${defect.id}')">✏️ 수정</button>
+              <button class="button small danger" onclick="deleteDefect('${defect.id}')">🗑️ 삭제</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
     
     route('case-detail');
     
@@ -514,186 +506,7 @@ function addDefectToCase(caseId) {
   route('newdefect');
 }
 
-// 점검결과 입력 화면 열기
-async function openDefectInspection(defectId, caseId) {
-  if (!checkAuth()) return;
-  
-  setLoading(true);
-  try {
-    AppState.currentDefectId = defectId;
-    AppState.currentCaseId = caseId;
-    
-    // 하자 정보 조회
-    const defect = await api.getDefect(defectId);
-    
-    // 하자 정보 표시
-    const detailsEl = $('#defect-inspection-details');
-    if (detailsEl) {
-      detailsEl.innerHTML = `
-        <div><strong>위치:</strong> ${escapeHTML(defect.location || '')}</div>
-        <div><strong>세부공정:</strong> ${escapeHTML(defect.trade || '')}</div>
-        <div><strong>내용:</strong> ${escapeHTML(defect.content || '')}</div>
-      `;
-    }
-    
-    // 첫 번째 탭으로 이동
-    showDefectInspectionTab('air');
-    
-    route('defect-inspection');
-    
-  } catch (error) {
-    showError(error);
-  } finally {
-    setLoading(false);
-  }
-}
-
-// 점검결과 입력 탭 전환
-function showDefectInspectionTab(tabType) {
-  // 모든 탭 비활성화
-  document.querySelectorAll('#defect-inspection .equipment-tab').forEach(tab => {
-    tab.classList.remove('active');
-  });
-  
-  document.querySelectorAll('#defect-inspection .equipment-tab-content').forEach(content => {
-    content.classList.add('hidden');
-  });
-  
-  // 선택된 탭 활성화
-  const tabButton = document.querySelector(`#defect-inspection [onclick="showDefectInspectionTab('${tabType}')"]`);
-  if (tabButton) {
-    tabButton.classList.add('active');
-  }
-  
-  const tabContent = document.getElementById(`defect-${tabType}-tab`);
-  if (tabContent) {
-    tabContent.classList.remove('hidden');
-  }
-}
-
-// 점검결과 입력 폼 초기화
-function resetDefectInspectionForm() {
-  if (confirm('입력한 내용을 모두 초기화하시겠습니까?')) {
-    // 모든 입력 필드 초기화
-    document.querySelectorAll('#defect-inspection input, #defect-inspection textarea, #defect-inspection select').forEach(input => {
-      if (input.type === 'checkbox') {
-        input.checked = false;
-      } else {
-        input.value = '';
-      }
-    });
-    
-    // 첫 번째 탭으로 이동
-    showDefectInspectionTab('air');
-    
-    toast('폼이 초기화되었습니다');
-  }
-}
-
-// 점검결과 저장
-async function saveDefectInspection() {
-  if (!checkAuth()) return;
-  
-  const defectId = AppState.currentDefectId;
-  const caseId = AppState.currentCaseId;
-  
-  if (!defectId || !caseId) {
-    toast('하자 정보가 없습니다', 'error');
-    return;
-  }
-  
-  // 현재 활성 탭 확인
-  const activeTab = document.querySelector('#defect-inspection .equipment-tab.active');
-  if (!activeTab) {
-    toast('측정 타입을 선택해주세요', 'error');
-    return;
-  }
-  
-  const tabType = activeTab.textContent.trim();
-  setLoading(true);
-  
-  try {
-    let response;
-    
-    if (tabType === '공기질') {
-      const location = $('#defect-air-location').value.trim();
-      const trade = $('#defect-air-trade').value.trim();
-      const tvoc = $('#defect-air-tvoc').value;
-      const hcho = $('#defect-air-hcho').value;
-      const co2 = $('#defect-air-co2').value;
-      const note = $('#defect-air-note').value.trim();
-      const result = $('#defect-air-result').value;
-      
-      if (!location) {
-        toast('위치를 입력해주세요', 'error');
-        return;
-      }
-      
-      response = await api.createAirMeasurementForDefect(
-        caseId, defectId, location, trade,
-        tvoc ? parseFloat(tvoc) : null,
-        hcho ? parseFloat(hcho) : null,
-        co2 ? parseFloat(co2) : null,
-        note, result
-      );
-      
-    } else if (tabType === '라돈') {
-      const location = $('#defect-radon-location').value.trim();
-      const trade = $('#defect-radon-trade').value.trim();
-      const radon = $('#defect-radon-value').value;
-      const unit = $('#defect-radon-unit').value;
-      const note = $('#defect-radon-note').value.trim();
-      const result = $('#defect-radon-result').value;
-      
-      if (!location || !radon) {
-        toast('위치와 라돈 농도를 입력해주세요', 'error');
-        return;
-      }
-      
-      response = await api.createRadonMeasurementForDefect(
-        caseId, defectId, location, trade,
-        parseFloat(radon), unit, note, result
-      );
-      
-    } else if (tabType === '레벨기') {
-      const location = $('#defect-level-location').value.trim();
-      const trade = $('#defect-level-trade').value.trim();
-      const leftMm = $('#defect-level-left').value;
-      const rightMm = $('#defect-level-right').value;
-      const note = $('#defect-level-note').value.trim();
-      const result = $('#defect-level-result').value;
-      
-      if (!location || !leftMm || !rightMm) {
-        toast('위치와 좌우측 수치를 모두 입력해주세요', 'error');
-        return;
-      }
-      
-      response = await api.createLevelMeasurementForDefect(
-        caseId, defectId, location, trade,
-        parseFloat(leftMm), parseFloat(rightMm), note, result
-      );
-    } else {
-      toast('잘못된 측정 타입입니다', 'error');
-      return;
-    }
-    
-    if (response && response.success) {
-      toast('점검결과가 저장되었습니다', 'success');
-      
-      // 하자 목록 화면으로 돌아가서 갱신
-      await viewCaseDefects(caseId);
-      
-    } else {
-      toast('저장에 실패했습니다', 'error');
-    }
-    
-  } catch (error) {
-    console.error('점검결과 저장 오류:', error);
-    handleAPIError(error, '점검결과 저장');
-  } finally {
-    setLoading(false);
-  }
-}
+// 점검결과 입력 기능은 inspector.html로 분리됨
 
 // 하자 수정 화면으로 이동
 async function editDefect(defectId) {
