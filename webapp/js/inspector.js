@@ -130,7 +130,12 @@ async function autoLogin() {
     
     // 하자목록 로드
     console.log('📋 하자목록 로드 시작...');
-    await loadAllDefects();
+    try {
+      await loadAllDefects();
+      console.log('✅ 하자목록 로드 완료');
+    } catch (error) {
+      console.error('❌ 하자목록 로드 실패:', error);
+    }
     
     console.log('✅ 자동 로그인 완료, 하자목록 화면으로 이동');
     route('defect-list');
@@ -171,7 +176,11 @@ function onLogout() {
 
 // 모든 하자 목록 조회
 async function loadAllDefects() {
+  console.log('🔍 loadAllDefects() 함수 호출됨');
+  console.log('🔍 InspectorState.session:', InspectorState.session ? '있음' : '없음');
+  
   if (!InspectorState.session) {
+    console.log('⚠️ 세션이 없어서 하자목록을 로드할 수 없습니다');
     // 세션이 없으면 로딩 메시지 표시
     const container = $('#defect-list-container');
     if (container) {
@@ -186,16 +195,20 @@ async function loadAllDefects() {
   
   // 로딩 표시 (버튼은 비활성화하지 않음 - setLoading 사용 안 함)
   const container = $('#defect-list-container');
+  console.log('🔍 container 요소:', container ? '찾음' : '없음');
   if (container) {
     container.innerHTML = `
       <div class="card" style="text-align: center; padding: 40px;">
         <div style="color: #666;">하자목록을 불러오는 중...</div>
       </div>
     `;
+    console.log('✅ 로딩 메시지 표시 완료');
   }
   
   try {
     console.log('📡 모든 하자 조회 시작...');
+    console.log('🔍 api 객체:', api ? '있음' : '없음');
+    console.log('🔍 api.baseURL:', api ? api.baseURL : 'N/A');
     
     // 점검원은 admin API를 사용하여 모든 하자 조회
     // 먼저 일반 API로 시도하고, 실패하면 admin API 사용
