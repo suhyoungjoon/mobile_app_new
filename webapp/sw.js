@@ -1,11 +1,13 @@
 // Enhanced Service Worker with Push Notifications
-const CACHE_NAME = 'insighti-v3.0-push';
+const CACHE_NAME = 'insighti-v3.1-inspector';
 const ASSETS = [
   '/index.html',
+  '/inspector.html',
   '/css/style.css',
   '/js/data.js',
   '/js/api.js',
   '/js/app.js',
+  '/js/inspector.js',
   '/js/push-manager.js',
   '/js/ai/base-detector.js',
   '/js/ai/local-detector.js',

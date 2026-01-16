@@ -270,6 +270,49 @@
 
 <script src="js/api.js"></script>
 <script src="js/inspector.js"></script>
+<script>
+  // Service Worker 등록 및 캐시 클리어
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', async function(){
+      try {
+        // 기존 Service Worker 등록 해제
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        for (let registration of registrations) {
+          await registration.unregister();
+          console.log('🗑️ 기존 Service Worker 등록 해제');
+        }
+        
+        // 모든 캐시 삭제
+        const cacheNames = await caches.keys();
+        for (let cacheName of cacheNames) {
+          await caches.delete(cacheName);
+          console.log('🗑️ 캐시 삭제:', cacheName);
+        }
+        
+        // 새 Service Worker 등록
+        const registration = await navigator.serviceWorker.register('/sw.js');
+        console.log('✅ Service Worker 등록 완료:', registration.scope);
+        
+        // Service Worker 업데이트 확인
+        registration.addEventListener('updatefound', () => {
+          console.log('🔄 Service Worker 업데이트 발견');
+          const newWorker = registration.installing;
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'activated') {
+              console.log('✅ 새 Service Worker 활성화됨');
+              // 페이지 새로고침 권장
+              if (confirm('새 버전이 업데이트되었습니다. 페이지를 새로고침하시겠습니까?')) {
+                window.location.reload();
+              }
+            }
+          });
+        });
+      } catch (error) {
+        console.error('❌ Service Worker 등록 실패:', error);
+      }
+    });
+  }
+</script>
 </body>
 </html>
 
