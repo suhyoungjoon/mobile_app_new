@@ -44,6 +44,46 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 
+// 점검원용: 모든 하자 조회 (admin complex만 접근 가능)
+router.get('/all', authenticateToken, requireInspectorAccess, async (req, res) => {
+  try {
+    const query = `
+      SELECT 
+        d.id, d.case_id, d.location, d.trade, d.content, d.memo, 
+        d.created_at,
+        ch.type as case_type, ch.created_at as case_created_at
+      FROM defect d
+      JOIN case_header ch ON d.case_id = ch.id
+      ORDER BY d.created_at DESC
+      LIMIT 1000
+    `;
+    
+    const result = await pool.query(query);
+    const defects = result.rows;
+    
+    // Fetch photos for each defect
+    for (const defect of defects) {
+      const photoQuery = `
+        SELECT id, kind, url, thumb_url, taken_at
+        FROM photo
+        WHERE defect_id = $1
+      `;
+      const photoResult = await pool.query(photoQuery, [defect.id]);
+      defect.photos = photoResult.rows;
+    }
+    
+    res.json({
+      success: true,
+      defects: defects,
+      total: defects.length
+    });
+    
+  } catch (error) {
+    console.error('Get all defects error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Create defect item
 router.post('/', authenticateToken, async (req, res) => {
   try {
