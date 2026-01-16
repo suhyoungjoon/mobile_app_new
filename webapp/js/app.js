@@ -1958,33 +1958,48 @@ window.addEventListener('DOMContentLoaded', async () => {
     toast('서버 연결 중입니다 (최대 1-2분 소요)', 'info');
   }
   
-  // 세션 복원 시도
+  // 세션 복원 시도 (토큰 유효성 검증 후)
   const savedSession = localStorage.getItem('insighti_session');
   if (savedSession) {
     try {
       const session = JSON.parse(savedSession);
       if (session && session.token) {
-        debugLog('🔄 세션 복원 중...');
-        AppState.session = session;
-        api.setToken(session.token);
-        $('#badge-user').textContent = `${session.dong}-${session.ho} ${session.name}`;
+        debugLog('🔄 저장된 세션 발견, 토큰 유효성 검증 중...');
         
-        // 케이스 로드 및 자동 생성 (에러 발생해도 계속 진행)
+        // 토큰 유효성 검증 (간단한 API 호출로 확인)
         try {
-          await loadCases();
+          api.setToken(session.token);
+          // 케이스 목록 조회로 토큰 유효성 검증
+          await api.getCases();
+          
+          // 토큰이 유효한 경우에만 세션 복원
+          debugLog('✅ 토큰 유효성 확인 완료, 세션 복원 중...');
+          AppState.session = session;
+          $('#badge-user').textContent = `${session.dong}-${session.ho} ${session.name}`;
+          
+          // 케이스 로드 및 자동 생성 (에러 발생해도 계속 진행)
+          try {
+            await loadCases();
+          } catch (error) {
+            debugError('⚠️ 케이스 로드 실패 (계속 진행):', error);
+          }
+          
+          try {
+            await ensureCase();
+          } catch (error) {
+            debugError('⚠️ 케이스 생성 실패 (계속 진행):', error);
+          }
+          
+          debugLog('✅ 세션 복원 완료');
+          // 명시적으로 list 화면으로 이동
+          route('list');
         } catch (error) {
-          debugError('⚠️ 케이스 로드 실패 (계속 진행):', error);
+          // 토큰이 만료되었거나 유효하지 않은 경우
+          debugError('❌ 토큰이 만료되었거나 유효하지 않습니다:', error);
+          localStorage.removeItem('insighti_session');
+          api.clearToken();
+          route('login');
         }
-        
-        try {
-          await ensureCase();
-        } catch (error) {
-          debugError('⚠️ 케이스 생성 실패 (계속 진행):', error);
-        }
-        
-        debugLog('✅ 세션 복원 완료');
-        // 명시적으로 list 화면으로 이동
-        route('list');
       } else {
         route('login');
       }
