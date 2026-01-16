@@ -569,7 +569,7 @@ class APIClient {
   }
 
   async getDefectInspections(defectId) {
-    return await this.request(`/api/inspections/defects/${defectId}`);
+    return await this.request(`/inspections/defects/${defectId}`);
   }
 
   async createLevelMeasurement(caseId, location, trade, leftMm, rightMm, note, result = 'normal') {
