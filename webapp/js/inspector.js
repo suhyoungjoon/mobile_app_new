@@ -89,7 +89,12 @@ function goBack() {
 
 // 자동 로그인 (점검원 계정으로 자동 로그인)
 async function autoLogin() {
-  if (isLoading) return;
+  if (isLoading) {
+    console.log('⚠️ 이미 로딩 중입니다');
+    return;
+  }
+  
+  console.log('🔐 자동 로그인 시작...');
   
   // 점검원 기본 정보 (admin complex)
   const complex = 'admin';
@@ -109,7 +114,9 @@ async function autoLogin() {
   }
   
   try {
+    console.log('📡 로그인 API 호출 중...', { complex, dong, ho, name, phone });
     const response = await api.login(complex, dong, ho, name, phone);
+    console.log('✅ 로그인 성공:', response);
     
     InspectorState.session = {
       complex, dong, ho, name, phone,
@@ -119,21 +126,31 @@ async function autoLogin() {
     
     api.setToken(response.token);
     localStorage.setItem('inspector_session', JSON.stringify(InspectorState.session));
+    console.log('💾 세션 저장 완료');
     
     // 하자목록 로드
+    console.log('📋 하자목록 로드 시작...');
     await loadAllDefects();
     
+    console.log('✅ 자동 로그인 완료, 하자목록 화면으로 이동');
     route('defect-list');
     
   } catch (error) {
-    console.error('자동 로그인 오류:', error);
-    toast('점검원 계정으로 자동 로그인에 실패했습니다', 'error');
+    console.error('❌ 자동 로그인 오류:', error);
+    console.error('에러 상세:', {
+      message: error.message,
+      stack: error.stack,
+      response: error.response
+    });
+    toast('점검원 계정으로 자동 로그인에 실패했습니다: ' + (error.message || '알 수 없는 오류'), 'error');
     
     // 에러 시에도 화면 표시
     if (container) {
       container.innerHTML = `
         <div class="card" style="text-align: center; padding: 40px;">
-          <div style="color: #e74c3c;">로그인에 실패했습니다. 페이지를 새로고침해주세요.</div>
+          <div style="color: #e74c3c;">로그인에 실패했습니다.</div>
+          <div style="color: #999; font-size: 12px; margin-top: 8px;">${error.message || '알 수 없는 오류'}</div>
+          <div style="color: #999; font-size: 12px; margin-top: 4px;">페이지를 새로고침해주세요.</div>
         </div>
       `;
     }
@@ -702,6 +719,8 @@ async function sendReportAsSMS() {
 
 // 앱 초기화
 window.addEventListener('DOMContentLoaded', async () => {
+  console.log('🚀 점검원 화면 초기화 시작');
+  
   // 모든 화면 숨기기
   $$('.screen').forEach(el => el.classList.add('hidden'));
   
@@ -709,6 +728,9 @@ window.addEventListener('DOMContentLoaded', async () => {
   const defectListScreen = $('#defect-list');
   if (defectListScreen) {
     defectListScreen.classList.remove('hidden');
+    console.log('✅ 하자목록 화면 표시');
+  } else {
+    console.error('❌ 하자목록 화면을 찾을 수 없습니다');
   }
   
   // 초기 로딩 메시지 표시 (버튼은 그대로 유지)
@@ -720,44 +742,59 @@ window.addEventListener('DOMContentLoaded', async () => {
         <div style="color: #999; font-size: 12px; margin-top: 8px;">잠시만 기다려주세요</div>
       </div>
     `;
+    console.log('✅ 로딩 메시지 표시');
+  } else {
+    console.error('❌ 하자목록 컨테이너를 찾을 수 없습니다');
   }
   
   // 세션 복원 시도
   const savedSession = localStorage.getItem('inspector_session');
+  console.log('💾 저장된 세션 확인:', savedSession ? '있음' : '없음');
+  
   if (savedSession) {
     try {
       const session = JSON.parse(savedSession);
       if (session && session.token) {
+        console.log('🔄 저장된 세션 발견, 토큰 유효성 검증 중...');
         // 토큰 유효성 검증
         try {
           api.setToken(session.token);
+          console.log('📡 케이스 목록 조회 API 호출 중...');
           await api.getCases();
           
           // 토큰이 유효한 경우에만 세션 복원
+          console.log('✅ 토큰 유효성 확인 완료, 세션 복원 중...');
           InspectorState.session = session;
           
           // 하자목록 로드
+          console.log('📋 하자목록 로드 시작...');
           await loadAllDefects();
           
+          console.log('✅ 세션 복원 완료, 하자목록 화면으로 이동');
           route('defect-list');
           return; // 성공 시 여기서 종료
         } catch (error) {
           // 토큰이 만료되었거나 유효하지 않은 경우
-          console.error('토큰이 만료되었거나 유효하지 않습니다:', error);
+          console.error('❌ 토큰이 만료되었거나 유효하지 않습니다:', error);
           localStorage.removeItem('inspector_session');
           api.clearToken();
           // 자동 로그인 시도
+          console.log('🔄 자동 로그인 시도...');
           await autoLogin();
           return;
         }
+      } else {
+        console.log('⚠️ 저장된 세션에 토큰이 없습니다');
       }
     } catch (error) {
-      console.error('세션 복원 실패:', error);
+      console.error('❌ 세션 복원 실패:', error);
       localStorage.removeItem('inspector_session');
     }
   }
   
   // 세션이 없거나 복원 실패 시 자동 로그인
+  console.log('🔄 자동 로그인 시작...');
   await autoLogin();
+  console.log('✅ 초기화 완료');
 });
 
