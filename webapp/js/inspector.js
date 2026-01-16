@@ -130,11 +130,14 @@ async function autoLogin() {
     
     // 하자목록 로드
     console.log('📋 하자목록 로드 시작...');
+    console.log('🔍 loadAllDefects 함수 존재 여부:', typeof loadAllDefects);
     try {
-      await loadAllDefects();
-      console.log('✅ 하자목록 로드 완료');
+      console.log('🔍 loadAllDefects 호출 직전');
+      const loadResult = await loadAllDefects();
+      console.log('✅ 하자목록 로드 완료, 결과:', loadResult);
     } catch (error) {
       console.error('❌ 하자목록 로드 실패:', error);
+      console.error('에러 스택:', error.stack);
     }
     
     console.log('✅ 자동 로그인 완료, 하자목록 화면으로 이동');
