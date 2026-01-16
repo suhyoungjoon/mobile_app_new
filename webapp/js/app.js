@@ -1923,6 +1923,13 @@ document.addEventListener('click', (e) => {
 window.addEventListener('DOMContentLoaded', async () => {
   debugLog('🚀 앱 초기화 시작');
   
+  // 먼저 모든 화면을 숨기고 login 화면만 표시 (기본 상태)
+  $$('.screen').forEach(el => el.classList.add('hidden'));
+  const loginScreen = $('#login');
+  if (loginScreen) {
+    loginScreen.classList.remove('hidden');
+  }
+  
   // AI 모드 설정 (localStorage에서 로드)
   const savedAISetting = localStorage.getItem('ENABLE_AI_ANALYSIS');
   const aiEnabled = savedAISetting === 'true';
@@ -1962,11 +1969,21 @@ window.addEventListener('DOMContentLoaded', async () => {
         api.setToken(session.token);
         $('#badge-user').textContent = `${session.dong}-${session.ho} ${session.name}`;
         
-        // 케이스 로드 및 자동 생성
-        await loadCases();
-        await ensureCase();
+        // 케이스 로드 및 자동 생성 (에러 발생해도 계속 진행)
+        try {
+          await loadCases();
+        } catch (error) {
+          debugError('⚠️ 케이스 로드 실패 (계속 진행):', error);
+        }
+        
+        try {
+          await ensureCase();
+        } catch (error) {
+          debugError('⚠️ 케이스 생성 실패 (계속 진행):', error);
+        }
         
         debugLog('✅ 세션 복원 완료');
+        // 명시적으로 list 화면으로 이동
         route('list');
       } else {
         route('login');
