@@ -71,7 +71,6 @@
     <!-- LIST -->
     <div id="list" class="screen hidden">
       <div id="case-list"></div>
-      <button class="button" onclick="onPreviewReport()">보고서 미리보기</button>
     </div>
 
     <!-- SETTINGS -->
@@ -342,14 +341,6 @@
       </div>
     </div>
 
-    <!-- REPORT -->
-    <div id="report" class="screen hidden">
-      <div id="report-preview"></div>
-      <div class="button-group" style="margin-top: 10px; display: flex; gap: 10px;">
-        <button class="button" onclick="previewReportAsPdf()">PDF 미리보기</button>
-        <button class="button" onclick="downloadReportAsPdf()">PDF 다운로드</button>
-      </div>
-    </div>
 
     <!-- CASE DETAIL (하자 목록) -->
     <div id="case-detail" class="screen hidden">
@@ -847,7 +838,6 @@
     <button id="tab-add" onclick="route('newdefect')">하자등록</button>
     <button id="tab-inspector" class="resident-only" onclick="route('inspector-registration')">점검원등록</button>
     <button id="tab-equipment" class="company-only hidden" onclick="route('equipment')">장비점검</button>
-    <button id="tab-report" onclick="onPreviewReport()">보고서</button>
   </div>
 
   <div class="toast"></div>

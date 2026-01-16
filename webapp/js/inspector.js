@@ -464,6 +464,197 @@ function showImageModal(imageUrl) {
   };
 }
 
+// 보고서 미리보기
+async function onPreviewReport() {
+  if (isLoading) return;
+  
+  if (!InspectorState.session) {
+    toast('로그인이 필요합니다', 'error');
+    return;
+  }
+
+  setLoading(true);
+  
+  try {
+    const reportData = await api.getReportPreview();
+    const cont = $('#report-preview');
+    cont.innerHTML = '';
+    
+    // PDF 버튼 그룹 요소 찾기
+    const buttonGroup = document.querySelector('#report .button-group');
+    
+    // 케이스 ID 설정 (PDF 생성에 필요)
+    if (reportData.case_id) {
+      InspectorState.currentCaseId = reportData.case_id;
+    }
+    
+    if (reportData.defects && reportData.defects.length > 0) {
+      // 하자가 있는 경우: 버튼 표시
+      if (buttonGroup) {
+        buttonGroup.style.display = 'flex';
+      }
+      
+      reportData.defects.forEach((d, index) => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `
+          <div style="font-weight:700;">${escapeHTML(d.location || '')} / ${escapeHTML(d.trade || '')}</div>
+          <div class="small">${escapeHTML(d.content || '')}</div>
+          ${d.memo ? `<div class="small" style="color: #666; margin-top: 4px;">메모: ${escapeHTML(d.memo)}</div>` : ''}
+          ${d.photos && d.photos.length > 0 ? `
+            <div class="gallery" style="margin-top:8px;">
+              ${d.photos.map(photo => `
+                <div class="thumb has-image" 
+                     style="background-image:url('https://mobile-app-new.onrender.com${photo.url}');cursor:pointer;" 
+                     onclick="showImageModal('https://mobile-app-new.onrender.com${photo.url}')">
+                  ${photo.kind === 'near' ? '근접' : '원거리'}
+                </div>
+              `).join('')}
+            </div>
+          ` : ''}
+        `;
+        cont.appendChild(card);
+      });
+    } else {
+      // 하자가 없는 경우: 버튼 숨김
+      if (buttonGroup) {
+        buttonGroup.style.display = 'none';
+      }
+      
+      cont.innerHTML = `
+        <div class="card" style="text-align: center; padding: 40px;">
+          <div style="color: #666;">등록된 하자가 없습니다.</div>
+          <div style="color: #999; font-size: 12px; margin-top: 10px;">하자를 등록하면 PDF 보고서를 생성할 수 있습니다.</div>
+        </div>
+      `;
+    }
+    
+    route('report');
+    
+  } catch (error) {
+    console.error('보고서 미리보기 오류:', error);
+    toast(error.message || '보고서 미리보기에 실패했습니다', 'error');
+  } finally {
+    setLoading(false);
+  }
+}
+
+// PDF 미리보기
+async function previewReportAsPdf() {
+  if (!InspectorState.session) {
+    toast('로그인이 필요합니다', 'error');
+    return;
+  }
+  
+  const caseId = InspectorState.currentCaseId;
+  if (!caseId) {
+    toast('케이스를 먼저 선택해주세요', 'error');
+    return;
+  }
+
+  setLoading(true);
+  try {
+    toast('PDF 생성 중...', 'info');
+    const generateResult = await api.generateReport(caseId);
+    
+    console.log('PDF 생성 결과:', generateResult);
+    
+    if (!generateResult || !generateResult.success) {
+      const errorMsg = generateResult?.message || generateResult?.error || 'PDF 생성에 실패했습니다';
+      throw new Error(errorMsg);
+    }
+
+    if (!generateResult.filename) {
+      throw new Error('PDF 파일명을 받지 못했습니다. 서버 응답을 확인해주세요.');
+    }
+
+    toast('PDF 미리보기를 여는 중...', 'info');
+    await api.previewReport(generateResult.filename);
+    
+    toast('PDF 미리보기 창이 열렸습니다', 'success');
+    
+  } catch (error) {
+    console.error('PDF 미리보기 오류:', error);
+    toast(error.message || 'PDF 미리보기에 실패했습니다', 'error');
+  } finally {
+    setLoading(false);
+  }
+}
+
+// PDF 다운로드
+async function downloadReportAsPdf() {
+  if (!InspectorState.session) {
+    toast('로그인이 필요합니다', 'error');
+    return;
+  }
+  
+  const caseId = InspectorState.currentCaseId;
+  if (!caseId) {
+    toast('케이스를 먼저 선택해주세요', 'error');
+    return;
+  }
+
+  setLoading(true);
+  try {
+    toast('PDF 생성 중...', 'info');
+    const generateResult = await api.generateReport(caseId);
+    
+    console.log('PDF 생성 결과:', generateResult);
+    
+    if (!generateResult || !generateResult.success) {
+      const errorMsg = generateResult?.message || generateResult?.error || 'PDF 생성에 실패했습니다';
+      throw new Error(errorMsg);
+    }
+
+    if (!generateResult.filename) {
+      throw new Error('PDF 파일명을 받지 못했습니다. 서버 응답을 확인해주세요.');
+    }
+
+    toast('PDF 다운로드 중...', 'info');
+    await api.downloadReport(generateResult.filename);
+    
+    toast('PDF 다운로드가 완료되었습니다', 'success');
+    
+  } catch (error) {
+    console.error('PDF 다운로드 오류:', error);
+    toast(error.message || 'PDF 다운로드에 실패했습니다', 'error');
+  } finally {
+    setLoading(false);
+  }
+}
+
+// SMS로 보고서 보내기
+async function sendReportAsSMS() {
+  if (!InspectorState.session) {
+    toast('로그인이 필요합니다', 'error');
+    return;
+  }
+  
+  const caseId = InspectorState.currentCaseId;
+  if (!caseId) {
+    toast('케이스를 먼저 선택해주세요', 'error');
+    return;
+  }
+
+  const phoneNumber = prompt('보고서를 받을 전화번호를 입력하세요 (예: 010-0000-0000)');
+  if (!phoneNumber) return;
+  
+  setLoading(true);
+  try {
+    const result = await api.sendReport(caseId, phoneNumber);
+    if (result.success) {
+      toast('SMS로 보고서가 발송되었습니다', 'success');
+    } else {
+      throw new Error(result.message || '보고서 발송에 실패했습니다');
+    }
+  } catch (error) {
+    console.error('보고서 발송 오류:', error);
+    toast(error.message || '보고서 발송에 실패했습니다', 'error');
+  } finally {
+    setLoading(false);
+  }
+}
+
 // 앱 초기화
 window.addEventListener('DOMContentLoaded', async () => {
   // 먼저 login 화면 표시

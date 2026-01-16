@@ -123,8 +123,27 @@
         <button class="button ghost" onclick="onLogout()" style="width: auto; padding: 8px 12px;">로그아웃</button>
       </div>
       
+      <div style="margin-bottom: 16px;">
+        <button class="button success" onclick="onPreviewReport()" style="width: 100%;">📄 보고서 미리보기</button>
+      </div>
+      
       <div id="defect-list-container">
         <!-- 하자 목록이 여기에 표시됩니다 -->
+      </div>
+    </div>
+
+    <!-- REPORT (보고서) -->
+    <div id="report" class="screen hidden">
+      <div class="screen-header">
+        <button class="back-btn" onclick="goBack()">← 뒤로</button>
+        <h2>보고서</h2>
+        <div></div>
+      </div>
+      <div id="report-preview"></div>
+      <div class="button-group" style="margin-top: 10px; display: flex; gap: 10px;">
+        <button class="button" onclick="previewReportAsPdf()">PDF 미리보기</button>
+        <button class="button" onclick="downloadReportAsPdf()">PDF 다운로드</button>
+        <button class="button success" onclick="sendReportAsSMS()">SMS 발송</button>
       </div>
     </div>
 
