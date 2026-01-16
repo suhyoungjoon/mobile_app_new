@@ -10,8 +10,8 @@ const InspectorState = {
   allDefects: []
 };
 
-// API Client (api.js에서 가져옴)
-const api = new APIClient();
+// API Client는 api.js에서 전역 변수로 선언됨
+// const api = new APIClient(); // api.js에서 이미 선언됨
 
 // Loading state
 let isLoading = false;
