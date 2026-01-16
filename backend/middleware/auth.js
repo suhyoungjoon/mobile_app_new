@@ -1,6 +1,7 @@
 // Simple JWT authentication middleware
 const jwt = require('jsonwebtoken');
 const config = require('../config');
+const pool = require('../database');
 
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
@@ -58,9 +59,47 @@ const requireEquipmentAccess = checkUserRole(['company', 'admin']);
 // 관리자 전용 권한
 const requireAdminAccess = checkUserRole(['admin']);
 
+// 점검원 권한 체크 (complex === 'admin'인지 확인)
+const requireInspectorAccess = async (req, res, next) => {
+  try {
+    const householdId = req.user?.householdId;
+    
+    if (!householdId) {
+      return res.status(403).json({ error: '점검원 권한이 필요합니다' });
+    }
+    
+    // household와 complex 정보 조회
+    const result = await pool.query(
+      `SELECT c.name as complex_name 
+       FROM household h
+       JOIN complex c ON h.complex_id = c.id
+       WHERE h.id = $1`,
+      [householdId]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(403).json({ error: '세대 정보를 찾을 수 없습니다' });
+    }
+    
+    const complexName = result.rows[0].complex_name?.toLowerCase();
+    
+    if (complexName !== 'admin') {
+      return res.status(403).json({ 
+        error: '점검원 권한이 필요합니다. 아파트(단지) 항목에 "admin"을 입력하세요.' 
+      });
+    }
+    
+    next();
+  } catch (error) {
+    console.error('점검원 권한 체크 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다' });
+  }
+};
+
 module.exports = { 
   authenticateToken, 
   checkUserRole, 
   requireEquipmentAccess, 
-  requireAdminAccess 
+  requireAdminAccess,
+  requireInspectorAccess
 };

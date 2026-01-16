@@ -1,7 +1,7 @@
 // 장비점검 관련 API 라우트
 const express = require('express');
 const pool = require('../database');
-const { authenticateToken, requireEquipmentAccess } = require('../middleware/auth');
+const { authenticateToken, requireEquipmentAccess, requireInspectorAccess } = require('../middleware/auth');
 const { v4: uuidv4 } = require('uuid');
 
 const router = express.Router();
@@ -103,7 +103,7 @@ router.post('/thermal/:itemId/photos', authenticateToken, requireEquipmentAccess
 });
 
 // 공기질 측정 등록
-router.post('/air', authenticateToken, async (req, res) => {
+router.post('/air', authenticateToken, requireInspectorAccess, async (req, res) => {
   try {
     const { caseId, defectId, location, trade, tvoc, hcho, co2, note, result = 'normal' } = req.body;
     
@@ -178,7 +178,7 @@ router.post('/air', authenticateToken, async (req, res) => {
 });
 
 // 라돈 측정 등록
-router.post('/radon', authenticateToken, async (req, res) => {
+router.post('/radon', authenticateToken, requireInspectorAccess, async (req, res) => {
   try {
     const { caseId, defectId, location, trade, radon, unit_radon = 'Bq/m³', note, result = 'normal' } = req.body;
     
@@ -248,7 +248,7 @@ router.post('/radon', authenticateToken, async (req, res) => {
 });
 
 // 레벨기 측정 등록
-router.post('/level', authenticateToken, async (req, res) => {
+router.post('/level', authenticateToken, requireInspectorAccess, async (req, res) => {
   try {
     const { caseId, defectId, location, trade, left_mm, right_mm, note, result = 'normal' } = req.body;
     
