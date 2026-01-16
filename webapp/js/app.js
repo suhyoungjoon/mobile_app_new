@@ -1584,59 +1584,16 @@ window.addEventListener('DOMContentLoaded', async () => {
     toast('서버 연결 중입니다 (최대 1-2분 소요)', 'info');
   }
   
-  // 세션 복원 시도 (토큰 유효성 검증 후)
+  // 세션 복원 비활성화 - 항상 로그인 화면 표시
+  // 저장된 세션이 있어도 자동 로그인하지 않음
   const savedSession = localStorage.getItem('insighti_session');
   if (savedSession) {
-    try {
-      const session = JSON.parse(savedSession);
-      if (session && session.token) {
-        debugLog('🔄 저장된 세션 발견, 토큰 유효성 검증 중...');
-        
-        // 토큰 유효성 검증 (간단한 API 호출로 확인)
-        try {
-          api.setToken(session.token);
-          // 케이스 목록 조회로 토큰 유효성 검증
-          await api.getCases();
-          
-          // 토큰이 유효한 경우에만 세션 복원
-          debugLog('✅ 토큰 유효성 확인 완료, 세션 복원 중...');
-          AppState.session = session;
-          $('#badge-user').textContent = `${session.dong}-${session.ho} ${session.name}`;
-          
-          // 케이스 로드 및 자동 생성 (에러 발생해도 계속 진행)
-          try {
-            await loadCases();
-          } catch (error) {
-            debugError('⚠️ 케이스 로드 실패 (계속 진행):', error);
-          }
-          
-          try {
-            await ensureCase();
-          } catch (error) {
-            debugError('⚠️ 케이스 생성 실패 (계속 진행):', error);
-          }
-          
-          debugLog('✅ 세션 복원 완료');
-          // 명시적으로 list 화면으로 이동
-          route('list');
-        } catch (error) {
-          // 토큰이 만료되었거나 유효하지 않은 경우
-          debugError('❌ 토큰이 만료되었거나 유효하지 않습니다:', error);
-          localStorage.removeItem('insighti_session');
-          api.clearToken();
-          route('login');
-        }
-      } else {
-        route('login');
-      }
-    } catch (error) {
-      debugError('❌ 세션 복원 실패:', error);
-      localStorage.removeItem('insighti_session');
-      route('login');
-    }
-  } else {
-    route('login');
+    debugLog('💾 저장된 세션이 있지만 자동 로그인은 비활성화되어 있습니다');
+    // 세션은 유지하되 로그인 화면 표시
   }
+  
+  // 항상 로그인 화면으로 이동
+  route('login');
   
   // UI 초기화
   initializeUI();
