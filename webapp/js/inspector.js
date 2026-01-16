@@ -131,13 +131,26 @@ async function autoLogin() {
     // 하자목록 로드
     console.log('📋 하자목록 로드 시작...');
     console.log('🔍 loadAllDefects 함수 존재 여부:', typeof loadAllDefects);
-    try {
-      console.log('🔍 loadAllDefects 호출 직전');
-      const loadResult = await loadAllDefects();
-      console.log('✅ 하자목록 로드 완료, 결과:', loadResult);
-    } catch (error) {
-      console.error('❌ 하자목록 로드 실패:', error);
-      console.error('에러 스택:', error.stack);
+    
+    // loadAllDefects 함수가 정의되어 있는지 확인
+    if (typeof loadAllDefects === 'function') {
+      try {
+        console.log('🔍 loadAllDefects 호출 직전');
+        await loadAllDefects();
+        console.log('✅ 하자목록 로드 완료');
+      } catch (error) {
+        console.error('❌ 하자목록 로드 실패:', error);
+        console.error('에러 스택:', error.stack);
+      }
+    } else {
+      console.error('❌ loadAllDefects 함수가 정의되지 않았습니다!');
+      // 직접 하자목록 조회 시도
+      try {
+        console.log('🔄 직접 하자목록 조회 시도...');
+        await loadAllDefectsDirectly();
+      } catch (error) {
+        console.error('❌ 직접 하자목록 조회 실패:', error);
+      }
     }
     
     console.log('✅ 자동 로그인 완료, 하자목록 화면으로 이동');
@@ -177,6 +190,118 @@ function onLogout() {
   }
 }
 
+// 직접 하자목록 조회 (fallback)
+async function loadAllDefectsDirectly() {
+  console.log('🔄 loadAllDefectsDirectly() 호출됨');
+  const container = $('#defect-list-container');
+  if (!container) {
+    console.error('❌ container 요소를 찾을 수 없습니다');
+    return;
+  }
+  
+  container.innerHTML = `
+    <div class="card" style="text-align: center; padding: 40px;">
+      <div style="color: #666;">하자목록을 불러오는 중...</div>
+    </div>
+  `;
+  
+  try {
+    // Admin API로 모든 하자 조회
+    const baseURL = api.baseURL.replace('/api', '');
+    const response = await fetch(`${baseURL}/api/admin/defects?limit=1000`, {
+      headers: {
+        'Authorization': `Bearer ${InspectorState.session.token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    const result = await response.json();
+    console.log('✅ Admin API 응답:', result);
+    
+    if (!result.defects || result.defects.length === 0) {
+      container.innerHTML = `
+        <div class="card" style="text-align: center; padding: 40px;">
+          <div style="color: #666;">등록된 하자가 없습니다.</div>
+        </div>
+      `;
+      return;
+    }
+    
+    // 하자목록 표시
+    InspectorState.allDefects = result.defects;
+    if (result.defects.length > 0 && !InspectorState.currentCaseId) {
+      InspectorState.currentCaseId = result.defects[0].case_id;
+    }
+    
+    // 측정값 조회
+    const defectsWithInspections = await Promise.all(
+      result.defects.map(async (defect) => {
+        try {
+          const inspections = await api.getDefectInspections(defect.id);
+          return { ...defect, inspections: inspections.inspections || {} };
+        } catch (error) {
+          return { ...defect, inspections: {} };
+        }
+      })
+    );
+    
+    // 화면에 표시
+    container.innerHTML = defectsWithInspections.map(defect => {
+      const hasInspections = Object.keys(defect.inspections || {}).length > 0;
+      const inspectionSummary = hasInspections 
+        ? Object.entries(defect.inspections).map(([type, items]) => {
+            const typeNames = { air: '공기질', radon: '라돈', level: '레벨기', thermal: '열화상' };
+            return `${typeNames[type] || type} ${items.length}건`;
+          }).join(', ')
+        : '';
+      
+      return `
+        <div class="defect-card">
+          <div class="defect-card-header">
+            <div>
+              <div class="defect-card-title">${escapeHTML(defect.location || '')} - ${escapeHTML(defect.trade || '')}</div>
+              <div class="defect-card-meta">케이스: ${defect.case_id} | ${formatDate(defect.created_at)}</div>
+            </div>
+            ${hasInspections ? '<span class="inspection-badge">점검완료</span>' : '<span class="inspection-badge pending">점검대기</span>'}
+          </div>
+          <div class="defect-card-content">
+            <div class="label">내용</div>
+            <div class="value">${escapeHTML(defect.content || '')}</div>
+            ${defect.memo ? `
+              <div class="label">메모</div>
+              <div class="value">${escapeHTML(defect.memo)}</div>
+            ` : ''}
+            ${hasInspections ? `
+              <div class="label">점검결과</div>
+              <div class="value" style="color: #10b981; font-size: 14px;">${inspectionSummary}</div>
+            ` : ''}
+          </div>
+          <div class="hr"></div>
+          <div class="button-group" style="display: flex; gap: 8px; margin-top: 12px;">
+            <button class="button success" style="flex: 1;" onclick="openDefectInspection('${defect.id}', '${defect.case_id}')">
+              📊 점검결과 입력
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
+    
+    console.log('✅ 하자목록 표시 완료:', defectsWithInspections.length, '개');
+  } catch (error) {
+    console.error('❌ 직접 하자목록 조회 실패:', error);
+    container.innerHTML = `
+      <div class="card" style="text-align: center; padding: 40px;">
+        <div style="color: #e74c3c;">하자목록을 불러오는데 실패했습니다.</div>
+        <div style="color: #999; font-size: 12px; margin-top: 8px;">${error.message || '알 수 없는 오류'}</div>
+      </div>
+    `;
+  }
+}
+
 // 모든 하자 목록 조회
 async function loadAllDefects() {
   console.log('🔍 loadAllDefects() 함수 호출됨');
@@ -213,88 +338,52 @@ async function loadAllDefects() {
     console.log('🔍 api 객체:', api ? '있음' : '없음');
     console.log('🔍 api.baseURL:', api ? api.baseURL : 'N/A');
     
-    // 점검원은 admin API를 사용하여 모든 하자 조회
-    // 먼저 일반 API로 시도하고, 실패하면 admin API 사용
-    let allDefects = [];
+    // 점검원은 Admin API를 직접 사용하여 모든 하자 조회
+    console.log('📋 Admin API로 모든 하자 조회 시도...');
+    const baseURL = api.baseURL.replace('/api', '');
+    const response = await fetch(`${baseURL}/api/admin/defects?limit=1000`, {
+      headers: {
+        'Authorization': `Bearer ${InspectorState.session.token}`,
+        'Content-Type': 'application/json'
+      }
+    });
     
-    try {
-      // 방법 1: 모든 케이스 조회 후 각 케이스의 하자 조회
-      console.log('📋 방법 1: 케이스별 하자 조회 시도...');
-      const cases = await api.getCases();
-      console.log('📋 조회된 케이스 수:', cases ? cases.length : 0);
-      
-      if (cases && cases.length > 0) {
-        // 첫 번째 케이스를 기본으로 설정 (보고서 생성용)
-        if (!InspectorState.currentCaseId && cases.length > 0) {
-          InspectorState.currentCaseId = cases[0].id;
-        }
-        
-        // 각 케이스의 하자 조회
-        for (const caseItem of cases) {
-          try {
-            const defects = await api.getDefects(caseItem.id);
-            if (defects && defects.length > 0) {
-              // 각 하자에 케이스 정보 추가
-              defects.forEach(defect => {
-                defect.case_id = caseItem.id;
-                defect.case_type = caseItem.type;
-                defect.case_created_at = caseItem.created_at;
-              });
-              allDefects.push(...defects);
-            }
-          } catch (error) {
-            console.warn(`케이스 ${caseItem.id}의 하자 조회 실패:`, error);
-          }
-        }
-        console.log('✅ 방법 1 성공, 조회된 하자 수:', allDefects.length);
-      } else {
-        console.log('⚠️ 조회된 케이스가 없습니다');
-      }
-    } catch (error) {
-      console.warn('⚠️ 방법 1 실패, admin API 시도:', error);
-      
-      // 방법 2: Admin API 사용 (모든 하자 조회)
-      try {
-        console.log('📋 방법 2: Admin API로 모든 하자 조회 시도...');
-        const response = await fetch(`${api.baseURL.replace('/api', '')}/api/admin/defects?limit=1000`, {
-          headers: {
-            'Authorization': `Bearer ${InspectorState.session.token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        if (response.ok) {
-          const result = await response.json();
-          if (result.defects && result.defects.length > 0) {
-            // Admin API 응답 형식을 점검원 화면 형식으로 변환
-            allDefects = result.defects.map(d => ({
-              id: d.id,
-              case_id: d.case_id,
-              case_type: d.case_type,
-              location: d.location,
-              trade: d.trade,
-              content: d.content,
-              memo: d.memo,
-              created_at: d.created_at,
-              case_created_at: d.created_at,
-              photos: [] // Admin API에는 photos가 없을 수 있음
-            }));
-            console.log('✅ 방법 2 성공, 조회된 하자 수:', allDefects.length);
-            
-            // 첫 번째 하자의 케이스 ID를 기본으로 설정
-            if (allDefects.length > 0 && !InspectorState.currentCaseId) {
-              InspectorState.currentCaseId = allDefects[0].case_id;
-            }
-          }
-        } else {
-          console.error('❌ Admin API 호출 실패:', response.status, response.statusText);
-        }
-      } catch (adminError) {
-        console.error('❌ Admin API 호출 오류:', adminError);
-      }
+    console.log('📡 Admin API 응답 상태:', response.status);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
     
-    if (!allDefects || allDefects.length === 0) {
+    const result = await response.json();
+    console.log('✅ Admin API 응답:', result);
+    console.log('📊 조회된 하자 수:', result.defects ? result.defects.length : 0);
+    
+    // 점검원은 Admin API를 직접 사용하여 모든 하자 조회
+    console.log('📋 Admin API로 모든 하자 조회 시도...');
+    const baseURL = api.baseURL.replace('/api', '');
+    console.log('🔍 API Base URL:', baseURL);
+    console.log('🔍 Token:', InspectorState.session.token ? '있음' : '없음');
+    
+    const response = await fetch(`${baseURL}/api/admin/defects?limit=1000`, {
+      headers: {
+        'Authorization': `Bearer ${InspectorState.session.token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    console.log('📡 Admin API 응답 상태:', response.status, response.statusText);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Admin API 호출 실패:', errorText);
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    const result = await response.json();
+    console.log('✅ Admin API 응답:', result);
+    console.log('📊 조회된 하자 수:', result.defects ? result.defects.length : 0);
+    
+    if (!result.defects || result.defects.length === 0) {
       console.log('⚠️ 조회된 하자가 없습니다');
       if (container) {
         container.innerHTML = `
@@ -309,8 +398,28 @@ async function loadAllDefects() {
       return;
     }
     
+    // Admin API 응답을 점검원 화면 형식으로 변환
+    const allDefects = result.defects.map(d => ({
+      id: d.id,
+      case_id: d.case_id,
+      case_type: d.case_type,
+      location: d.location,
+      trade: d.trade,
+      content: d.content,
+      memo: d.memo,
+      created_at: d.created_at,
+      case_created_at: d.created_at,
+      photos: d.photos || [] // Admin API 응답에 photos가 있을 수 있음
+    }));
+    
     console.log('✅ 총 조회된 하자 수:', allDefects.length);
     InspectorState.allDefects = allDefects;
+    
+    // 첫 번째 하자의 케이스 ID를 기본으로 설정 (보고서 생성용)
+    if (allDefects.length > 0 && !InspectorState.currentCaseId) {
+      InspectorState.currentCaseId = allDefects[0].case_id;
+      console.log('✅ 기본 케이스 ID 설정:', InspectorState.currentCaseId);
+    }
     
     // 각 하자에 대한 측정값 조회
     const defectsWithInspections = await Promise.all(
