@@ -154,20 +154,49 @@ function onLogout() {
 
 // 모든 하자 목록 조회
 async function loadAllDefects() {
-  if (!InspectorState.session) return;
+  if (!InspectorState.session) {
+    // 세션이 없으면 로딩 메시지 표시
+    const container = $('#defect-list-container');
+    if (container) {
+      container.innerHTML = `
+        <div class="card" style="text-align: center; padding: 40px;">
+          <div style="color: #666;">로그인 중...</div>
+        </div>
+      `;
+    }
+    return;
+  }
   
-  setLoading(true);
+  // 로딩 표시 (버튼은 비활성화하지 않음 - setLoading 사용 안 함)
+  const container = $('#defect-list-container');
+  if (container) {
+    container.innerHTML = `
+      <div class="card" style="text-align: center; padding: 40px;">
+        <div style="color: #666;">하자목록을 불러오는 중...</div>
+      </div>
+    `;
+  }
+  
   try {
     // 모든 케이스 조회
     const cases = await api.getCases();
     
     if (!cases || cases.length === 0) {
-      $('#defect-list-container').innerHTML = `
-        <div class="card" style="text-align: center; padding: 40px;">
-          <div style="color: #666;">등록된 하자가 없습니다.</div>
-        </div>
-      `;
+      if (container) {
+        container.innerHTML = `
+          <div class="card" style="text-align: center; padding: 40px;">
+            <div style="color: #666;">등록된 하자가 없습니다.</div>
+          </div>
+        `;
+      }
+      // 첫 번째 케이스가 없으면 currentCaseId 초기화
+      InspectorState.currentCaseId = null;
       return;
+    }
+    
+    // 첫 번째 케이스를 기본으로 설정 (보고서 생성용)
+    if (!InspectorState.currentCaseId && cases.length > 0) {
+      InspectorState.currentCaseId = cases[0].id;
     }
     
     // 각 케이스의 하자 조회
@@ -205,15 +234,17 @@ async function loadAllDefects() {
     );
     
     // 하자목록 표시
-    const container = $('#defect-list-container');
     if (!defectsWithInspections || defectsWithInspections.length === 0) {
-      container.innerHTML = `
-        <div class="card" style="text-align: center; padding: 40px;">
-          <div style="color: #666;">등록된 하자가 없습니다.</div>
-        </div>
-      `;
+      if (container) {
+        container.innerHTML = `
+          <div class="card" style="text-align: center; padding: 40px;">
+            <div style="color: #666;">등록된 하자가 없습니다.</div>
+          </div>
+        `;
+      }
     } else {
-      container.innerHTML = defectsWithInspections.map(defect => {
+      if (container) {
+        container.innerHTML = defectsWithInspections.map(defect => {
         const hasInspections = Object.keys(defect.inspections || {}).length > 0;
         const inspectionSummary = hasInspections 
           ? Object.entries(defect.inspections).map(([type, items]) => {
@@ -263,14 +294,21 @@ async function loadAllDefects() {
             </div>
           </div>
         `;
-      }).join('');
+        }).join('');
+      }
     }
     
   } catch (error) {
     console.error('하자목록 조회 오류:', error);
     toast('하자목록을 불러오는데 실패했습니다', 'error');
-  } finally {
-    setLoading(false);
+    if (container) {
+      container.innerHTML = `
+        <div class="card" style="text-align: center; padding: 40px;">
+          <div style="color: #e74c3c;">하자목록을 불러오는데 실패했습니다.</div>
+          <div style="color: #999; font-size: 12px; margin-top: 8px;">페이지를 새로고침해주세요.</div>
+        </div>
+      `;
+    }
   }
 }
 
@@ -673,12 +711,13 @@ window.addEventListener('DOMContentLoaded', async () => {
     defectListScreen.classList.remove('hidden');
   }
   
-  // 로딩 표시
+  // 초기 로딩 메시지 표시 (버튼은 그대로 유지)
   const container = $('#defect-list-container');
   if (container) {
     container.innerHTML = `
       <div class="card" style="text-align: center; padding: 40px;">
         <div style="color: #666;">점검원 계정으로 로그인 중...</div>
+        <div style="color: #999; font-size: 12px; margin-top: 8px;">잠시만 기다려주세요</div>
       </div>
     `;
   }
