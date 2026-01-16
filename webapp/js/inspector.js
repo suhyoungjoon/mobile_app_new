@@ -195,46 +195,105 @@ async function loadAllDefects() {
   }
   
   try {
-    // 모든 케이스 조회
-    const cases = await api.getCases();
+    console.log('📡 모든 하자 조회 시작...');
     
-    if (!cases || cases.length === 0) {
+    // 점검원은 admin API를 사용하여 모든 하자 조회
+    // 먼저 일반 API로 시도하고, 실패하면 admin API 사용
+    let allDefects = [];
+    
+    try {
+      // 방법 1: 모든 케이스 조회 후 각 케이스의 하자 조회
+      console.log('📋 방법 1: 케이스별 하자 조회 시도...');
+      const cases = await api.getCases();
+      console.log('📋 조회된 케이스 수:', cases ? cases.length : 0);
+      
+      if (cases && cases.length > 0) {
+        // 첫 번째 케이스를 기본으로 설정 (보고서 생성용)
+        if (!InspectorState.currentCaseId && cases.length > 0) {
+          InspectorState.currentCaseId = cases[0].id;
+        }
+        
+        // 각 케이스의 하자 조회
+        for (const caseItem of cases) {
+          try {
+            const defects = await api.getDefects(caseItem.id);
+            if (defects && defects.length > 0) {
+              // 각 하자에 케이스 정보 추가
+              defects.forEach(defect => {
+                defect.case_id = caseItem.id;
+                defect.case_type = caseItem.type;
+                defect.case_created_at = caseItem.created_at;
+              });
+              allDefects.push(...defects);
+            }
+          } catch (error) {
+            console.warn(`케이스 ${caseItem.id}의 하자 조회 실패:`, error);
+          }
+        }
+        console.log('✅ 방법 1 성공, 조회된 하자 수:', allDefects.length);
+      } else {
+        console.log('⚠️ 조회된 케이스가 없습니다');
+      }
+    } catch (error) {
+      console.warn('⚠️ 방법 1 실패, admin API 시도:', error);
+      
+      // 방법 2: Admin API 사용 (모든 하자 조회)
+      try {
+        console.log('📋 방법 2: Admin API로 모든 하자 조회 시도...');
+        const response = await fetch(`${api.baseURL.replace('/api', '')}/api/admin/defects?limit=1000`, {
+          headers: {
+            'Authorization': `Bearer ${InspectorState.session.token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          if (result.defects && result.defects.length > 0) {
+            // Admin API 응답 형식을 점검원 화면 형식으로 변환
+            allDefects = result.defects.map(d => ({
+              id: d.id,
+              case_id: d.case_id,
+              case_type: d.case_type,
+              location: d.location,
+              trade: d.trade,
+              content: d.content,
+              memo: d.memo,
+              created_at: d.created_at,
+              case_created_at: d.created_at,
+              photos: [] // Admin API에는 photos가 없을 수 있음
+            }));
+            console.log('✅ 방법 2 성공, 조회된 하자 수:', allDefects.length);
+            
+            // 첫 번째 하자의 케이스 ID를 기본으로 설정
+            if (allDefects.length > 0 && !InspectorState.currentCaseId) {
+              InspectorState.currentCaseId = allDefects[0].case_id;
+            }
+          }
+        } else {
+          console.error('❌ Admin API 호출 실패:', response.status, response.statusText);
+        }
+      } catch (adminError) {
+        console.error('❌ Admin API 호출 오류:', adminError);
+      }
+    }
+    
+    if (!allDefects || allDefects.length === 0) {
+      console.log('⚠️ 조회된 하자가 없습니다');
       if (container) {
         container.innerHTML = `
           <div class="card" style="text-align: center; padding: 40px;">
             <div style="color: #666;">등록된 하자가 없습니다.</div>
+            <div style="color: #999; font-size: 12px; margin-top: 8px;">하자를 등록하면 여기에 표시됩니다.</div>
           </div>
         `;
       }
-      // 첫 번째 케이스가 없으면 currentCaseId 초기화
+      InspectorState.allDefects = [];
       InspectorState.currentCaseId = null;
       return;
     }
     
-    // 첫 번째 케이스를 기본으로 설정 (보고서 생성용)
-    if (!InspectorState.currentCaseId && cases.length > 0) {
-      InspectorState.currentCaseId = cases[0].id;
-    }
-    
-    // 각 케이스의 하자 조회
-    const allDefects = [];
-    for (const caseItem of cases) {
-      try {
-        const defects = await api.getDefects(caseItem.id);
-        if (defects && defects.length > 0) {
-          // 각 하자에 케이스 정보 추가
-          defects.forEach(defect => {
-            defect.case_id = caseItem.id;
-            defect.case_type = caseItem.type;
-            defect.case_created_at = caseItem.created_at;
-          });
-          allDefects.push(...defects);
-        }
-      } catch (error) {
-        console.warn(`케이스 ${caseItem.id}의 하자 조회 실패:`, error);
-      }
-    }
-    
+    console.log('✅ 총 조회된 하자 수:', allDefects.length);
     InspectorState.allDefects = allDefects;
     
     // 각 하자에 대한 측정값 조회
