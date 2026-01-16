@@ -721,6 +721,13 @@ async function sendReportAsSMS() {
 window.addEventListener('DOMContentLoaded', async () => {
   console.log('🚀 점검원 화면 초기화 시작');
   
+  // API 클라이언트 확인
+  if (typeof api === 'undefined') {
+    console.error('❌ API 클라이언트가 로드되지 않았습니다. api.js가 먼저 로드되어야 합니다.');
+    return;
+  }
+  console.log('✅ API 클라이언트 확인 완료');
+  
   // 모든 화면 숨기기
   $$('.screen').forEach(el => el.classList.add('hidden'));
   
