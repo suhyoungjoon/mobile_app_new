@@ -83,29 +83,18 @@ function goBack() {
   }
 }
 
-// 로그인
-async function onLogin() {
+// 자동 로그인 (점검원 계정으로 자동 로그인)
+async function autoLogin() {
   if (isLoading) return;
   
-  const complex = $('#login-complex').value.trim();
-  const dong = $('#login-dong').value.trim();
-  const ho = $('#login-ho').value.trim();
-  const name = $('#login-name').value.trim();
-  const phone = $('#login-phone').value.trim();
-  
-  if (!complex || !dong || !ho || !name || !phone) {
-    toast('입력값을 확인해 주세요', 'error');
-    return;
-  }
-  
-  // 점검원 권한 체크 (complex === 'admin')
-  if (complex.toLowerCase() !== 'admin') {
-    toast('점검원은 아파트(단지) 항목에 "admin"을 입력해야 합니다', 'error');
-    return;
-  }
+  // 점검원 기본 정보 (admin complex)
+  const complex = 'admin';
+  const dong = '000';
+  const ho = '000';
+  const name = '점검원';
+  const phone = '010-0000-0000';
   
   setLoading(true);
-  toast('로그인 중...', 'info');
   
   try {
     const response = await api.login(complex, dong, ho, name, phone);
@@ -119,29 +108,28 @@ async function onLogin() {
     api.setToken(response.token);
     localStorage.setItem('inspector_session', JSON.stringify(InspectorState.session));
     
-    toast('✅ 로그인 성공', 'success');
-    
     // 하자목록 로드
     await loadAllDefects();
     
     route('defect-list');
     
   } catch (error) {
-    console.error('로그인 오류:', error);
-    toast(error.message || '로그인 실패', 'error');
+    console.error('자동 로그인 오류:', error);
+    toast('점검원 계정으로 자동 로그인에 실패했습니다', 'error');
   } finally {
     setLoading(false);
   }
 }
 
-// 로그아웃
+// 로그아웃 (자동 재로그인)
 function onLogout() {
-  if (confirm('로그아웃하시겠습니까?')) {
+  if (confirm('로그아웃하시겠습니까? (자동으로 다시 로그인됩니다)')) {
     InspectorState.session = null;
     InspectorState.allDefects = [];
     api.clearToken();
     localStorage.removeItem('inspector_session');
-    route('login');
+    // 자동으로 다시 로그인
+    autoLogin();
   }
 }
 
@@ -657,12 +645,8 @@ async function sendReportAsSMS() {
 
 // 앱 초기화
 window.addEventListener('DOMContentLoaded', async () => {
-  // 먼저 login 화면 표시
+  // 모든 화면 숨기기
   $$('.screen').forEach(el => el.classList.add('hidden'));
-  const loginScreen = $('#login');
-  if (loginScreen) {
-    loginScreen.classList.remove('hidden');
-  }
   
   // 세션 복원 시도
   const savedSession = localStorage.getItem('inspector_session');
@@ -682,23 +666,24 @@ window.addEventListener('DOMContentLoaded', async () => {
           await loadAllDefects();
           
           route('defect-list');
+          return; // 성공 시 여기서 종료
         } catch (error) {
           // 토큰이 만료되었거나 유효하지 않은 경우
           console.error('토큰이 만료되었거나 유효하지 않습니다:', error);
           localStorage.removeItem('inspector_session');
           api.clearToken();
-          route('login');
+          // 자동 로그인 시도
+          await autoLogin();
+          return;
         }
-      } else {
-        route('login');
       }
     } catch (error) {
       console.error('세션 복원 실패:', error);
       localStorage.removeItem('inspector_session');
-      route('login');
     }
-  } else {
-    route('login');
   }
+  
+  // 세션이 없거나 복원 실패 시 자동 로그인
+  await autoLogin();
 });
 
