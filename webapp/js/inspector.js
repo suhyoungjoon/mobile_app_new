@@ -358,31 +358,6 @@ async function loadAllDefects() {
     console.log('✅ Admin API 응답:', result);
     console.log('📊 조회된 하자 수:', result.defects ? result.defects.length : 0);
     
-    // 점검원은 Admin API를 직접 사용하여 모든 하자 조회
-    console.log('📋 Admin API로 모든 하자 조회 시도...');
-    const baseURL = api.baseURL.replace('/api', '');
-    console.log('🔍 API Base URL:', baseURL);
-    console.log('🔍 Token:', InspectorState.session.token ? '있음' : '없음');
-    
-    const response = await fetch(`${baseURL}/api/admin/defects?limit=1000`, {
-      headers: {
-        'Authorization': `Bearer ${InspectorState.session.token}`,
-        'Content-Type': 'application/json'
-      }
-    });
-    
-    console.log('📡 Admin API 응답 상태:', response.status, response.statusText);
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ Admin API 호출 실패:', errorText);
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-    
-    const result = await response.json();
-    console.log('✅ Admin API 응답:', result);
-    console.log('📊 조회된 하자 수:', result.defects ? result.defects.length : 0);
-    
     if (!result.defects || result.defects.length === 0) {
       console.log('⚠️ 조회된 하자가 없습니다');
       if (container) {
