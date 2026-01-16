@@ -338,24 +338,11 @@ async function loadAllDefects() {
     console.log('🔍 api 객체:', api ? '있음' : '없음');
     console.log('🔍 api.baseURL:', api ? api.baseURL : 'N/A');
     
-    // 점검원은 Admin API를 직접 사용하여 모든 하자 조회
-    console.log('📋 Admin API로 모든 하자 조회 시도...');
-    const baseURL = api.baseURL.replace('/api', '');
-    const response = await fetch(`${baseURL}/api/admin/defects?limit=1000`, {
-      headers: {
-        'Authorization': `Bearer ${InspectorState.session.token}`,
-        'Content-Type': 'application/json'
-      }
-    });
+    // 점검원용 API로 모든 하자 조회
+    console.log('📋 점검원용 API로 모든 하자 조회 시도...');
+    const result = await api.request('/defects/all');
     
-    console.log('📡 Admin API 응답 상태:', response.status);
-    
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-    
-    const result = await response.json();
-    console.log('✅ Admin API 응답:', result);
+    console.log('✅ 점검원용 API 응답:', result);
     console.log('📊 조회된 하자 수:', result.defects ? result.defects.length : 0);
     
     if (!result.defects || result.defects.length === 0) {
