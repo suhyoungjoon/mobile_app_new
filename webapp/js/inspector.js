@@ -20,6 +20,10 @@ function setLoading(loading) {
   isLoading = loading;
   const buttons = $$('.button');
   buttons.forEach(btn => {
+    // 로그아웃 버튼은 항상 활성화 유지
+    if (btn.textContent.includes('로그아웃')) {
+      return;
+    }
     btn.disabled = loading;
     if (loading) {
       btn.style.opacity = '0.6';
@@ -94,7 +98,15 @@ async function autoLogin() {
   const name = '점검원';
   const phone = '010-0000-0000';
   
-  setLoading(true);
+  // 로딩 표시 (버튼은 비활성화하지 않고 로딩 메시지만 표시)
+  const container = $('#defect-list-container');
+  if (container) {
+    container.innerHTML = `
+      <div class="card" style="text-align: center; padding: 40px;">
+        <div style="color: #666;">점검원 계정으로 로그인 중...</div>
+      </div>
+    `;
+  }
   
   try {
     const response = await api.login(complex, dong, ho, name, phone);
@@ -116,8 +128,15 @@ async function autoLogin() {
   } catch (error) {
     console.error('자동 로그인 오류:', error);
     toast('점검원 계정으로 자동 로그인에 실패했습니다', 'error');
-  } finally {
-    setLoading(false);
+    
+    // 에러 시에도 화면 표시
+    if (container) {
+      container.innerHTML = `
+        <div class="card" style="text-align: center; padding: 40px;">
+          <div style="color: #e74c3c;">로그인에 실패했습니다. 페이지를 새로고침해주세요.</div>
+        </div>
+      `;
+    }
   }
 }
 
@@ -647,6 +666,22 @@ async function sendReportAsSMS() {
 window.addEventListener('DOMContentLoaded', async () => {
   // 모든 화면 숨기기
   $$('.screen').forEach(el => el.classList.add('hidden'));
+  
+  // 먼저 하자목록 화면 표시 (로딩 중에도 화면이 보이도록)
+  const defectListScreen = $('#defect-list');
+  if (defectListScreen) {
+    defectListScreen.classList.remove('hidden');
+  }
+  
+  // 로딩 표시
+  const container = $('#defect-list-container');
+  if (container) {
+    container.innerHTML = `
+      <div class="card" style="text-align: center; padding: 40px;">
+        <div style="color: #666;">점검원 계정으로 로그인 중...</div>
+      </div>
+    `;
+  }
   
   // 세션 복원 시도
   const savedSession = localStorage.getItem('inspector_session');
