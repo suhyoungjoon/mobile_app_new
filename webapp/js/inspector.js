@@ -679,7 +679,7 @@ function resetDefectInspectionForm() {
     });
     
     // 사진 미리보기 초기화
-    ['air', 'radon', 'level'].forEach(type => {
+    ['air', 'radon', 'level', 'thermal'].forEach(type => {
       const previewElement = $(`#defect-${type}-photo-preview`);
       const inputElement = $(`#defect-${type}-photo`);
       if (previewElement) {
@@ -783,6 +783,25 @@ async function saveDefectInspection() {
         caseId, defectId, location, trade,
         parseFloat(leftMm), parseFloat(rightMm), note, result
       );
+      
+    } else if (tabType === '열화상') {
+      const location = $('#defect-thermal-location').value.trim();
+      const note = $('#defect-thermal-note').value.trim();
+      
+      if (!location) {
+        toast('위치를 입력해주세요', 'error');
+        return;
+      }
+      
+      if (!note) {
+        toast('점검내용을 입력해주세요', 'error');
+        return;
+      }
+      
+      response = await api.createThermalInspectionForDefect(
+        caseId, defectId, location, '', note, 'normal'
+      );
+      
     } else {
       toast('잘못된 측정 타입입니다', 'error');
       return;
@@ -790,8 +809,11 @@ async function saveDefectInspection() {
     
     if (response && response.success) {
       // 측정값 저장 성공 후 사진 업로드 (사진이 있는 경우)
-      const measurementType = tabType === '공기질' ? 'air' : tabType === '라돈' ? 'radon' : 'level';
-      const photoData = InspectorState.measurementPhotos[measurementType];
+      const measurementType = tabType === '공기질' ? 'air' : 
+                             tabType === '라돈' ? 'radon' : 
+                             tabType === '레벨기' ? 'level' : 
+                             tabType === '열화상' ? 'thermal' : null;
+      const photoData = measurementType ? InspectorState.measurementPhotos[measurementType] : null;
       
       if (photoData && response.item && response.item.id) {
         try {
@@ -805,7 +827,9 @@ async function saveDefectInspection() {
       }
       
       // 사진 정보 초기화
-      InspectorState.measurementPhotos[measurementType] = null;
+      if (measurementType) {
+        InspectorState.measurementPhotos[measurementType] = null;
+      }
       
       toast('점검결과가 저장되었습니다', 'success');
       

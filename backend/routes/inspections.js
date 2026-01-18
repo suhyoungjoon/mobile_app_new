@@ -39,9 +39,9 @@ function validateInput(value, rules) {
 }
 
 // 열화상 점검 항목 생성
-router.post('/thermal', authenticateToken, requireEquipmentAccess, async (req, res) => {
+router.post('/thermal', authenticateToken, requireInspectorAccess, async (req, res) => {
   try {
-    const { caseId, location, trade, note, result = 'normal' } = req.body;
+    const { caseId, defectId, location, trade, note, result = 'normal' } = req.body;
     
     if (!caseId || !location) {
       return res.status(400).json({ error: '케이스 ID와 위치는 필수입니다' });
@@ -49,14 +49,14 @@ router.post('/thermal', authenticateToken, requireEquipmentAccess, async (req, r
     
     const itemId = uuidv4();
     
-    // 점검 항목 생성
+    // 점검 항목 생성 (defect_id 포함)
     const query = `
-      INSERT INTO inspection_item (id, case_id, type, location, trade, note, result)
-      VALUES ($1, $2, 'thermal', $3, $4, $5, $6)
+      INSERT INTO inspection_item (id, case_id, defect_id, type, location, trade, note, result)
+      VALUES ($1, $2, $3, 'thermal', $4, $5, $6, $7)
       RETURNING *
     `;
     
-    const queryResult = await pool.query(query, [itemId, caseId, location, trade, note, result]);
+    const queryResult = await pool.query(query, [itemId, caseId, defectId || null, location, trade, note, result]);
     
     res.status(201).json({
       success: true,
@@ -71,7 +71,7 @@ router.post('/thermal', authenticateToken, requireEquipmentAccess, async (req, r
 });
 
 // 열화상 사진 업로드
-router.post('/thermal/:itemId/photos', authenticateToken, requireEquipmentAccess, async (req, res) => {
+router.post('/thermal/:itemId/photos', authenticateToken, requireInspectorAccess, async (req, res) => {
   try {
     const { itemId } = req.params;
     const { file_url, caption } = req.body;

@@ -489,17 +489,22 @@ class APIClient {
   // 장비점검 관련 API 메서드들 (Phase 2)
   
   // 열화상 점검 항목 생성
-  async createThermalInspection(caseId, location, trade, note, result = 'normal') {
+  async createThermalInspection(caseId, defectId, location, trade, note, result = 'normal') {
     return await this.request('/inspections/thermal', {
       method: 'POST',
       body: JSON.stringify({
         caseId,
+        defectId,
         location,
         trade,
         note,
         result
       })
     });
+  }
+  
+  async createThermalInspectionForDefect(caseId, defectId, location, trade, note, result = 'normal') {
+    return await this.createThermalInspection(caseId, defectId, location, trade, note, result);
   }
 
   // 열화상 사진 업로드
