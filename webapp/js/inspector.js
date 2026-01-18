@@ -7,7 +7,8 @@ const InspectorState = {
   session: null,
   currentDefectId: null,
   currentCaseId: null,
-  allDefects: []
+  allDefects: [],
+  measurementPhotos: {} // 측정 타입별 사진 정보 {air: {file: File, url: string}, radon: {...}, level: {...}}
 };
 
 // API Client는 api.js에서 전역 변수로 선언됨
@@ -534,6 +535,138 @@ function showDefectInspectionTab(tabType) {
   }
 }
 
+// 이미지 압축 함수 (app.js의 compressImage 복사)
+async function compressImage(file, maxWidth = 1920, maxHeight = 1080, quality = 0.85) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    
+    reader.onerror = () => reject(new Error('파일 읽기 실패'));
+    
+    reader.onload = (e) => {
+      const img = new Image();
+      
+      img.onerror = () => reject(new Error('이미지 로드 실패'));
+      
+      img.onload = () => {
+        try {
+          const originalWidth = img.width;
+          const originalHeight = img.height;
+          
+          let targetWidth = originalWidth;
+          let targetHeight = originalHeight;
+          
+          if (originalWidth > maxWidth || originalHeight > maxHeight) {
+            const ratio = Math.min(maxWidth / originalWidth, maxHeight / originalHeight);
+            targetWidth = Math.round(originalWidth * ratio);
+            targetHeight = Math.round(originalHeight * ratio);
+          }
+          
+          const canvas = document.createElement('canvas');
+          canvas.width = targetWidth;
+          canvas.height = targetHeight;
+          
+          const ctx = canvas.getContext('2d');
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          
+          ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+          
+          canvas.toBlob(
+            (blob) => {
+              if (!blob) {
+                reject(new Error('이미지 압축 실패'));
+                return;
+              }
+              
+              const compressedFile = new File(
+                [blob],
+                file.name,
+                {
+                  type: 'image/jpeg',
+                  lastModified: Date.now()
+                }
+              );
+              
+              resolve(compressedFile);
+            },
+            'image/jpeg',
+            quality
+          );
+        } catch (error) {
+          reject(error);
+        }
+      };
+      
+      img.src = e.target.result;
+    };
+    
+    reader.readAsDataURL(file);
+  });
+}
+
+// 측정값 사진 업로드 처리
+async function handleMeasurementPhotoUpload(type, inputElement) {
+  const file = inputElement.files[0];
+  if (!file) {
+    return;
+  }
+  
+  // 이미지 파일 검증
+  if (!file.type.startsWith('image/')) {
+    toast('이미지 파일만 업로드 가능합니다', 'error');
+    return;
+  }
+  
+  // 파일 크기 검증 (10MB)
+  if (file.size > 10 * 1024 * 1024) {
+    toast('파일 크기는 10MB 이하여야 합니다', 'error');
+    return;
+  }
+  
+  try {
+    toast('사진 처리 중...', 'info');
+    
+    // 파일 미리보기
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const previewElement = $(`#defect-${type}-photo-preview`);
+      if (previewElement) {
+        previewElement.style.backgroundImage = `url(${e.target.result})`;
+        previewElement.style.display = 'block';
+      }
+      
+      try {
+        // 이미지 압축
+        const compressedFile = await compressImage(file, 1920, 1080, 0.85);
+        
+        // 서버에 압축된 사진 업로드
+        const uploadResult = await api.uploadImage(compressedFile);
+        
+        // InspectorState에 사진 정보 저장
+        InspectorState.measurementPhotos[type] = {
+          file: compressedFile,
+          url: uploadResult.url || `/uploads/${uploadResult.key || uploadResult.filename}`,
+          key: uploadResult.key || uploadResult.filename
+        };
+        
+        toast('사진 업로드 완료!', 'success');
+      } catch (error) {
+        console.error('사진 업로드 실패:', error);
+        toast(error.message || '사진 업로드 실패', 'error');
+        if (previewElement) {
+          previewElement.style.backgroundImage = '';
+          previewElement.style.display = 'none';
+        }
+      }
+    };
+    
+    reader.readAsDataURL(file);
+  } catch (error) {
+    console.error('사진 처리 실패:', error);
+    toast('사진 처리 중 오류가 발생했습니다', 'error');
+  }
+}
+
 // 점검결과 입력 폼 초기화
 function resetDefectInspectionForm() {
   if (confirm('입력한 내용을 모두 초기화하시겠습니까?')) {
@@ -544,6 +677,22 @@ function resetDefectInspectionForm() {
         input.value = '';
       }
     });
+    
+    // 사진 미리보기 초기화
+    ['air', 'radon', 'level'].forEach(type => {
+      const previewElement = $(`#defect-${type}-photo-preview`);
+      const inputElement = $(`#defect-${type}-photo`);
+      if (previewElement) {
+        previewElement.style.backgroundImage = '';
+        previewElement.style.display = 'none';
+      }
+      if (inputElement) {
+        inputElement.value = '';
+      }
+    });
+    
+    // InspectorState 사진 정보 초기화
+    InspectorState.measurementPhotos = {};
     
     showDefectInspectionTab('air');
     toast('폼이 초기화되었습니다');
@@ -640,6 +789,24 @@ async function saveDefectInspection() {
     }
     
     if (response && response.success) {
+      // 측정값 저장 성공 후 사진 업로드 (사진이 있는 경우)
+      const measurementType = tabType === '공기질' ? 'air' : tabType === '라돈' ? 'radon' : 'level';
+      const photoData = InspectorState.measurementPhotos[measurementType];
+      
+      if (photoData && response.item && response.item.id) {
+        try {
+          // 사진 업로드 API 호출 (thermal_photo 테이블 사용)
+          await api.uploadThermalPhoto(response.item.id, photoData.url, `측정값 사진`);
+          console.log('✅ 측정값 사진 업로드 완료');
+        } catch (photoError) {
+          console.error('⚠️ 측정값 사진 업로드 실패:', photoError);
+          // 사진 업로드 실패는 무시하고 계속 진행
+        }
+      }
+      
+      // 사진 정보 초기화
+      InspectorState.measurementPhotos[measurementType] = null;
+      
       toast('점검결과가 저장되었습니다', 'success');
       
       // 하자 목록 화면으로 돌아가서 갱신

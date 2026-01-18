@@ -175,6 +175,15 @@
               <option value="na">해당없음</option>
             </select>
           </div>
+          
+          <div class="form-group">
+            <label class="form-label">사진</label>
+            <div style="display: flex; gap: 8px; margin-top: 8px;">
+              <input type="file" id="defect-air-photo" accept="image/*" style="display: none;" onchange="handleMeasurementPhotoUpload('air', this)" />
+              <button type="button" class="button" onclick="document.getElementById('defect-air-photo').click()" style="flex: 1;">📷 사진 추가</button>
+              <div id="defect-air-photo-preview" style="flex: 1; min-height: 60px; border: 1px solid #ddd; border-radius: 4px; background-size: cover; background-position: center; background-repeat: no-repeat; display: none;"></div>
+            </div>
+          </div>
         </div>
 
         <!-- 라돈 탭 -->
@@ -216,6 +225,15 @@
               <option value="na">해당없음</option>
             </select>
           </div>
+          
+          <div class="form-group">
+            <label class="form-label">사진</label>
+            <div style="display: flex; gap: 8px; margin-top: 8px;">
+              <input type="file" id="defect-radon-photo" accept="image/*" style="display: none;" onchange="handleMeasurementPhotoUpload('radon', this)" />
+              <button type="button" class="button" onclick="document.getElementById('defect-radon-photo').click()" style="flex: 1;">📷 사진 추가</button>
+              <div id="defect-radon-photo-preview" style="flex: 1; min-height: 60px; border: 1px solid #ddd; border-radius: 4px; background-size: cover; background-position: center; background-repeat: no-repeat; display: none;"></div>
+            </div>
+          </div>
         </div>
 
         <!-- 레벨기 탭 -->
@@ -253,6 +271,15 @@
               <option value="check">확인요망</option>
               <option value="na">해당없음</option>
             </select>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">사진</label>
+            <div style="display: flex; gap: 8px; margin-top: 8px;">
+              <input type="file" id="defect-level-photo" accept="image/*" style="display: none;" onchange="handleMeasurementPhotoUpload('level', this)" />
+              <button type="button" class="button" onclick="document.getElementById('defect-level-photo').click()" style="flex: 1;">📷 사진 추가</button>
+              <div id="defect-level-photo-preview" style="flex: 1; min-height: 60px; border: 1px solid #ddd; border-radius: 4px; background-size: cover; background-position: center; background-repeat: no-repeat; display: none;"></div>
+            </div>
           </div>
         </div>
 

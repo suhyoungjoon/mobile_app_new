@@ -385,21 +385,24 @@ router.post('/generate', authenticateToken, async (req, res) => {
             hcho: item.hcho,
             co2: item.co2,
             unit_tvoc: item.unit_tvoc,
-            unit_hcho: item.unit_hcho
+            unit_hcho: item.unit_hcho,
+            photos: item.photos || [] // 측정값 사진 포함
           });
           break;
         case 'radon':
           radonMeasurements.push({
             ...baseData,
             radon: item.radon,
-            unit: item.unit_radon
+            unit: item.unit_radon,
+            photos: item.photos || [] // 측정값 사진 포함
           });
           break;
         case 'level':
           levelMeasurements.push({
             ...baseData,
             left_mm: item.left_mm,
-            right_mm: item.right_mm
+            right_mm: item.right_mm,
+            photos: item.photos || [] // 측정값 사진 포함
           });
           break;
         case 'thermal':

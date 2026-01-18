@@ -246,6 +246,37 @@ class PDFMakeGenerator {
             ],
             margin: [20, 0, 0, 10]
           });
+          
+          // 공기질 측정 사진 추가
+          if (item.photos && item.photos.length > 0) {
+            item.photos.forEach((photo) => {
+              try {
+                const urlPath = photo.file_url.replace(/^\//, '');
+                const photoPath = path.join(__dirname, '..', urlPath);
+                
+                if (fs.existsSync(photoPath)) {
+                  content.push({
+                    image: photoPath,
+                    width: 150,
+                    margin: [20, 5, 0, 5],
+                    alignment: 'left'
+                  });
+                  
+                  if (photo.caption) {
+                    content.push({
+                      text: `[${photo.caption}]`,
+                      style: 'photoCaption',
+                      margin: [20, 0, 0, 10]
+                    });
+                  }
+                } else {
+                  console.warn(`⚠️ 사진 파일을 찾을 수 없습니다: ${photoPath}`);
+                }
+              } catch (error) {
+                console.error(`❌ 사진 처리 오류 (공기질 측정 #${index + 1}):`, error.message);
+              }
+            });
+          }
         });
       }
 
@@ -273,6 +304,37 @@ class PDFMakeGenerator {
             ],
             margin: [20, 0, 0, 10]
           });
+          
+          // 라돈 측정 사진 추가
+          if (item.photos && item.photos.length > 0) {
+            item.photos.forEach((photo) => {
+              try {
+                const urlPath = photo.file_url.replace(/^\//, '');
+                const photoPath = path.join(__dirname, '..', urlPath);
+                
+                if (fs.existsSync(photoPath)) {
+                  content.push({
+                    image: photoPath,
+                    width: 150,
+                    margin: [20, 5, 0, 5],
+                    alignment: 'left'
+                  });
+                  
+                  if (photo.caption) {
+                    content.push({
+                      text: `[${photo.caption}]`,
+                      style: 'photoCaption',
+                      margin: [20, 0, 0, 10]
+                    });
+                  }
+                } else {
+                  console.warn(`⚠️ 사진 파일을 찾을 수 없습니다: ${photoPath}`);
+                }
+              } catch (error) {
+                console.error(`❌ 사진 처리 오류 (라돈 측정 #${index + 1}):`, error.message);
+              }
+            });
+          }
         });
       }
 
@@ -301,6 +363,37 @@ class PDFMakeGenerator {
             ],
             margin: [20, 0, 0, 10]
           });
+          
+          // 레벨기 측정 사진 추가
+          if (item.photos && item.photos.length > 0) {
+            item.photos.forEach((photo) => {
+              try {
+                const urlPath = photo.file_url.replace(/^\//, '');
+                const photoPath = path.join(__dirname, '..', urlPath);
+                
+                if (fs.existsSync(photoPath)) {
+                  content.push({
+                    image: photoPath,
+                    width: 150,
+                    margin: [20, 5, 0, 5],
+                    alignment: 'left'
+                  });
+                  
+                  if (photo.caption) {
+                    content.push({
+                      text: `[${photo.caption}]`,
+                      style: 'photoCaption',
+                      margin: [20, 0, 0, 10]
+                    });
+                  }
+                } else {
+                  console.warn(`⚠️ 사진 파일을 찾을 수 없습니다: ${photoPath}`);
+                }
+              } catch (error) {
+                console.error(`❌ 사진 처리 오류 (레벨기 측정 #${index + 1}):`, error.message);
+              }
+            });
+          }
         });
       }
 
