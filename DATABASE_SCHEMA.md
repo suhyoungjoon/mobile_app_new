@@ -320,7 +320,111 @@ CREATE TABLE admin_user (
 
 ---
 
-## 5. 점검원 관리 테이블
+## 5. 푸시 알림 테이블
+
+### `push_subscription` - 푸시 구독 정보
+```sql
+CREATE TABLE push_subscription (
+  id SERIAL PRIMARY KEY,
+  household_id INTEGER REFERENCES household(id) ON DELETE CASCADE,
+  complex_id INTEGER REFERENCES complex(id),
+  dong TEXT NOT NULL,
+  ho TEXT NOT NULL,
+  name TEXT NOT NULL,
+  user_type TEXT NOT NULL CHECK (user_type IN ('resident','company','admin','super_admin')),
+  endpoint TEXT NOT NULL,
+  p256dh TEXT NOT NULL,
+  auth TEXT NOT NULL,
+  user_agent TEXT,
+  created_at TIMESTAMP DEFAULT now(),
+  updated_at TIMESTAMP DEFAULT now(),
+  UNIQUE(household_id, endpoint)
+);
+```
+
+**컬럼 설명:**
+- `id`: 구독 ID (자동 증가)
+- `household_id`: 세대 ID (외래키 → `household.id`)
+- `complex_id`: 단지 ID (외래키 → `complex.id`)
+- `dong`, `ho`: 동-호수
+- `name`: 사용자 이름
+- `user_type`: 사용자 유형
+- `endpoint`: 푸시 엔드포인트 URL
+- `p256dh`: 푸시 암호화 공개키 (P256DH)
+- `auth`: 푸시 인증 키
+- `user_agent`: 사용자 에이전트 정보
+- `created_at`: 생성 일시
+- `updated_at`: 수정 일시
+
+---
+
+### `push_notification_log` - 푸시 알림 발송 이력
+```sql
+CREATE TABLE push_notification_log (
+  id SERIAL PRIMARY KEY,
+  household_id INTEGER REFERENCES household(id),
+  notification_type TEXT NOT NULL CHECK (notification_type IN (
+    'defect-registered',
+    'inspection-completed', 
+    'inspector-decision',
+    'report-generated',
+    'test'
+  )),
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  data JSONB,
+  sent_at TIMESTAMP DEFAULT now(),
+  status TEXT DEFAULT 'sent' CHECK (status IN ('sent','failed','delivered')),
+  error_message TEXT
+);
+```
+
+**컬럼 설명:**
+- `id`: 로그 ID (자동 증가)
+- `household_id`: 세대 ID (외래키 → `household.id`)
+- `notification_type`: 알림 유형
+  - `defect-registered`: 하자 등록 알림
+  - `inspection-completed`: 점검 완료 알림
+  - `inspector-decision`: 점검원 결정 알림
+  - `report-generated`: 보고서 생성 알림
+  - `test`: 테스트 알림
+- `title`: 알림 제목
+- `body`: 알림 내용
+- `data`: 추가 데이터 (JSONB)
+- `sent_at`: 발송 일시
+- `status`: 상태 ('sent', 'failed', 'delivered')
+- `error_message`: 오류 메시지
+
+---
+
+### `push_notification_settings` - 푸시 알림 설정
+```sql
+CREATE TABLE push_notification_settings (
+  id SERIAL PRIMARY KEY,
+  household_id INTEGER REFERENCES household(id) ON DELETE CASCADE,
+  defect_notifications BOOLEAN DEFAULT true,
+  inspection_notifications BOOLEAN DEFAULT true,
+  inspector_notifications BOOLEAN DEFAULT true,
+  report_notifications BOOLEAN DEFAULT true,
+  created_at TIMESTAMP DEFAULT now(),
+  updated_at TIMESTAMP DEFAULT now(),
+  UNIQUE(household_id)
+);
+```
+
+**컬럼 설명:**
+- `id`: 설정 ID (자동 증가)
+- `household_id`: 세대 ID (외래키 → `household.id`)
+- `defect_notifications`: 하자 알림 수신 여부
+- `inspection_notifications`: 점검 알림 수신 여부
+- `inspector_notifications`: 점검원 알림 수신 여부
+- `report_notifications`: 보고서 알림 수신 여부
+- `created_at`: 생성 일시
+- `updated_at`: 수정 일시
+
+---
+
+## 6. 점검원 관리 테이블
 
 ### `inspector_registration` - 점검원 등록 정보
 ```sql
@@ -369,7 +473,7 @@ CREATE TABLE inspector_registration (
 
 ---
 
-## 6. 인덱스 목록
+## 7. 인덱스 목록
 
 ### 핵심 테이블 인덱스
 - `idx_household_complex`: `household(complex_id)`
@@ -390,6 +494,15 @@ CREATE TABLE inspector_registration (
 - `idx_inspector_registration_status`: `inspector_registration(status)`
 - `idx_inspector_registration_complex`: `inspector_registration(complex_id)`
 - `idx_inspector_registration_created`: `inspector_registration(created_at)`
+
+### 푸시 알림 인덱스
+- `idx_push_subscription_household`: `push_subscription(household_id)`
+- `idx_push_subscription_user_type`: `push_subscription(user_type)`
+- `idx_push_subscription_endpoint`: `push_subscription(endpoint)`
+- `idx_push_notification_log_household`: `push_notification_log(household_id)`
+- `idx_push_notification_log_type`: `push_notification_log(notification_type)`
+- `idx_push_notification_log_sent`: `push_notification_log(sent_at)`
+- `idx_push_notification_settings_household`: `push_notification_settings(household_id)`
 
 ---
 
