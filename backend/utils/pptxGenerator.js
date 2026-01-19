@@ -10,6 +10,7 @@ const { XMLParser, XMLBuilder } = require('fast-xml-parser');
 const { v4: uuidv4 } = require('uuid');
 const sharp = require('sharp');
 const templateMapper = require('./pptxTemplateMapper');
+const tableGenerator = require('./pptxTableGenerator');
 
 class PPTXGenerator {
   constructor() {
@@ -144,7 +145,10 @@ class PPTXGenerator {
       // 단계 2-4: 하자 및 측정 정보를 위한 새 슬라이드 추가
       await this.addDefectsAndMeasurements(zip, data, parser, builder);
       
-      // 단계 7: 프레젠테이션 파일 업데이트 (슬라이드 목록에 새 슬라이드 추가)
+      // 단계 7: 요약 슬라이드 추가 (테이블 포함)
+      await this.addSummarySlide(zip, data, parser, builder);
+      
+      // 단계 8: 프레젠테이션 파일 업데이트 (슬라이드 목록에 새 슬라이드 추가)
       await this.updatePresentationFile(zip);
 
       // ZIP 파일 저장
@@ -258,17 +262,15 @@ class PPTXGenerator {
   }
 
   /**
-   * 하자 슬라이드 추가
-   * 단계 5: 하자 정보를 새 슬라이드로 추가
+   * 요약 슬라이드 추가 (테이블 포함)
+   * 단계 7: 테이블 데이터 삽입
    */
-  async addDefectSlide(zip, defect, parser, builder) {
+  async addSummarySlide(zip, data, parser, builder) {
     try {
-      console.log(`📄 단계 5: 하자 슬라이드 추가 - ${defect.id}`);
+      console.log('📊 단계 7: 요약 슬라이드 추가 (테이블 포함)...');
       
-      // 템플릿의 하자 슬라이드 템플릿을 찾거나 기본 슬라이드를 복사
-      // 여기서는 간단하게 텍스트 기반 슬라이드 생성
       const slideNumber = this.getNextSlideNumber(zip);
-      const slideXml = this.createDefectSlideXML(slideNumber, defect);
+      const slideXml = this.createSummarySlideXML(slideNumber, data);
       
       // 슬라이드 파일 추가
       zip.addFile(`ppt/slides/slide${slideNumber}.xml`, Buffer.from(slideXml, 'utf8'));
@@ -276,18 +278,138 @@ class PPTXGenerator {
       // 관계 파일 추가
       await this.addSlideRelationship(zip, slideNumber);
       
-      // 이미지 추가
+      console.log(`✅ 요약 슬라이드 ${slideNumber} 추가 완료`);
+      
+    } catch (error) {
+      console.error('❌ 요약 슬라이드 추가 오류:', error);
+    }
+  }
+
+  /**
+   * 요약 슬라이드 XML 생성 (테이블 포함)
+   */
+  createSummarySlideXML(slideNumber, data) {
+    // 하자 요약 테이블
+    const defectTable = data.defects && data.defects.length > 0
+      ? tableGenerator.createDefectSummaryTable(data.defects)
+      : '';
+
+    // 측정값 요약 테이블
+    const airTable = data.air_measurements && data.air_measurements.length > 0
+      ? tableGenerator.createMeasurementTable(data.air_measurements, 'air')
+      : '';
+
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+       xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+       xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <p:cSld>
+    <p:spTree>
+      <p:nvGrpSpPr>
+        <p:cNvPr id="1" name=""/>
+        <p:cNvGrpSpPr/>
+        <p:nvPr/>
+      </p:nvGrpSpPr>
+      <p:grpSpPr>
+        <a:xfrm>
+          <a:off x="0" y="0"/>
+          <a:ext cx="9144000" cy="6858000"/>
+          <a:chOff x="0" y="0"/>
+          <a:chExt cx="9144000" cy="6858000"/>
+        </a:xfrm>
+      </p:grpSpPr>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="2" name="제목"/>
+          <p:cNvSpPr>
+            <a:spLocks noGrp="1"/>
+          </p:cNvSpPr>
+          <p:nvPr>
+            <p:ph type="ctrTitle"/>
+          </p:nvPr>
+        </p:nvSpPr>
+        <p:spPr/>
+        <p:txBody>
+          <a:bodyPr/>
+          <a:p>
+            <a:r>
+              <a:t>점검 요약</a:t>
+            </a:r>
+          </a:p>
+        </p:txBody>
+      </p:sp>
+      ${defectTable}
+      ${airTable}
+    </p:spTree>
+  </p:cSld>
+  <p:clrMapOvr>
+    <a:masterClrMapping/>
+  </p:clrMapOvr>
+</p:sld>`;
+  }
+
+  /**
+   * 하자 슬라이드 추가
+   * 단계 5: 하자 정보를 새 슬라이드로 추가
+   */
+  async addDefectSlide(zip, defect, parser, builder) {
+    try {
+      console.log(`📄 단계 5: 하자 슬라이드 추가 - ${defect.id}`);
+      
+      const slideNumber = this.getNextSlideNumber(zip);
+      let slideXml = this.createDefectSlideXML(slideNumber, defect);
+      
+      // 이미지 추가 및 슬라이드에 삽입
+      const imageInfos = [];
       if (defect.photos && defect.photos.length > 0) {
+        let imageIndex = 0;
         for (const photo of defect.photos) {
-          await this.addImageToZip(zip, photo.url, photo.id);
+          const imageInfo = await this.addImageToZip(zip, photo.url, `${defect.id}_${photo.id}`);
+          if (imageInfo) {
+            imageInfos.push(imageInfo);
+            // 이미지를 슬라이드에 삽입
+            const position = {
+              x: 1000000 + (imageIndex % 2) * 4000000, // 2열 배치
+              y: 4000000 + Math.floor(imageIndex / 2) * 3000000, // 행별 배치
+              width: 3500000,
+              height: 2500000
+            };
+            slideXml = await this.insertImageIntoSlide(slideXml, imageInfo, position);
+            imageIndex++;
+          }
         }
       }
       
-      console.log(`✅ 하자 슬라이드 ${slideNumber} 추가 완료`);
+      // 관계 파일 생성 (이미지 포함)
+      await this.addSlideRelationshipWithImages(zip, slideNumber, imageInfos);
+      
+      // 슬라이드 파일 추가
+      zip.addFile(`ppt/slides/slide${slideNumber}.xml`, Buffer.from(slideXml, 'utf8'));
+      
+      console.log(`✅ 하자 슬라이드 ${slideNumber} 추가 완료 (이미지 ${imageInfos.length}개)`);
       
     } catch (error) {
       console.error(`❌ 하자 슬라이드 추가 오류:`, error);
     }
+  }
+
+  /**
+   * 이미지가 포함된 슬라이드 관계 파일 추가
+   */
+  async addSlideRelationshipWithImages(zip, slideNumber, imageInfos) {
+    let relsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"
+               xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>`;
+    
+    // 이미지 관계 추가
+    imageInfos.forEach((imageInfo, index) => {
+      relsXml += `\n  <Relationship Id="${imageInfo.rId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/${imageInfo.fileName}"/>`;
+    });
+    
+    relsXml += '\n</Relationships>';
+    
+    zip.addFile(`ppt/slides/_rels/slide${slideNumber}.xml.rels`, Buffer.from(relsXml, 'utf8'));
   }
 
   /**
@@ -616,41 +738,91 @@ class PPTXGenerator {
 
   /**
    * 이미지를 ZIP에 추가
+   * 단계 4: 이미지 삽입 위치 및 크기 조정
    */
   async addImageToZip(zip, imagePath, imageId) {
     try {
+      console.log(`🖼️ 단계 4: 이미지 추가 - ${imageId}`);
+      
       const fullPath = imagePath.startsWith('/') 
         ? path.join(__dirname, '..', imagePath)
         : path.join(this.uploadsDir, imagePath);
 
       if (!fs.existsSync(fullPath)) {
         console.warn(`⚠️ 이미지 파일을 찾을 수 없습니다: ${fullPath}`);
-        return;
+        return null;
       }
 
       const imageData = await this.prepareImage(fullPath);
-      if (!imageData) return;
+      if (!imageData) return null;
 
       // PowerPoint 미디어 폴더에 이미지 추가
-      const imageExt = path.extname(fullPath) || '.jpg';
-      const mediaPath = `ppt/media/image_${imageId}${imageExt}`;
+      const imageExt = '.jpg'; // 항상 JPEG로 변환
+      const mediaFileName = `image_${imageId}_${Date.now()}${imageExt}`;
+      const mediaPath = `ppt/media/${mediaFileName}`;
       
       zip.addFile(mediaPath, imageData.buffer);
 
-      console.log(`✅ 이미지 추가: ${mediaPath}`);
+      console.log(`✅ 이미지 추가 완료: ${mediaPath} (${imageData.width}x${imageData.height})`);
+
+      // 이미지 정보 반환 (슬라이드에 삽입할 때 사용)
+      return {
+        mediaPath,
+        fileName: mediaFileName,
+        width: imageData.width,
+        height: imageData.height,
+        rId: `rId${Date.now()}` // 관계 ID 생성
+      };
 
     } catch (error) {
       console.error(`❌ 이미지 추가 오류 (${imagePath}):`, error.message);
+      return null;
     }
   }
 
   /**
+   * 슬라이드에 이미지 삽입
+   */
+  async insertImageIntoSlide(slideContent, imageInfo, position = { x: 1000000, y: 2000000, width: 3000000, height: 2000000 }) {
+    // PowerPoint XML에 이미지 삽입
+    // 실제 구현에서는 XML 구조를 정확히 파악하여 삽입해야 함
+    const imageXml = `
+      <p:pic>
+        <p:nvPicPr>
+          <p:cNvPr id="${Date.now()}" name="Picture"/>
+          <p:cNvPicPr>
+            <a:picLocks noChangeAspect="1"/>
+          </p:cNvPicPr>
+          <p:nvPr/>
+        </p:nvPicPr>
+        <p:blipFill>
+          <a:blip r:embed="${imageInfo.rId}"/>
+          <a:stretch>
+            <a:fillRect/>
+          </a:stretch>
+        </p:blipFill>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="${position.x}" y="${position.y}"/>
+            <a:ext cx="${position.width}" cy="${position.height}"/>
+          </a:xfrm>
+          <a:prstGeom prst="rect">
+            <a:avLst/>
+          </a:prstGeom>
+        </p:spPr>
+      </p:pic>`;
+    
+    // 슬라이드의 spTree에 이미지 추가
+    return slideContent.replace('</p:spTree>', `${imageXml}</p:spTree>`);
+  }
+
+  /**
    * 프레젠테이션 파일 업데이트
-   * 단계 7: 새로 추가된 슬라이드를 프레젠테이션 목록에 추가
+   * 단계 8: 새로 추가된 슬라이드를 프레젠테이션 목록에 추가
    */
   async updatePresentationFile(zip) {
     try {
-      console.log('📝 단계 7: 프레젠테이션 파일 업데이트...');
+      console.log('📝 단계 8: 프레젠테이션 파일 업데이트...');
       
       const presFile = zip.getEntry('ppt/presentation.xml');
       if (!presFile) {
@@ -659,22 +831,89 @@ class PPTXGenerator {
       }
       
       const content = presFile.getData().toString('utf8');
-      const parser = new XMLParser({
-        ignoreAttributes: false,
-        attributeNamePrefix: '@_',
-        textNodeName: '#text',
-        preserveOrder: true
-      });
       
-      const parsed = parser.parse(content);
+      // 슬라이드 파일 목록 가져오기
+      const slideFiles = zip.getEntries()
+        .filter(entry => entry.entryName.startsWith('ppt/slides/slide') && entry.entryName.endsWith('.xml'))
+        .map(entry => {
+          const match = entry.entryName.match(/slide(\d+)\.xml/);
+          return match ? parseInt(match[1]) : 0;
+        })
+        .sort((a, b) => a - b);
       
-      // 슬라이드 목록에 새 슬라이드 추가
-      // 실제 구현에서는 XML 구조를 정확히 파악하여 수정해야 함
+      // sldIdLst에 슬라이드 추가
+      // PowerPoint XML 구조에 맞게 슬라이드 ID 추가
+      let modifiedContent = content;
       
-      console.log('✅ 단계 7 완료: 프레젠테이션 파일 업데이트됨');
+      // 기존 슬라이드 ID 찾기
+      const sldIdPattern = /<p:sldId[^>]*id="(\d+)"[^>]*r:id="rId(\d+)"[^>]*\/>/g;
+      const existingIds = [];
+      let match;
+      while ((match = sldIdPattern.exec(content)) !== null) {
+        existingIds.push({
+          id: parseInt(match[1]),
+          rId: parseInt(match[2])
+        });
+      }
+      
+      // 새 슬라이드 ID 추가
+      const maxId = existingIds.length > 0 ? Math.max(...existingIds.map(i => i.id)) : 0;
+      const maxRId = existingIds.length > 0 ? Math.max(...existingIds.map(i => i.rId)) : 0;
+      
+      // sldIdLst 태그 찾아서 새 슬라이드 추가
+      const sldIdLstPattern = /(<p:sldIdLst[^>]*>)([\s\S]*?)(<\/p:sldIdLst>)/;
+      const sldIdLstMatch = content.match(sldIdLstPattern);
+      
+      if (sldIdLstMatch) {
+        let newSldIds = '';
+        slideFiles.forEach((slideNum, index) => {
+          const newId = maxId + index + 1;
+          const newRId = maxRId + index + 1;
+          newSldIds += `\n    <p:sldId id="${newId}" r:id="rId${newRId}"/>`;
+        });
+        
+        modifiedContent = content.replace(
+          sldIdLstPattern,
+          `$1${sldIdLstMatch[2]}${newSldIds}\n  $3`
+        );
+        
+        // 관계 파일도 업데이트
+        await this.updatePresentationRelationships(zip, slideFiles, maxRId);
+      }
+      
+      zip.updateFile('ppt/presentation.xml', Buffer.from(modifiedContent, 'utf8'));
+      
+      console.log(`✅ 단계 8 완료: 프레젠테이션 파일 업데이트됨 (슬라이드 ${slideFiles.length}개)`);
       
     } catch (error) {
       console.error('❌ 프레젠테이션 파일 업데이트 오류:', error);
+      // 오류가 발생해도 계속 진행 (슬라이드는 이미 추가됨)
+    }
+  }
+
+  /**
+   * 프레젠테이션 관계 파일 업데이트
+   */
+  async updatePresentationRelationships(zip, slideFiles, startRId) {
+    try {
+      const relsFile = zip.getEntry('ppt/_rels/presentation.xml.rels');
+      if (!relsFile) {
+        return;
+      }
+      
+      const content = relsFile.getData().toString('utf8');
+      let newRels = '';
+      
+      slideFiles.forEach((slideNum, index) => {
+        const rId = startRId + index + 1;
+        newRels += `\n  <Relationship Id="rId${rId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide${slideNum}.xml"/>`;
+      });
+      
+      const modifiedContent = content.replace('</Relationships>', `${newRels}\n</Relationships>`);
+      zip.updateFile('ppt/_rels/presentation.xml.rels', Buffer.from(modifiedContent, 'utf8'));
+      
+    } catch (error) {
+      console.error('❌ 프레젠테이션 관계 파일 업데이트 오류:', error);
     }
   }
 
