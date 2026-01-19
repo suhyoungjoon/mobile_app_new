@@ -78,45 +78,55 @@ class PDFMakeGenerator {
   buildDocumentDefinition(data) {
     const content = [];
 
-    // 헤더
+    // 헤더 - PowerPoint 템플릿 형식
     content.push({
-      text: '세대 점검 종합보고서',
+      text: `CM형 ${data.type || '사전점검'} 종합 보고서`,
       style: 'header',
       alignment: 'center',
       margin: [0, 0, 0, 10]
     });
 
+    // 연락처 정보 (PowerPoint 템플릿에서 가져옴)
     content.push({
-      text: 'InsightI Pre/Post Inspection Comprehensive Report',
+      text: [
+        { text: 'Tel. ', style: 'contactText' },
+        { text: '1668-5343', style: 'contactText' },
+        { text: '  |  Email: ', style: 'contactText' },
+        { text: 'insighteye01@naver.com', style: 'contactText' }
+      ],
       style: 'subtitle',
       alignment: 'center',
+      margin: [0, 0, 0, 30]
+    });
+
+    // 인사말 (PowerPoint 템플릿에서 가져옴)
+    content.push({
+      text: '입주자님 귀하',
+      style: 'greeting',
+      alignment: 'left',
       margin: [0, 0, 0, 20]
     });
 
-    // 점검 정보
-    content.push({
-      text: '점검 정보',
-      style: 'sectionHeader',
-      margin: [0, 0, 0, 10]
-    });
-
+    // 점검 정보 테이블 (PowerPoint 템플릿 형식)
     const metaTable = {
       table: {
-        widths: ['*', '*', '*'],
+        widths: ['auto', '*', 'auto', '*'],
         body: [
           [
-            { text: `단지명: ${data.complex || ''}`, style: 'metaText' },
-            { text: `동-호: ${data.dong || ''}-${data.ho || ''}`, style: 'metaText' },
-            { text: `세대주: ${data.name || ''}`, style: 'metaText' }
+            { text: '입 주 자 성 함', style: 'tableHeader', border: [true, true, true, true] },
+            { text: `: ${data.name || ''}`, style: 'metaText', border: [false, true, true, true] },
+            { text: '점검일짜', style: 'tableHeader', border: [true, true, true, true] },
+            { text: `: ${this.formatDate(data.created_at)}`, style: 'metaText', border: [false, true, true, true] }
           ],
           [
-            { text: `점검일: ${this.formatDate(data.created_at)}`, style: 'metaText' },
-            { text: `점검 유형: ${data.type || ''}`, style: 'metaText' },
-            { text: `보고서 생성일: ${this.formatDate(data.generated_at)}`, style: 'metaText' }
+            { text: '아파트명', style: 'tableHeader', border: [true, true, true, true] },
+            { text: `: ${data.complex || ''}`, style: 'metaText', border: [false, true, true, true] },
+            { text: '동호수', style: 'tableHeader', border: [true, true, true, true] },
+            { text: `: ${data.dong || ''}동 ${data.ho || ''}호`, style: 'metaText', border: [false, true, true, true] }
           ]
         ]
       },
-      margin: [0, 0, 0, 20]
+      margin: [0, 0, 0, 30]
     };
     content.push(metaTable);
 
@@ -467,12 +477,44 @@ class PDFMakeGenerator {
       }
     }
 
+    // 회사 소개 (PowerPoint 템플릿에서 가져옴)
+    content.push({
+      text: [
+        { text: '인싸이트아이는 ', style: 'companyText' },
+        { text: '사전점검', style: 'companyText', bold: true },
+        { text: ', ', style: 'companyText' },
+        { text: '시공사 하자등록', style: 'companyText', bold: true },
+        { text: ', ', style: 'companyText' },
+        { text: '사후점검', style: 'companyText', bold: true },
+        { text: ' 단계에 이르기까지 입주자를 대신하여 최대한의 만족도 창출해 드리고 있는 ', style: 'companyText' },
+        { text: 'CM형 사전점검 (Construction Management)', style: 'companyText', bold: true },
+        { text: ' 전문회사입니다.', style: 'companyText' }
+      ],
+      style: 'companyInfo',
+      alignment: 'left',
+      margin: [0, 30, 0, 10]
+    });
+
+    content.push({
+      text: '고객과 함께 미래를 만드는 데 중심적인 역할을 하는 기업이 되겠습니다.',
+      style: 'companyVision',
+      alignment: 'left',
+      margin: [0, 0, 0, 10]
+    });
+
+    content.push({
+      text: '고객과 함께 성장합니다 - Innovative Partner',
+      style: 'companyTagline',
+      alignment: 'left',
+      margin: [0, 0, 0, 30]
+    });
+
     // 푸터
     content.push({
-      text: `※ InsightI`,
+      text: '인싸이트아이',
       style: 'footerText',
       alignment: 'center',
-      margin: [0, 30, 0, 0]
+      margin: [0, 30, 0, 10]
     });
 
     return {
@@ -489,8 +531,22 @@ class PDFMakeGenerator {
           color: '#1a73e8'
         },
         subtitle: {
-          fontSize: 12,
+          fontSize: 10,
           color: '#666'
+        },
+        contactText: {
+          fontSize: 9,
+          color: '#666'
+        },
+        greeting: {
+          fontSize: 14,
+          bold: true,
+          margin: [0, 20, 0, 10]
+        },
+        tableHeader: {
+          fontSize: 10,
+          bold: true,
+          fillColor: '#f0f0f0'
         },
         sectionHeader: {
           fontSize: 16,
@@ -518,6 +574,25 @@ class PDFMakeGenerator {
         },
         photoCaption: {
           fontSize: 8,
+          color: '#666',
+          italics: true
+        },
+        companyText: {
+          fontSize: 10,
+          lineHeight: 1.6
+        },
+        companyInfo: {
+          fontSize: 10,
+          lineHeight: 1.6
+        },
+        companyVision: {
+          fontSize: 11,
+          bold: true,
+          color: '#1a73e8',
+          lineHeight: 1.6
+        },
+        companyTagline: {
+          fontSize: 10,
           color: '#666',
           italics: true
         },
