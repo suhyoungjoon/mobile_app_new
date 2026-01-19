@@ -190,6 +190,7 @@ class PPTXGenerator {
       let modifiedContent = templateMapper.replaceTextInSlide(content, replacements);
       
       // 추가 텍스트 교체 (템플릿에 직접 포함된 경우)
+      // 주의: XML 구조를 유지하면서 텍스트만 교체
       const additionalReplacements = {
         'CM형 사전점검 종합 보고서': `CM형 ${data.type || '사전점검'} 종합 보고서`,
         '단지명': data.complex || '단지명',
@@ -200,8 +201,15 @@ class PPTXGenerator {
       
       Object.entries(additionalReplacements).forEach(([oldText, newText]) => {
         // XML 내의 텍스트 노드만 교체 (태그는 유지)
-        const textNodePattern = new RegExp(`(<a:t[^>]*>)${this.escapeRegex(oldText)}(</a:t>)`, 'g');
-        modifiedContent = modifiedContent.replace(textNodePattern, `$1${newText}$2`);
+        // 더 안전한 방법: 정확한 텍스트 노드만 찾아서 교체
+        const escapedOldText = this.escapeXml(oldText);
+        const escapedNewText = this.escapeXml(newText);
+        
+        // <a:t>태그 내의 텍스트만 교체
+        const textNodePattern = new RegExp(`(<a:t[^>]*>)${this.escapeRegex(escapedOldText)}(</a:t>)`, 'g');
+        modifiedContent = modifiedContent.replace(textNodePattern, (match, openTag, closeTag) => {
+          return `${openTag}${escapedNewText}${closeTag}`;
+        });
       });
       
       // ZIP에 업데이트된 슬라이드 저장
@@ -211,7 +219,8 @@ class PPTXGenerator {
 
     } catch (error) {
       console.error('❌ 세대 정보 추가 오류:', error);
-      throw error;
+      // 오류가 발생해도 계속 진행 (템플릿 그대로 사용)
+      console.warn('⚠️ 세대 정보 삽입 실패, 템플릿 그대로 사용합니다.');
     }
   }
 
