@@ -4,6 +4,8 @@ const pool = require('../database');
 const { authenticateToken } = require('../middleware/auth');
 // PDF 생성기: pdfmake 사용 (한글 폰트 지원)
 const pdfGenerator = require('../utils/pdfmakeGenerator');
+// PowerPoint 생성기
+const pptxGenerator = require('../utils/pptxGenerator');
 const smsService = require('../utils/smsService');
 const { decrypt } = require('../utils/encryption');
 const fs = require('fs');
@@ -474,6 +476,216 @@ router.post('/generate', authenticateToken, async (req, res) => {
     res.status(500).json({ 
       success: false,
       error: 'PDF generation failed',
+      message: error.message 
+    });
+  }
+});
+
+// Generate PowerPoint report
+router.post('/generate-pptx', authenticateToken, async (req, res) => {
+  try {
+    const { case_id } = req.body;
+    const { householdId } = req.user;
+
+    // Get household information from database
+    const householdQuery = `
+      SELECT h.dong, h.ho, h.resident_name, h.resident_name_encrypted,
+             c.name as complex_name
+      FROM household h
+      JOIN complex c ON h.complex_id = c.id
+      WHERE h.id = $1
+    `;
+    const householdResult = await pool.query(householdQuery, [householdId]);
+    
+    if (householdResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Household not found' });
+    }
+    
+    const household = householdResult.rows[0];
+    const complex = household.complex_name || '';
+    const dong = household.dong || '';
+    const ho = household.ho || '';
+    const name = household.resident_name_encrypted 
+      ? decrypt(household.resident_name_encrypted)
+      : (household.resident_name || '');
+
+    // Get case_id from request or use latest case
+    let targetCaseId = case_id;
+
+    if (!targetCaseId) {
+      const latestCaseQuery = `
+        SELECT id FROM case_header 
+        WHERE household_id = $1 
+        ORDER BY created_at DESC 
+        LIMIT 1
+      `;
+      const latestCaseResult = await pool.query(latestCaseQuery, [householdId]);
+      
+      if (latestCaseResult.rows.length === 0) {
+        return res.status(404).json({ error: 'No cases found' });
+      }
+      
+      targetCaseId = latestCaseResult.rows[0].id;
+    }
+
+    // Get case data
+    const caseQuery = `
+      SELECT c.id, c.type, c.created_at
+      FROM case_header c
+      WHERE c.id = $1 AND c.household_id = $2
+    `;
+
+    const caseResult = await pool.query(caseQuery, [targetCaseId, householdId]);
+    
+    if (caseResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Case not found' });
+    }
+
+    const caseData = caseResult.rows[0];
+    
+    // Get defects with photos
+    const defectsQuery = `
+      SELECT d.id, d.location, d.trade, d.content, d.memo, d.created_at
+      FROM defect d
+      WHERE d.case_id = $1
+      ORDER BY d.created_at DESC
+    `;
+    const defectsResult = await pool.query(defectsQuery, [targetCaseId]);
+    const defects = defectsResult.rows || [];
+    
+    // Fetch photos for each defect
+    for (const defect of defects) {
+      const photoQuery = `
+        SELECT id, kind, url, thumb_url, taken_at
+        FROM photo
+        WHERE defect_id = $1
+        ORDER BY kind, taken_at
+      `;
+      const photoResult = await pool.query(photoQuery, [defect.id]);
+      defect.photos = photoResult.rows || [];
+    }
+
+    // Get equipment inspection data
+    const equipmentQuery = `
+      SELECT 
+        i.id, i.type, i.location, i.trade, i.note, i.result, i.created_at,
+        am.tvoc, am.hcho, am.co2, am.unit_tvoc, am.unit_hcho,
+        rm.radon, rm.unit_radon,
+        lm.left_mm, lm.right_mm,
+        json_agg(
+          DISTINCT jsonb_build_object(
+            'id', tp.id,
+            'file_url', tp.file_url,
+            'caption', tp.caption,
+            'shot_at', tp.shot_at
+          )
+        ) FILTER (WHERE tp.id IS NOT NULL) as photos
+      FROM inspection_item i
+      LEFT JOIN air_measure am ON i.id = am.item_id
+      LEFT JOIN radon_measure rm ON i.id = rm.item_id
+      LEFT JOIN level_measure lm ON i.id = lm.item_id
+      LEFT JOIN thermal_photo tp ON i.id = tp.item_id
+      WHERE i.case_id = $1
+      GROUP BY i.id, am.tvoc, am.hcho, am.co2, am.unit_tvoc, am.unit_hcho,
+               rm.radon, rm.unit_radon, lm.left_mm, lm.right_mm
+      ORDER BY i.created_at DESC
+    `;
+    const equipmentResult = await pool.query(equipmentQuery, [targetCaseId]);
+    const equipmentData = equipmentResult.rows || [];
+
+    // Organize equipment data by type
+    const airMeasurements = [];
+    const radonMeasurements = [];
+    const levelMeasurements = [];
+    const thermalInspections = [];
+
+    equipmentData.forEach(item => {
+      const baseData = {
+        location: item.location,
+        trade: item.trade,
+        note: item.note,
+        result: item.result,
+        created_at: item.created_at
+      };
+
+      switch (item.type) {
+        case 'air':
+          airMeasurements.push({
+            ...baseData,
+            tvoc: item.tvoc,
+            hcho: item.hcho,
+            co2: item.co2,
+            unit_tvoc: item.unit_tvoc,
+            unit_hcho: item.unit_hcho
+          });
+          break;
+        case 'radon':
+          radonMeasurements.push({
+            ...baseData,
+            radon: item.radon,
+            unit: item.unit_radon
+          });
+          break;
+        case 'level':
+          levelMeasurements.push({
+            ...baseData,
+            left_mm: item.left_mm,
+            right_mm: item.right_mm
+          });
+          break;
+        case 'thermal':
+          thermalInspections.push({
+            ...baseData,
+            photos: item.photos || []
+          });
+          break;
+      }
+    });
+
+    // Prepare data for PowerPoint generation
+    const reportData = {
+      complex: complex || '',
+      dong: dong || '',
+      ho: ho || '',
+      name: name || '',
+      type: caseData.type || '',
+      created_at: caseData.created_at,
+      generated_at: new Date().toISOString(),
+      total_defects: defects.length,
+      total_thermal: thermalInspections.length,
+      total_air: airMeasurements.length,
+      total_radon: radonMeasurements.length,
+      total_level: levelMeasurements.length,
+      defects: defects.map((defect, index) => ({
+        ...defect,
+        index: index + 1
+      })),
+      air_measurements: airMeasurements,
+      radon_measurements: radonMeasurements,
+      level_measurements: levelMeasurements,
+      thermal_inspections: thermalInspections
+    };
+
+    // Generate PowerPoint
+    const pptxResult = await pptxGenerator.generateReport(reportData, {
+      filename: `report-${targetCaseId}-${Date.now()}.pptx`
+    });
+
+    res.json({
+      success: true,
+      message: 'PowerPoint generated successfully',
+      filename: pptxResult.filename,
+      url: pptxResult.url,
+      download_url: `/api/reports/download/${pptxResult.filename}`,
+      size: pptxResult.size,
+      case_id: targetCaseId
+    });
+
+  } catch (error) {
+    console.error('PowerPoint generation error:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'PowerPoint generation failed',
       message: error.message 
     });
   }
