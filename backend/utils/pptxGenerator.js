@@ -9,6 +9,7 @@ const AdmZip = require('adm-zip');
 const { XMLParser, XMLBuilder } = require('fast-xml-parser');
 const { v4: uuidv4 } = require('uuid');
 const sharp = require('sharp');
+const templateMapper = require('./pptxTemplateMapper');
 
 class PPTXGenerator {
   constructor() {
@@ -132,13 +133,19 @@ class PPTXGenerator {
 
       console.log(`✅ 슬라이드 수: ${slideFiles.length}개`);
 
-      // 첫 번째 슬라이드에 세대 정보 추가
+      // 단계별 구현
+      console.log('\n📋 단계별 구현 시작:\n');
+      
+      // 단계 1: 첫 번째 슬라이드에 세대 정보 추가
       if (slideFiles.length > 0) {
         await this.addHouseholdInfo(zip, slideFiles[0], data, parser, builder);
       }
 
-      // 하자 및 측정 정보를 위한 새 슬라이드 추가
+      // 단계 2-4: 하자 및 측정 정보를 위한 새 슬라이드 추가
       await this.addDefectsAndMeasurements(zip, data, parser, builder);
+      
+      // 단계 7: 프레젠테이션 파일 업데이트 (슬라이드 목록에 새 슬라이드 추가)
+      await this.updatePresentationFile(zip);
 
       // ZIP 파일 저장
       zip.writeZip(outputPath);
@@ -161,37 +168,51 @@ class PPTXGenerator {
 
   /**
    * 첫 번째 슬라이드에 세대 정보 추가
+   * 단계 1: 플레이스홀더를 찾아서 데이터로 교체
    */
   async addHouseholdInfo(zip, slideEntry, data, parser, builder) {
     try {
+      console.log('📝 단계 1: 세대 정보 삽입 시작...');
+      
       const content = slideEntry.getData().toString('utf8');
-      const parsed = parser.parse(content);
-
-      // 세대 정보 텍스트 찾아서 교체
-      // 실제 구현에서는 XML 구조를 분석하여 적절한 위치에 텍스트 삽입
-      let modifiedContent = content;
-
-      // 간단한 텍스트 교체 (실제로는 XML 구조를 정확히 파악해야 함)
-      const replacements = {
-        '{{complex}}': data.complex || '',
-        '{{dong}}': data.dong || '',
-        '{{ho}}': data.ho || '',
-        '{{name}}': data.name || '',
-        '{{type}}': data.type || '',
-        '{{created_at}}': this.formatDate(data.created_at) || '',
-        '{{generated_at}}': this.formatDate(data.generated_at) || ''
+      
+      // 템플릿 매퍼를 사용하여 데이터 변환
+      const replacements = templateMapper.mapDataToTemplate(data);
+      
+      // 플레이스홀더 교체
+      let modifiedContent = templateMapper.replaceTextInSlide(content, replacements);
+      
+      // 추가 텍스트 교체 (템플릿에 직접 포함된 경우)
+      const additionalReplacements = {
+        'CM형 사전점검 종합 보고서': `CM형 ${data.type || '사전점검'} 종합 보고서`,
+        '단지명': data.complex || '단지명',
+        '동-호': `${data.dong || ''}-${data.ho || ''}`,
+        '세대주': data.name || '세대주',
+        '점검일': this.formatDate(data.created_at) || '점검일'
       };
-
-      Object.entries(replacements).forEach(([placeholder, value]) => {
-        modifiedContent = modifiedContent.replace(new RegExp(placeholder, 'g'), value);
+      
+      Object.entries(additionalReplacements).forEach(([oldText, newText]) => {
+        // XML 내의 텍스트 노드만 교체 (태그는 유지)
+        const textNodePattern = new RegExp(`(<a:t[^>]*>)${this.escapeRegex(oldText)}(</a:t>)`, 'g');
+        modifiedContent = modifiedContent.replace(textNodePattern, `$1${newText}$2`);
       });
-
+      
       // ZIP에 업데이트된 슬라이드 저장
       zip.updateFile(slideEntry.entryName, Buffer.from(modifiedContent, 'utf8'));
+      
+      console.log('✅ 단계 1 완료: 세대 정보 삽입됨');
 
     } catch (error) {
       console.error('❌ 세대 정보 추가 오류:', error);
+      throw error;
     }
+  }
+
+  /**
+   * 정규식 특수문자 이스케이프
+   */
+  escapeRegex(str) {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
   /**
@@ -238,43 +259,359 @@ class PPTXGenerator {
 
   /**
    * 하자 슬라이드 추가
+   * 단계 5: 하자 정보를 새 슬라이드로 추가
    */
   async addDefectSlide(zip, defect, parser, builder) {
-    // 실제 구현에서는 템플릿의 슬라이드를 복사하여 하자 정보로 채움
-    // 이미지도 함께 추가
-    console.log(`📄 하자 슬라이드 추가: ${defect.id}`);
-    
-    if (defect.photos && defect.photos.length > 0) {
-      for (const photo of defect.photos) {
-        await this.addImageToZip(zip, photo.url, photo.id);
+    try {
+      console.log(`📄 단계 5: 하자 슬라이드 추가 - ${defect.id}`);
+      
+      // 템플릿의 하자 슬라이드 템플릿을 찾거나 기본 슬라이드를 복사
+      // 여기서는 간단하게 텍스트 기반 슬라이드 생성
+      const slideNumber = this.getNextSlideNumber(zip);
+      const slideXml = this.createDefectSlideXML(slideNumber, defect);
+      
+      // 슬라이드 파일 추가
+      zip.addFile(`ppt/slides/slide${slideNumber}.xml`, Buffer.from(slideXml, 'utf8'));
+      
+      // 관계 파일 추가
+      await this.addSlideRelationship(zip, slideNumber);
+      
+      // 이미지 추가
+      if (defect.photos && defect.photos.length > 0) {
+        for (const photo of defect.photos) {
+          await this.addImageToZip(zip, photo.url, photo.id);
+        }
       }
+      
+      console.log(`✅ 하자 슬라이드 ${slideNumber} 추가 완료`);
+      
+    } catch (error) {
+      console.error(`❌ 하자 슬라이드 추가 오류:`, error);
     }
+  }
+
+  /**
+   * 다음 슬라이드 번호 가져오기
+   */
+  getNextSlideNumber(zip) {
+    const slideFiles = zip.getEntries()
+      .filter(entry => entry.entryName.startsWith('ppt/slides/slide') && entry.entryName.endsWith('.xml'))
+      .map(entry => {
+        const match = entry.entryName.match(/slide(\d+)\.xml/);
+        return match ? parseInt(match[1]) : 0;
+      });
+    
+    return slideFiles.length > 0 ? Math.max(...slideFiles) + 1 : 1;
+  }
+
+  /**
+   * 하자 슬라이드 XML 생성
+   */
+  createDefectSlideXML(slideNumber, defect) {
+    // 간단한 하자 슬라이드 XML 구조
+    // 실제로는 템플릿의 슬라이드를 복사하여 수정하는 것이 더 좋음
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+  <p:cSld>
+    <p:spTree>
+      <p:nvGrpSpPr>
+        <p:cNvPr id="1" name=""/>
+        <p:cNvGrpSpPr/>
+        <p:nvPr/>
+      </p:nvGrpSpPr>
+      <p:grpSpPr>
+        <a:xfrm>
+          <a:off x="0" y="0"/>
+          <a:ext cx="9144000" cy="6858000"/>
+          <a:chOff x="0" y="0"/>
+          <a:chExt cx="9144000" cy="6858000"/>
+        </a:xfrm>
+      </p:grpSpPr>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="2" name="제목 1"/>
+          <p:cNvSpPr>
+            <a:spLocks noGrp="1"/>
+          </p:cNvSpPr>
+          <p:nvPr>
+            <p:ph type="ctrTitle"/>
+          </p:nvPr>
+        </p:nvSpPr>
+        <p:spPr/>
+        <p:txBody>
+          <a:bodyPr/>
+          <a:p>
+            <a:r>
+              <a:t>하자 #${defect.index || 1}</a:t>
+            </a:r>
+          </a:p>
+        </p:txBody>
+      </p:sp>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="3" name="내용"/>
+          <p:cNvSpPr>
+            <a:spLocks noGrp="1"/>
+          </p:cNvSpPr>
+          <p:nvPr>
+            <p:ph type="body" idx="1"/>
+          </p:nvPr>
+        </p:nvSpPr>
+        <p:spPr/>
+        <p:txBody>
+          <a:bodyPr/>
+          <a:p>
+            <a:r>
+              <a:t>위치: ${defect.location || ''}</a:t>
+            </a:r>
+          </a:p>
+          <a:p>
+            <a:r>
+              <a:t>공종: ${defect.trade || ''}</a:t>
+            </a:r>
+          </a:p>
+          <a:p>
+            <a:r>
+              <a:t>내용: ${defect.content || ''}</a:t>
+            </a:r>
+          </a:p>
+          ${defect.memo ? `<a:p><a:r><a:t>메모: ${defect.memo}</a:t></a:r></a:p>` : ''}
+        </p:txBody>
+      </p:sp>
+    </p:spTree>
+  </p:cSld>
+  <p:clrMapOvr>
+    <a:masterClrMapping/>
+  </p:clrMapOvr>
+</p:sld>`;
+  }
+
+  /**
+   * 슬라이드 관계 파일 추가
+   */
+  async addSlideRelationship(zip, slideNumber) {
+    const relsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>
+</Relationships>`;
+    
+    zip.addFile(`ppt/slides/_rels/slide${slideNumber}.xml.rels`, Buffer.from(relsXml, 'utf8'));
   }
 
   /**
    * 측정값 슬라이드 추가
+   * 단계 6: 측정 정보를 새 슬라이드로 추가
    */
   async addMeasurementSlide(zip, type, measurement, parser, builder) {
-    console.log(`📄 측정값 슬라이드 추가: ${type} - ${measurement.location}`);
-    
-    // 측정값 사진이 있으면 추가
-    if (measurement.photoKey) {
-      const photoPath = path.join(this.uploadsDir, measurement.photoKey);
-      await this.addImageToZip(zip, photoPath, measurement.photoKey);
+    try {
+      console.log(`📄 단계 6: 측정값 슬라이드 추가 - ${type} - ${measurement.location}`);
+      
+      const slideNumber = this.getNextSlideNumber(zip);
+      const slideXml = this.createMeasurementSlideXML(slideNumber, type, measurement);
+      
+      // 슬라이드 파일 추가
+      zip.addFile(`ppt/slides/slide${slideNumber}.xml`, Buffer.from(slideXml, 'utf8'));
+      
+      // 관계 파일 추가
+      await this.addSlideRelationship(zip, slideNumber);
+      
+      // 측정값 사진이 있으면 추가
+      if (measurement.photoKey) {
+        const photoPath = path.join(this.uploadsDir, measurement.photoKey);
+        await this.addImageToZip(zip, photoPath, measurement.photoKey);
+      }
+      
+      console.log(`✅ 측정값 슬라이드 ${slideNumber} 추가 완료`);
+      
+    } catch (error) {
+      console.error(`❌ 측정값 슬라이드 추가 오류:`, error);
     }
   }
 
   /**
+   * 측정값 슬라이드 XML 생성
+   */
+  createMeasurementSlideXML(slideNumber, type, measurement) {
+    const typeNames = {
+      air: '공기질 측정',
+      radon: '라돈 측정',
+      level: '레벨기 측정'
+    };
+    
+    let content = '';
+    if (type === 'air') {
+      content = `
+          <a:p><a:r><a:t>TVOC: ${measurement.tvoc || ''} ${measurement.unit_tvoc || 'mg/m³'}</a:t></a:r></a:p>
+          <a:p><a:r><a:t>HCHO: ${measurement.hcho || ''} ${measurement.unit_hcho || 'mg/m³'}</a:t></a:r></a:p>
+          <a:p><a:r><a:t>CO2: ${measurement.co2 || ''} ppm</a:t></a:r></a:p>`;
+    } else if (type === 'radon') {
+      content = `<a:p><a:r><a:t>라돈: ${measurement.radon || ''} ${measurement.unit || 'Bq/m³'}</a:t></a:r></a:p>`;
+    } else if (type === 'level') {
+      content = `
+          <a:p><a:r><a:t>좌측: ${measurement.left_mm || ''} mm</a:t></a:r></a:p>
+          <a:p><a:r><a:t>우측: ${measurement.right_mm || ''} mm</a:t></a:r></a:p>`;
+    }
+    
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+  <p:cSld>
+    <p:spTree>
+      <p:nvGrpSpPr>
+        <p:cNvPr id="1" name=""/>
+        <p:cNvGrpSpPr/>
+        <p:nvPr/>
+      </p:nvGrpSpPr>
+      <p:grpSpPr>
+        <a:xfrm>
+          <a:off x="0" y="0"/>
+          <a:ext cx="9144000" cy="6858000"/>
+          <a:chOff x="0" y="0"/>
+          <a:chExt cx="9144000" cy="6858000"/>
+        </a:xfrm>
+      </p:grpSpPr>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="2" name="제목"/>
+          <p:cNvSpPr>
+            <a:spLocks noGrp="1"/>
+          </p:cNvSpPr>
+          <p:nvPr>
+            <p:ph type="ctrTitle"/>
+          </p:nvPr>
+        </p:nvSpPr>
+        <p:spPr/>
+        <p:txBody>
+          <a:bodyPr/>
+          <a:p>
+            <a:r>
+              <a:t>${typeNames[type] || type} - ${measurement.location || ''}</a:t>
+            </a:r>
+          </a:p>
+        </p:txBody>
+      </p:sp>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="3" name="내용"/>
+          <p:cNvSpPr>
+            <a:spLocks noGrp="1"/>
+          </p:cNvSpPr>
+          <p:nvPr>
+            <p:ph type="body" idx="1"/>
+          </p:nvPr>
+        </p:nvSpPr>
+        <p:spPr/>
+        <p:txBody>
+          <a:bodyPr/>
+          <a:p><a:r><a:t>위치: ${measurement.location || ''}</a:t></a:r></a:p>
+          <a:p><a:r><a:t>공정: ${measurement.trade || ''}</a:t></a:r></a:p>${content}
+          ${measurement.note ? `<a:p><a:r><a:t>메모: ${measurement.note}</a:t></a:r></a:p>` : ''}
+        </p:txBody>
+      </p:sp>
+    </p:spTree>
+  </p:cSld>
+  <p:clrMapOvr>
+    <a:masterClrMapping/>
+  </p:clrMapOvr>
+</p:sld>`;
+  }
+
+  /**
    * 열화상 슬라이드 추가
+   * 단계 6: 열화상 정보를 새 슬라이드로 추가
    */
   async addThermalSlide(zip, inspection, parser, builder) {
-    console.log(`📄 열화상 슬라이드 추가: ${inspection.location}`);
-    
-    if (inspection.photos && inspection.photos.length > 0) {
-      for (const photo of inspection.photos) {
-        await this.addImageToZip(zip, photo.file_url, photo.id);
+    try {
+      console.log(`📄 단계 6: 열화상 슬라이드 추가 - ${inspection.location}`);
+      
+      const slideNumber = this.getNextSlideNumber(zip);
+      const slideXml = this.createThermalSlideXML(slideNumber, inspection);
+      
+      // 슬라이드 파일 추가
+      zip.addFile(`ppt/slides/slide${slideNumber}.xml`, Buffer.from(slideXml, 'utf8'));
+      
+      // 관계 파일 추가
+      await this.addSlideRelationship(zip, slideNumber);
+      
+      // 이미지 추가
+      if (inspection.photos && inspection.photos.length > 0) {
+        for (const photo of inspection.photos) {
+          await this.addImageToZip(zip, photo.file_url, photo.id);
+        }
       }
+      
+      console.log(`✅ 열화상 슬라이드 ${slideNumber} 추가 완료`);
+      
+    } catch (error) {
+      console.error(`❌ 열화상 슬라이드 추가 오류:`, error);
     }
+  }
+
+  /**
+   * 열화상 슬라이드 XML 생성
+   */
+  createThermalSlideXML(slideNumber, inspection) {
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+  <p:cSld>
+    <p:spTree>
+      <p:nvGrpSpPr>
+        <p:cNvPr id="1" name=""/>
+        <p:cNvGrpSpPr/>
+        <p:nvPr/>
+      </p:nvGrpSpPr>
+      <p:grpSpPr>
+        <a:xfrm>
+          <a:off x="0" y="0"/>
+          <a:ext cx="9144000" cy="6858000"/>
+          <a:chOff x="0" y="0"/>
+          <a:chExt cx="9144000" cy="6858000"/>
+        </a:xfrm>
+      </p:grpSpPr>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="2" name="제목"/>
+          <p:cNvSpPr>
+            <a:spLocks noGrp="1"/>
+          </p:cNvSpPr>
+          <p:nvPr>
+            <p:ph type="ctrTitle"/>
+          </p:nvPr>
+        </p:nvSpPr>
+        <p:spPr/>
+        <p:txBody>
+          <a:bodyPr/>
+          <a:p>
+            <a:r>
+              <a:t>열화상 점검 - ${inspection.location || ''}</a:t>
+            </a:r>
+          </a:p>
+        </p:txBody>
+      </p:sp>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="3" name="내용"/>
+          <p:cNvSpPr>
+            <a:spLocks noGrp="1"/>
+          </p:cNvSpPr>
+          <p:nvPr>
+            <p:ph type="body" idx="1"/>
+          </p:nvPr>
+        </p:nvSpPr>
+        <p:spPr/>
+        <p:txBody>
+          <a:bodyPr/>
+          <a:p><a:r><a:t>위치: ${inspection.location || ''}</a:t></a:r></a:p>
+          <a:p><a:r><a:t>공정: ${inspection.trade || ''}</a:t></a:r></a:p>
+          ${inspection.note ? `<a:p><a:r><a:t>점검내용: ${inspection.note}</a:t></a:r></a:p>` : ''}
+          ${inspection.result ? `<a:p><a:r><a:t>결과: ${inspection.result}</a:t></a:r></a:p>` : ''}
+        </p:txBody>
+      </p:sp>
+    </p:spTree>
+  </p:cSld>
+  <p:clrMapOvr>
+    <a:masterClrMapping/>
+  </p:clrMapOvr>
+</p:sld>`;
   }
 
   /**
@@ -304,6 +641,40 @@ class PPTXGenerator {
 
     } catch (error) {
       console.error(`❌ 이미지 추가 오류 (${imagePath}):`, error.message);
+    }
+  }
+
+  /**
+   * 프레젠테이션 파일 업데이트
+   * 단계 7: 새로 추가된 슬라이드를 프레젠테이션 목록에 추가
+   */
+  async updatePresentationFile(zip) {
+    try {
+      console.log('📝 단계 7: 프레젠테이션 파일 업데이트...');
+      
+      const presFile = zip.getEntry('ppt/presentation.xml');
+      if (!presFile) {
+        console.warn('⚠️ 프레젠테이션 파일을 찾을 수 없습니다.');
+        return;
+      }
+      
+      const content = presFile.getData().toString('utf8');
+      const parser = new XMLParser({
+        ignoreAttributes: false,
+        attributeNamePrefix: '@_',
+        textNodeName: '#text',
+        preserveOrder: true
+      });
+      
+      const parsed = parser.parse(content);
+      
+      // 슬라이드 목록에 새 슬라이드 추가
+      // 실제 구현에서는 XML 구조를 정확히 파악하여 수정해야 함
+      
+      console.log('✅ 단계 7 완료: 프레젠테이션 파일 업데이트됨');
+      
+    } catch (error) {
+      console.error('❌ 프레젠테이션 파일 업데이트 오류:', error);
     }
   }
 

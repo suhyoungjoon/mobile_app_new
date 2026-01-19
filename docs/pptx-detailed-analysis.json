@@ -1,0 +1,25 @@
+{
+  "slideNumber": 1,
+  "textBoxes": [
+    {
+      "text": "CM",
+      "x": "0",
+      "y": "0",
+      "width": "0",
+      "height": "0"
+    },
+    {
+      "text": "Tel.",
+      "x": "1",
+      "y": "4444907",
+      "width": "2399696",
+      "height": "813911"
+    }
+  ],
+  "imageRefs": [
+    "2",
+    "3",
+    "4"
+  ],
+  "totalTexts": 2
+}
