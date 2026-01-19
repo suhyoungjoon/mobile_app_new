@@ -148,7 +148,10 @@ class PPTXGenerator {
       // 단계 7: 요약 슬라이드 추가 (테이블 포함)
       await this.addSummarySlide(zip, data, parser, builder);
       
-      // 단계 8: 프레젠테이션 파일 업데이트 (슬라이드 목록에 새 슬라이드 추가)
+      // 단계 8: Content_Types.xml 업데이트 (새 슬라이드 타입 등록)
+      await this.updateContentTypes(zip);
+      
+      // 단계 9: 프레젠테이션 파일 업데이트 (슬라이드 목록에 새 슬라이드 추가)
       await this.updatePresentationFile(zip);
 
       // ZIP 파일 저장
@@ -349,47 +352,114 @@ class PPTXGenerator {
   }
 
   /**
+   * 템플릿 슬라이드 복사
+   */
+  copyTemplateSlide(zip, sourceSlideNum, targetSlideNum) {
+    try {
+      // 원본 슬라이드 파일 복사
+      const sourceSlide = `ppt/slides/slide${sourceSlideNum}.xml`;
+      const targetSlide = `ppt/slides/slide${targetSlideNum}.xml`;
+      
+      const sourceEntry = zip.getEntry(sourceSlide);
+      if (!sourceEntry) {
+        throw new Error(`템플릿 슬라이드 ${sourceSlideNum}을 찾을 수 없습니다.`);
+      }
+      
+      const slideContent = sourceEntry.getData();
+      zip.addFile(targetSlide, slideContent);
+      
+      // 관계 파일도 복사
+      const sourceRels = `ppt/slides/_rels/slide${sourceSlideNum}.xml.rels`;
+      const targetRels = `ppt/slides/_rels/slide${targetSlideNum}.xml.rels`;
+      
+      const relsEntry = zip.getEntry(sourceRels);
+      if (relsEntry) {
+        const relsContent = relsEntry.getData();
+        zip.addFile(targetRels, relsContent);
+      } else {
+        // 관계 파일이 없으면 기본 관계 파일 생성
+        this.addSlideRelationship(zip, targetSlideNum);
+      }
+      
+      return targetSlide;
+    } catch (error) {
+      console.error(`❌ 템플릿 슬라이드 복사 오류:`, error);
+      throw error;
+    }
+  }
+
+  /**
    * 하자 슬라이드 추가
-   * 단계 5: 하자 정보를 새 슬라이드로 추가
+   * 단계 5: 하자 정보를 새 슬라이드로 추가 (템플릿 슬라이드 복사 후 수정)
    */
   async addDefectSlide(zip, defect, parser, builder) {
     try {
       console.log(`📄 단계 5: 하자 슬라이드 추가 - ${defect.id}`);
       
       const slideNumber = this.getNextSlideNumber(zip);
-      let slideXml = this.createDefectSlideXML(slideNumber, defect);
       
-      // 이미지 추가 및 슬라이드에 삽입
+      // 템플릿의 두 번째 슬라이드를 복사 (또는 적절한 템플릿 슬라이드)
+      const templateSlideNum = 2; // 두 번째 슬라이드를 템플릿으로 사용
+      this.copyTemplateSlide(zip, templateSlideNum, slideNumber);
+      
+      // 복사된 슬라이드 수정
+      const slideEntry = zip.getEntry(`ppt/slides/slide${slideNumber}.xml`);
+      if (!slideEntry) {
+        throw new Error(`슬라이드 ${slideNumber}을 찾을 수 없습니다.`);
+      }
+      
+      let slideContent = slideEntry.getData().toString('utf8');
+      
+      // 텍스트 교체 (템플릿의 텍스트를 하자 정보로 교체)
+      // 실제로는 XML 구조를 정확히 파악하여 교체해야 함
+      slideContent = slideContent.replace(
+        /<a:t[^>]*>([^<]*)<\/a:t>/g,
+        (match, text) => {
+          // 특정 텍스트 패턴을 찾아서 교체
+          if (text.includes('제목') || text.includes('Title')) {
+            return match.replace(text, `하자 #${defect.index || 1}`);
+          }
+          return match;
+        }
+      );
+      
+      // 이미지 추가
       const imageInfos = [];
       if (defect.photos && defect.photos.length > 0) {
-        let imageIndex = 0;
         for (const photo of defect.photos) {
           const imageInfo = await this.addImageToZip(zip, photo.url, `${defect.id}_${photo.id}`);
           if (imageInfo) {
             imageInfos.push(imageInfo);
-            // 이미지를 슬라이드에 삽입
-            const position = {
-              x: 1000000 + (imageIndex % 2) * 4000000, // 2열 배치
-              y: 4000000 + Math.floor(imageIndex / 2) * 3000000, // 행별 배치
-              width: 3500000,
-              height: 2500000
-            };
-            slideXml = await this.insertImageIntoSlide(slideXml, imageInfo, position);
-            imageIndex++;
           }
         }
       }
       
-      // 관계 파일 생성 (이미지 포함)
-      await this.addSlideRelationshipWithImages(zip, slideNumber, imageInfos);
-      
-      // 슬라이드 파일 추가
-      zip.addFile(`ppt/slides/slide${slideNumber}.xml`, Buffer.from(slideXml, 'utf8'));
+      // 슬라이드 파일 업데이트
+      zip.updateFile(`ppt/slides/slide${slideNumber}.xml`, Buffer.from(slideContent, 'utf8'));
       
       console.log(`✅ 하자 슬라이드 ${slideNumber} 추가 완료 (이미지 ${imageInfos.length}개)`);
       
     } catch (error) {
       console.error(`❌ 하자 슬라이드 추가 오류:`, error);
+      // 오류 발생 시 기본 슬라이드 생성
+      await this.addDefectSlideFallback(zip, defect);
+    }
+  }
+
+  /**
+   * 하자 슬라이드 추가 (Fallback - 기본 XML 생성)
+   */
+  async addDefectSlideFallback(zip, defect) {
+    try {
+      const slideNumber = this.getNextSlideNumber(zip);
+      const slideXml = this.createDefectSlideXML(slideNumber, defect);
+      
+      zip.addFile(`ppt/slides/slide${slideNumber}.xml`, Buffer.from(slideXml, 'utf8'));
+      await this.addSlideRelationship(zip, slideNumber);
+      
+      console.log(`✅ 하자 슬라이드 ${slideNumber} 추가 완료 (Fallback)`);
+    } catch (error) {
+      console.error(`❌ Fallback 하자 슬라이드 추가 오류:`, error);
     }
   }
 
@@ -428,12 +498,14 @@ class PPTXGenerator {
 
   /**
    * 하자 슬라이드 XML 생성
+   * 올바른 PowerPoint XML 구조로 생성
    */
   createDefectSlideXML(slideNumber, defect) {
-    // 간단한 하자 슬라이드 XML 구조
-    // 실제로는 템플릿의 슬라이드를 복사하여 수정하는 것이 더 좋음
+    // PowerPoint XML 네임스페이스 포함
     return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+       xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+       xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
   <p:cSld>
     <p:spTree>
       <p:nvGrpSpPr>
@@ -459,13 +531,27 @@ class PPTXGenerator {
             <p:ph type="ctrTitle"/>
           </p:nvPr>
         </p:nvSpPr>
-        <p:spPr/>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="914400" y="457200"/>
+            <a:ext cx="7315200" cy="914400"/>
+          </a:xfrm>
+          <a:prstGeom prst="rect">
+            <a:avLst/>
+          </a:prstGeom>
+          <a:noFill/>
+        </p:spPr>
         <p:txBody>
-          <a:bodyPr/>
+          <a:bodyPr wrap="square" rtlCol="0">
+            <a:spAutoFit/>
+          </a:bodyPr>
+          <a:lstStyle/>
           <a:p>
             <a:r>
+              <a:rPr lang="ko-KR" dirty="0"/>
               <a:t>하자 #${defect.index || 1}</a:t>
             </a:r>
+            <a:endParaRPr lang="ko-KR" dirty="0"/>
           </a:p>
         </p:txBody>
       </p:sp>
@@ -479,25 +565,43 @@ class PPTXGenerator {
             <p:ph type="body" idx="1"/>
           </p:nvPr>
         </p:nvSpPr>
-        <p:spPr/>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="914400" y="1828800"/>
+            <a:ext cx="7315200" cy="4572000"/>
+          </a:xfrm>
+          <a:prstGeom prst="rect">
+            <a:avLst/>
+          </a:prstGeom>
+          <a:noFill/>
+        </p:spPr>
         <p:txBody>
-          <a:bodyPr/>
+          <a:bodyPr wrap="square" rtlCol="0">
+            <a:spAutoFit/>
+          </a:bodyPr>
+          <a:lstStyle/>
           <a:p>
             <a:r>
-              <a:t>위치: ${defect.location || ''}</a:t>
+              <a:rPr lang="ko-KR" dirty="0"/>
+              <a:t>위치: ${this.escapeXml(defect.location || '')}</a:t>
             </a:r>
+            <a:endParaRPr lang="ko-KR" dirty="0"/>
           </a:p>
           <a:p>
             <a:r>
-              <a:t>공종: ${defect.trade || ''}</a:t>
+              <a:rPr lang="ko-KR" dirty="0"/>
+              <a:t>공종: ${this.escapeXml(defect.trade || '')}</a:t>
             </a:r>
+            <a:endParaRPr lang="ko-KR" dirty="0"/>
           </a:p>
           <a:p>
             <a:r>
-              <a:t>내용: ${defect.content || ''}</a:t>
+              <a:rPr lang="ko-KR" dirty="0"/>
+              <a:t>내용: ${this.escapeXml(defect.content || '')}</a:t>
             </a:r>
+            <a:endParaRPr lang="ko-KR" dirty="0"/>
           </a:p>
-          ${defect.memo ? `<a:p><a:r><a:t>메모: ${defect.memo}</a:t></a:r></a:p>` : ''}
+          ${defect.memo ? `<a:p><a:r><a:rPr lang="ko-KR" dirty="0"/><a:t>메모: ${this.escapeXml(defect.memo)}</a:t></a:r><a:endParaRPr lang="ko-KR" dirty="0"/></a:p>` : ''}
         </p:txBody>
       </p:sp>
     </p:spTree>
@@ -506,6 +610,19 @@ class PPTXGenerator {
     <a:masterClrMapping/>
   </p:clrMapOvr>
 </p:sld>`;
+  }
+
+  /**
+   * XML 특수문자 이스케이프
+   */
+  escapeXml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
   }
 
   /**
@@ -563,19 +680,51 @@ class PPTXGenerator {
     let content = '';
     if (type === 'air') {
       content = `
-          <a:p><a:r><a:t>TVOC: ${measurement.tvoc || ''} ${measurement.unit_tvoc || 'mg/m³'}</a:t></a:r></a:p>
-          <a:p><a:r><a:t>HCHO: ${measurement.hcho || ''} ${measurement.unit_hcho || 'mg/m³'}</a:t></a:r></a:p>
-          <a:p><a:r><a:t>CO2: ${measurement.co2 || ''} ppm</a:t></a:r></a:p>`;
+          <a:p>
+            <a:r>
+              <a:rPr lang="ko-KR" dirty="0"/>
+              <a:t>TVOC: ${measurement.tvoc || ''} ${measurement.unit_tvoc || 'mg/m³'}</a:t>
+            </a:r>
+            <a:endParaRPr lang="ko-KR" dirty="0"/>
+          </a:p>
+          <a:p>
+            <a:r>
+              <a:rPr lang="ko-KR" dirty="0"/>
+              <a:t>HCHO: ${measurement.hcho || ''} ${measurement.unit_hcho || 'mg/m³'}</a:t>
+            </a:r>
+            <a:endParaRPr lang="ko-KR" dirty="0"/>
+          </a:p>
+          <a:p>
+            <a:r>
+              <a:rPr lang="ko-KR" dirty="0"/>
+              <a:t>CO2: ${measurement.co2 || ''} ppm</a:t>
+            </a:r>
+            <a:endParaRPr lang="ko-KR" dirty="0"/>
+          </a:p>`;
     } else if (type === 'radon') {
-      content = `<a:p><a:r><a:t>라돈: ${measurement.radon || ''} ${measurement.unit || 'Bq/m³'}</a:t></a:r></a:p>`;
+      content = `<a:p><a:r><a:rPr lang="ko-KR" dirty="0"/><a:t>라돈: ${measurement.radon || ''} ${measurement.unit || 'Bq/m³'}</a:t></a:r><a:endParaRPr lang="ko-KR" dirty="0"/></a:p>`;
     } else if (type === 'level') {
       content = `
-          <a:p><a:r><a:t>좌측: ${measurement.left_mm || ''} mm</a:t></a:r></a:p>
-          <a:p><a:r><a:t>우측: ${measurement.right_mm || ''} mm</a:t></a:r></a:p>`;
+          <a:p>
+            <a:r>
+              <a:rPr lang="ko-KR" dirty="0"/>
+              <a:t>좌측: ${measurement.left_mm || ''} mm</a:t>
+            </a:r>
+            <a:endParaRPr lang="ko-KR" dirty="0"/>
+          </a:p>
+          <a:p>
+            <a:r>
+              <a:rPr lang="ko-KR" dirty="0"/>
+              <a:t>우측: ${measurement.right_mm || ''} mm</a:t>
+            </a:r>
+            <a:endParaRPr lang="ko-KR" dirty="0"/>
+          </a:p>`;
     }
     
     return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+       xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+       xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
   <p:cSld>
     <p:spTree>
       <p:nvGrpSpPr>
@@ -601,13 +750,27 @@ class PPTXGenerator {
             <p:ph type="ctrTitle"/>
           </p:nvPr>
         </p:nvSpPr>
-        <p:spPr/>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="914400" y="457200"/>
+            <a:ext cx="7315200" cy="914400"/>
+          </a:xfrm>
+          <a:prstGeom prst="rect">
+            <a:avLst/>
+          </a:prstGeom>
+          <a:noFill/>
+        </p:spPr>
         <p:txBody>
-          <a:bodyPr/>
+          <a:bodyPr wrap="square" rtlCol="0">
+            <a:spAutoFit/>
+          </a:bodyPr>
+          <a:lstStyle/>
           <a:p>
             <a:r>
-              <a:t>${typeNames[type] || type} - ${measurement.location || ''}</a:t>
+              <a:rPr lang="ko-KR" dirty="0"/>
+              <a:t>${typeNames[type] || type} - ${this.escapeXml(measurement.location || '')}</a:t>
             </a:r>
+            <a:endParaRPr lang="ko-KR" dirty="0"/>
           </a:p>
         </p:txBody>
       </p:sp>
@@ -621,12 +784,36 @@ class PPTXGenerator {
             <p:ph type="body" idx="1"/>
           </p:nvPr>
         </p:nvSpPr>
-        <p:spPr/>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="914400" y="1828800"/>
+            <a:ext cx="7315200" cy="4572000"/>
+          </a:xfrm>
+          <a:prstGeom prst="rect">
+            <a:avLst/>
+          </a:prstGeom>
+          <a:noFill/>
+        </p:spPr>
         <p:txBody>
-          <a:bodyPr/>
-          <a:p><a:r><a:t>위치: ${measurement.location || ''}</a:t></a:r></a:p>
-          <a:p><a:r><a:t>공정: ${measurement.trade || ''}</a:t></a:r></a:p>${content}
-          ${measurement.note ? `<a:p><a:r><a:t>메모: ${measurement.note}</a:t></a:r></a:p>` : ''}
+          <a:bodyPr wrap="square" rtlCol="0">
+            <a:spAutoFit/>
+          </a:bodyPr>
+          <a:lstStyle/>
+          <a:p>
+            <a:r>
+              <a:rPr lang="ko-KR" dirty="0"/>
+              <a:t>위치: ${this.escapeXml(measurement.location || '')}</a:t>
+            </a:r>
+            <a:endParaRPr lang="ko-KR" dirty="0"/>
+          </a:p>
+          <a:p>
+            <a:r>
+              <a:rPr lang="ko-KR" dirty="0"/>
+              <a:t>공정: ${this.escapeXml(measurement.trade || '')}</a:t>
+            </a:r>
+            <a:endParaRPr lang="ko-KR" dirty="0"/>
+          </a:p>${content}
+          ${measurement.note ? `<a:p><a:r><a:rPr lang="ko-KR" dirty="0"/><a:t>메모: ${this.escapeXml(measurement.note)}</a:t></a:r><a:endParaRPr lang="ko-KR" dirty="0"/></a:p>` : ''}
         </p:txBody>
       </p:sp>
     </p:spTree>
@@ -673,7 +860,9 @@ class PPTXGenerator {
    */
   createThermalSlideXML(slideNumber, inspection) {
     return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+       xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+       xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
   <p:cSld>
     <p:spTree>
       <p:nvGrpSpPr>
@@ -699,13 +888,27 @@ class PPTXGenerator {
             <p:ph type="ctrTitle"/>
           </p:nvPr>
         </p:nvSpPr>
-        <p:spPr/>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="914400" y="457200"/>
+            <a:ext cx="7315200" cy="914400"/>
+          </a:xfrm>
+          <a:prstGeom prst="rect">
+            <a:avLst/>
+          </a:prstGeom>
+          <a:noFill/>
+        </p:spPr>
         <p:txBody>
-          <a:bodyPr/>
+          <a:bodyPr wrap="square" rtlCol="0">
+            <a:spAutoFit/>
+          </a:bodyPr>
+          <a:lstStyle/>
           <a:p>
             <a:r>
-              <a:t>열화상 점검 - ${inspection.location || ''}</a:t>
+              <a:rPr lang="ko-KR" dirty="0"/>
+              <a:t>열화상 점검 - ${this.escapeXml(inspection.location || '')}</a:t>
             </a:r>
+            <a:endParaRPr lang="ko-KR" dirty="0"/>
           </a:p>
         </p:txBody>
       </p:sp>
@@ -719,13 +922,37 @@ class PPTXGenerator {
             <p:ph type="body" idx="1"/>
           </p:nvPr>
         </p:nvSpPr>
-        <p:spPr/>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="914400" y="1828800"/>
+            <a:ext cx="7315200" cy="4572000"/>
+          </a:xfrm>
+          <a:prstGeom prst="rect">
+            <a:avLst/>
+          </a:prstGeom>
+          <a:noFill/>
+        </p:spPr>
         <p:txBody>
-          <a:bodyPr/>
-          <a:p><a:r><a:t>위치: ${inspection.location || ''}</a:t></a:r></a:p>
-          <a:p><a:r><a:t>공정: ${inspection.trade || ''}</a:t></a:r></a:p>
-          ${inspection.note ? `<a:p><a:r><a:t>점검내용: ${inspection.note}</a:t></a:r></a:p>` : ''}
-          ${inspection.result ? `<a:p><a:r><a:t>결과: ${inspection.result}</a:t></a:r></a:p>` : ''}
+          <a:bodyPr wrap="square" rtlCol="0">
+            <a:spAutoFit/>
+          </a:bodyPr>
+          <a:lstStyle/>
+          <a:p>
+            <a:r>
+              <a:rPr lang="ko-KR" dirty="0"/>
+              <a:t>위치: ${this.escapeXml(inspection.location || '')}</a:t>
+            </a:r>
+            <a:endParaRPr lang="ko-KR" dirty="0"/>
+          </a:p>
+          <a:p>
+            <a:r>
+              <a:rPr lang="ko-KR" dirty="0"/>
+              <a:t>공정: ${this.escapeXml(inspection.trade || '')}</a:t>
+            </a:r>
+            <a:endParaRPr lang="ko-KR" dirty="0"/>
+          </a:p>
+          ${inspection.note ? `<a:p><a:r><a:rPr lang="ko-KR" dirty="0"/><a:t>점검내용: ${this.escapeXml(inspection.note)}</a:t></a:r><a:endParaRPr lang="ko-KR" dirty="0"/></a:p>` : ''}
+          ${inspection.result ? `<a:p><a:r><a:rPr lang="ko-KR" dirty="0"/><a:t>결과: ${this.escapeXml(inspection.result)}</a:t></a:r><a:endParaRPr lang="ko-KR" dirty="0"/></a:p>` : ''}
         </p:txBody>
       </p:sp>
     </p:spTree>
@@ -817,12 +1044,69 @@ class PPTXGenerator {
   }
 
   /**
+   * Content_Types.xml 업데이트
+   * 단계 8: 새로 추가된 슬라이드를 Content Types에 등록
+   */
+  async updateContentTypes(zip) {
+    try {
+      console.log('📝 단계 8: Content_Types.xml 업데이트...');
+      
+      const contentTypesFile = zip.getEntry('[Content_Types].xml');
+      if (!contentTypesFile) {
+        console.warn('⚠️ Content_Types.xml 파일을 찾을 수 없습니다.');
+        return;
+      }
+      
+      const content = contentTypesFile.getData().toString('utf8');
+      
+      // 새로 추가된 슬라이드 파일 찾기
+      const newSlideFiles = zip.getEntries()
+        .filter(entry => {
+          const isSlide = entry.entryName.startsWith('ppt/slides/slide') && entry.entryName.endsWith('.xml');
+          if (!isSlide) return false;
+          // Content_Types에 이미 등록되어 있는지 확인
+          const slideNum = entry.entryName.match(/slide(\d+)\.xml/)?.[1];
+          return slideNum && !content.includes(`ppt/slides/slide${slideNum}.xml`);
+        })
+        .map(entry => entry.entryName);
+      
+      if (newSlideFiles.length === 0) {
+        console.log('  새로 추가된 슬라이드가 없습니다.');
+        return;
+      }
+      
+      console.log(`  새 슬라이드 파일: ${newSlideFiles.length}개`);
+      
+      // 새 슬라이드를 Content Types에 추가
+      let modifiedContent = content;
+      const overridePattern = /(<Override[^>]*PartName="\/ppt\/slides\/slide\d+\.xml"[^>]*\/>)/;
+      
+      newSlideFiles.forEach(slidePath => {
+        const slideFileName = slidePath.split('/').pop();
+        const overrideTag = `<Override PartName="/${slidePath}" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>`;
+        
+        // 기존 Override 태그 뒤에 추가
+        if (modifiedContent.includes('</Types>')) {
+          modifiedContent = modifiedContent.replace('</Types>', `  ${overrideTag}\n</Types>`);
+        }
+      });
+      
+      zip.updateFile('[Content_Types].xml', Buffer.from(modifiedContent, 'utf8'));
+      
+      console.log(`✅ 단계 8 완료: Content_Types.xml 업데이트됨`);
+      
+    } catch (error) {
+      console.error('❌ Content_Types.xml 업데이트 오류:', error);
+    }
+  }
+
+  /**
    * 프레젠테이션 파일 업데이트
-   * 단계 8: 새로 추가된 슬라이드를 프레젠테이션 목록에 추가
+   * 단계 9: 새로 추가된 슬라이드를 프레젠테이션 목록에 추가
    */
   async updatePresentationFile(zip) {
     try {
-      console.log('📝 단계 8: 프레젠테이션 파일 업데이트...');
+      console.log('📝 단계 9: 프레젠테이션 파일 업데이트...');
       
       const presFile = zip.getEntry('ppt/presentation.xml');
       if (!presFile) {
@@ -832,18 +1116,17 @@ class PPTXGenerator {
       
       const content = presFile.getData().toString('utf8');
       
-      // 슬라이드 파일 목록 가져오기
-      const slideFiles = zip.getEntries()
+      // 슬라이드 파일 목록 가져오기 (기존 + 새로 추가된 것)
+      const allSlideFiles = zip.getEntries()
         .filter(entry => entry.entryName.startsWith('ppt/slides/slide') && entry.entryName.endsWith('.xml'))
         .map(entry => {
           const match = entry.entryName.match(/slide(\d+)\.xml/);
           return match ? parseInt(match[1]) : 0;
         })
+        .filter(num => num > 0)
         .sort((a, b) => a - b);
       
-      // sldIdLst에 슬라이드 추가
-      // PowerPoint XML 구조에 맞게 슬라이드 ID 추가
-      let modifiedContent = content;
+      console.log(`  발견된 슬라이드: ${allSlideFiles.join(', ')}`);
       
       // 기존 슬라이드 ID 찾기
       const sldIdPattern = /<p:sldId[^>]*id="(\d+)"[^>]*r:id="rId(\d+)"[^>]*\/>/g;
@@ -856,6 +1139,19 @@ class PPTXGenerator {
         });
       }
       
+      console.log(`  기존 슬라이드 ID: ${existingIds.length}개`);
+      
+      // 새로 추가된 슬라이드만 찾기 (기존에 없는 것)
+      const existingSlideNums = existingIds.length; // 기존 슬라이드 수
+      const newSlideNums = allSlideFiles.filter(num => num > existingSlideNums);
+      
+      if (newSlideNums.length === 0) {
+        console.log('  새로 추가된 슬라이드가 없습니다.');
+        return;
+      }
+      
+      console.log(`  새로 추가된 슬라이드: ${newSlideNums.join(', ')}`);
+      
       // 새 슬라이드 ID 추가
       const maxId = existingIds.length > 0 ? Math.max(...existingIds.map(i => i.id)) : 0;
       const maxRId = existingIds.length > 0 ? Math.max(...existingIds.map(i => i.rId)) : 0;
@@ -866,27 +1162,30 @@ class PPTXGenerator {
       
       if (sldIdLstMatch) {
         let newSldIds = '';
-        slideFiles.forEach((slideNum, index) => {
+        newSlideNums.forEach((slideNum, index) => {
           const newId = maxId + index + 1;
           const newRId = maxRId + index + 1;
           newSldIds += `\n    <p:sldId id="${newId}" r:id="rId${newRId}"/>`;
         });
         
-        modifiedContent = content.replace(
+        const modifiedContent = content.replace(
           sldIdLstPattern,
           `$1${sldIdLstMatch[2]}${newSldIds}\n  $3`
         );
         
+        zip.updateFile('ppt/presentation.xml', Buffer.from(modifiedContent, 'utf8'));
+        
         // 관계 파일도 업데이트
-        await this.updatePresentationRelationships(zip, slideFiles, maxRId);
+        await this.updatePresentationRelationships(zip, newSlideNums, maxRId);
+        
+        console.log(`✅ 단계 9 완료: 프레젠테이션 파일 업데이트됨 (새 슬라이드 ${newSlideNums.length}개 추가)`);
+      } else {
+        console.warn('⚠️ sldIdLst 태그를 찾을 수 없습니다.');
       }
-      
-      zip.updateFile('ppt/presentation.xml', Buffer.from(modifiedContent, 'utf8'));
-      
-      console.log(`✅ 단계 8 완료: 프레젠테이션 파일 업데이트됨 (슬라이드 ${slideFiles.length}개)`);
       
     } catch (error) {
       console.error('❌ 프레젠테이션 파일 업데이트 오류:', error);
+      console.error(error.stack);
       // 오류가 발생해도 계속 진행 (슬라이드는 이미 추가됨)
     }
   }
