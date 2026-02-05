@@ -8,6 +8,9 @@ const InspectorState = {
   currentDefectId: null,
   currentCaseId: null,
   allDefects: [],
+  selectedHouseholdId: null,
+  selectedHouseholdDisplay: null, // { complex_name, dong, ho, resident_name }
+  userListCache: [], // loadUserList 결과 캐시 (selectUser에서 표시 정보 사용)
   measurementPhotos: {} // 측정 타입별 사진 정보 {air: {file: File, url: string}, radon: {...}, level: {...}}
 };
 
@@ -84,8 +87,13 @@ function goBack() {
     const previousScreen = navigationHistory.pop();
     route(previousScreen);
   } else {
-    route('defect-list');
+    route(InspectorState.selectedHouseholdId ? 'defect-list' : 'user-list');
   }
+}
+
+function goBackToUserList() {
+  navigationHistory.length = 0;
+  route('user-list');
 }
 
 // 자동 로그인 (점검원 계정으로 자동 로그인)
@@ -104,8 +112,7 @@ async function autoLogin() {
   const name = '점검원';
   const phone = '010-0000-0000';
   
-  // 로딩 표시 (버튼은 비활성화하지 않고 로딩 메시지만 표시)
-  const container = $('#defect-list-container');
+  const container = $('#user-list-container');
   if (container) {
     container.innerHTML = `
       <div class="card" style="text-align: center; padding: 40px;">
@@ -133,29 +140,17 @@ async function autoLogin() {
     console.log('📋 하자목록 로드 시작...');
     console.log('🔍 loadAllDefects 함수 존재 여부:', typeof loadAllDefects);
     
-    // loadAllDefects 함수가 정의되어 있는지 확인
-    if (typeof loadAllDefects === 'function') {
+    if (typeof loadUserList === 'function') {
       try {
-        console.log('🔍 loadAllDefects 호출 직전');
-        await loadAllDefects();
-        console.log('✅ 하자목록 로드 완료');
+        await loadUserList();
+        console.log('✅ 사용자 목록 로드 완료');
       } catch (error) {
-        console.error('❌ 하자목록 로드 실패:', error);
-        console.error('에러 스택:', error.stack);
-      }
-    } else {
-      console.error('❌ loadAllDefects 함수가 정의되지 않았습니다!');
-      // 직접 하자목록 조회 시도
-      try {
-        console.log('🔄 직접 하자목록 조회 시도...');
-        await loadAllDefectsDirectly();
-      } catch (error) {
-        console.error('❌ 직접 하자목록 조회 실패:', error);
+        console.error('❌ 사용자 목록 로드 실패:', error);
       }
     }
     
-    console.log('✅ 자동 로그인 완료, 하자목록 화면으로 이동');
-    route('defect-list');
+    console.log('✅ 자동 로그인 완료, 사용자 목록 화면으로 이동');
+    route('user-list');
     
   } catch (error) {
     console.error('❌ 자동 로그인 오류:', error);
@@ -188,6 +183,158 @@ function onLogout() {
     localStorage.removeItem('inspector_session');
     // 자동으로 다시 로그인
     autoLogin();
+  }
+}
+
+// 하자가 등록된 사용자(세대) 목록 조회 및 표시
+async function loadUserList() {
+  const container = $('#user-list-container');
+  if (!container) return;
+  container.innerHTML = `
+    <div class="card" style="text-align: center; padding: 40px;">
+      <div style="color: #666;">사용자 목록을 불러오는 중...</div>
+    </div>
+  `;
+  try {
+    const result = await api.getUsersWithDefects();
+    const users = result.users || [];
+    InspectorState.userListCache = users;
+    if (users.length === 0) {
+      container.innerHTML = `
+        <div class="card" style="text-align: center; padding: 40px;">
+          <div style="color: #666;">하자가 등록된 사용자가 없습니다.</div>
+          <div style="color: #999; font-size: 12px; margin-top: 8px;">일반 앱에서 하자를 등록하면 여기에 표시됩니다.</div>
+        </div>
+      `;
+      return;
+    }
+    const baseUrl = api.baseURL.replace('/api', '');
+    container.innerHTML = users.map((u) => `
+      <div class="defect-card">
+        <div class="defect-card-header">
+          <div class="defect-card-title">${escapeHTML(u.complex_name || '')} ${escapeHTML(u.dong || '')}동 ${escapeHTML(u.ho || '')}호</div>
+          <span class="inspection-badge">하자 ${u.defect_count}건</span>
+        </div>
+        <div class="defect-card-meta">${escapeHTML(u.resident_name || '')} · 하자 ${u.defect_count}건</div>
+        <div class="button-group" style="display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap;">
+          <button class="button" style="flex: 1; min-width: 90px;" onclick="event.stopPropagation(); selectUser(${u.household_id})">하자목록 보기</button>
+          <button class="button" style="flex: 1; min-width: 90px;" onclick="event.stopPropagation(); previewReportForUser(${u.household_id})">보고서 미리보기</button>
+          <button class="button success" style="flex: 1; min-width: 90px;" onclick="event.stopPropagation(); downloadReportForUser(${u.household_id})">보고서 다운로드</button>
+        </div>
+      </div>
+    `).join('');
+  } catch (error) {
+    console.error('사용자 목록 조회 오류:', error);
+    toast('사용자 목록을 불러오는데 실패했습니다', 'error');
+    container.innerHTML = `
+      <div class="card" style="text-align: center; padding: 40px;">
+        <div style="color: #e74c3c;">목록을 불러오는데 실패했습니다.</div>
+        <div style="color: #999; font-size: 12px; margin-top: 8px;">페이지를 새로고침해주세요.</div>
+      </div>
+    `;
+  }
+}
+
+// 사용자 선택 시 해당 세대의 하자목록 로드
+function selectUser(householdId) {
+  const u = InspectorState.userListCache.find((x) => x.household_id === householdId);
+  InspectorState.selectedHouseholdId = householdId;
+  InspectorState.selectedHouseholdDisplay = u ? {
+    complex_name: u.complex_name,
+    dong: u.dong,
+    ho: u.ho,
+    resident_name: u.resident_name
+  } : null;
+  const titleEl = $('#defect-list-title');
+  if (titleEl) titleEl.textContent = u ? `하자목록 - ${u.dong || ''}동 ${u.ho || ''}호` : '하자목록';
+  loadDefectsForHousehold(householdId);
+  route('defect-list');
+}
+
+// 사용자 목록에서 해당 사용자 보고서 미리보기 (보고서 화면으로 이동)
+async function previewReportForUser(householdId) {
+  if (!InspectorState.session) {
+    toast('로그인이 필요합니다', 'error');
+    return;
+  }
+  const u = InspectorState.userListCache.find((x) => x.household_id === householdId);
+  InspectorState.selectedHouseholdId = householdId;
+  InspectorState.selectedHouseholdDisplay = u ? { complex_name: u.complex_name, dong: u.dong, ho: u.ho, resident_name: u.resident_name } : null;
+  setLoading(true);
+  try {
+    const reportData = await api.getReportPreview(householdId);
+    if (reportData.case_id) InspectorState.currentCaseId = reportData.case_id;
+    const cont = $('#report-preview');
+    const buttonGroup = document.querySelector('#report .button-group');
+    if (buttonGroup) buttonGroup.style.display = 'flex';
+    cont.innerHTML = '';
+    const baseUrl = api.baseURL.replace('/api', '');
+    if (reportData.defects && reportData.defects.length > 0) {
+      reportData.defects.forEach((d) => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `
+          <div style="font-weight:700;">${escapeHTML(d.location || '')} / ${escapeHTML(d.trade || '')}</div>
+          <div class="small">${escapeHTML(d.content || '')}</div>
+          ${d.memo ? `<div class="small" style="color: #666; margin-top: 4px;">메모: ${escapeHTML(d.memo)}</div>` : ''}
+          ${d.photos && d.photos.length > 0 ? `
+            <div class="gallery" style="margin-top:8px;">
+              ${d.photos.map((photo) => `
+                <div class="thumb has-image" style="background-image:url('${baseUrl}${photo.url}');cursor:pointer;" onclick="showImageModal('${baseUrl}${photo.url}')">
+                  ${photo.kind === 'near' ? '근접' : '원거리'}
+                </div>
+              `).join('')}
+            </div>
+          ` : ''}
+        `;
+        cont.appendChild(card);
+      });
+    } else {
+      if (buttonGroup) buttonGroup.style.display = 'none';
+      cont.innerHTML = `
+        <div class="card" style="text-align: center; padding: 40px;">
+          <div style="color: #666;">등록된 하자가 없습니다.</div>
+          <div style="color: #999; font-size: 12px; margin-top: 10px;">하자를 등록하면 PDF 보고서를 생성할 수 있습니다.</div>
+        </div>
+      `;
+    }
+    route('report');
+  } catch (error) {
+    console.error('보고서 미리보기 오류:', error);
+    toast(error.message || '보고서 미리보기에 실패했습니다', 'error');
+  } finally {
+    setLoading(false);
+  }
+}
+
+// 사용자 목록에서 해당 사용자 보고서 다운로드
+async function downloadReportForUser(householdId) {
+  if (!InspectorState.session) {
+    toast('로그인이 필요합니다', 'error');
+    return;
+  }
+  setLoading(true);
+  try {
+    toast('보고서 데이터 조회 중...', 'info');
+    const reportData = await api.getReportPreview(householdId);
+    const caseId = reportData.case_id;
+    if (!caseId) {
+      toast('해당 사용자의 케이스가 없습니다', 'error');
+      return;
+    }
+    toast('PDF 생성 중...', 'info');
+    const generateResult = await api.generateReport(caseId, householdId);
+    if (!generateResult || !generateResult.success || !generateResult.filename) {
+      throw new Error(generateResult?.message || generateResult?.error || 'PDF 생성에 실패했습니다');
+    }
+    toast('다운로드 중...', 'info');
+    await api.downloadReport(generateResult.filename);
+    toast('보고서 다운로드가 완료되었습니다', 'success');
+  } catch (error) {
+    console.error('보고서 다운로드 오류:', error);
+    toast(error.message || '보고서 다운로드에 실패했습니다', 'error');
+  } finally {
+    setLoading(false);
   }
 }
 
@@ -303,177 +450,103 @@ async function loadAllDefectsDirectly() {
   }
 }
 
-// 모든 하자 목록 조회
-async function loadAllDefects() {
-  console.log('🔍 loadAllDefects() 함수 호출됨');
-  console.log('🔍 InspectorState.session:', InspectorState.session ? '있음' : '없음');
-  
+// 선택한 사용자(세대)의 하자 목록 조회 (household_id 기준)
+async function loadDefectsForHousehold(householdId) {
+  const container = $('#defect-list-container');
+  if (!container) return;
   if (!InspectorState.session) {
-    console.log('⚠️ 세션이 없어서 하자목록을 로드할 수 없습니다');
-    // 세션이 없으면 로딩 메시지 표시
-    const container = $('#defect-list-container');
-    if (container) {
-      container.innerHTML = `
-        <div class="card" style="text-align: center; padding: 40px;">
-          <div style="color: #666;">로그인 중...</div>
-        </div>
-      `;
-    }
+    container.innerHTML = '<div class="card" style="text-align: center; padding: 40px;"><div style="color: #666;">로그인이 필요합니다.</div></div>';
     return;
   }
-  
-  // 로딩 표시 (버튼은 비활성화하지 않음 - setLoading 사용 안 함)
-  const container = $('#defect-list-container');
-  console.log('🔍 container 요소:', container ? '찾음' : '없음');
-  if (container) {
-    container.innerHTML = `
-      <div class="card" style="text-align: center; padding: 40px;">
-        <div style="color: #666;">하자목록을 불러오는 중...</div>
-      </div>
-    `;
-    console.log('✅ 로딩 메시지 표시 완료');
-  }
-  
+  container.innerHTML = `
+    <div class="card" style="text-align: center; padding: 40px;">
+      <div style="color: #666;">하자목록을 불러오는 중...</div>
+    </div>
+  `;
   try {
-    console.log('📡 모든 하자 조회 시작...');
-    console.log('🔍 api 객체:', api ? '있음' : '없음');
-    console.log('🔍 api.baseURL:', api ? api.baseURL : 'N/A');
-    
-    // 점검원용 API로 모든 하자 조회
-    console.log('📋 점검원용 API로 모든 하자 조회 시도...');
-    const result = await api.request('/defects/all');
-    
-    console.log('✅ 점검원용 API 응답:', result);
-    console.log('📊 조회된 하자 수:', result.defects ? result.defects.length : 0);
-    
-    if (!result.defects || result.defects.length === 0) {
-      console.log('⚠️ 조회된 하자가 없습니다');
-      if (container) {
-        container.innerHTML = `
-          <div class="card" style="text-align: center; padding: 40px;">
-            <div style="color: #666;">등록된 하자가 없습니다.</div>
-            <div style="color: #999; font-size: 12px; margin-top: 8px;">하자를 등록하면 여기에 표시됩니다.</div>
-          </div>
-        `;
-      }
-      InspectorState.allDefects = [];
-      InspectorState.currentCaseId = null;
+    const result = await api.getDefectsByHousehold(householdId);
+    const defects = result.defects || [];
+    InspectorState.allDefects = defects;
+    InspectorState.currentCaseId = defects.length > 0 ? defects[0].case_id : null;
+
+    if (defects.length === 0) {
+      container.innerHTML = `
+        <div class="card" style="text-align: center; padding: 40px;">
+          <div style="color: #666;">이 사용자에게 등록된 하자가 없습니다.</div>
+        </div>
+      `;
       return;
     }
-    
-    // Admin API 응답을 점검원 화면 형식으로 변환
-    const allDefects = result.defects.map(d => ({
-      id: d.id,
-      case_id: d.case_id,
-      case_type: d.case_type,
-      location: d.location,
-      trade: d.trade,
-      content: d.content,
-      memo: d.memo,
-      created_at: d.created_at,
-      case_created_at: d.created_at,
-      photos: d.photos || [] // Admin API 응답에 photos가 있을 수 있음
-    }));
-    
-    console.log('✅ 총 조회된 하자 수:', allDefects.length);
-    InspectorState.allDefects = allDefects;
-    
-    // 첫 번째 하자의 케이스 ID를 기본으로 설정 (보고서 생성용)
-    if (allDefects.length > 0 && !InspectorState.currentCaseId) {
-      InspectorState.currentCaseId = allDefects[0].case_id;
-      console.log('✅ 기본 케이스 ID 설정:', InspectorState.currentCaseId);
-    }
-    
-    // 각 하자에 대한 측정값 조회
+
     const defectsWithInspections = await Promise.all(
-      allDefects.map(async (defect) => {
+      defects.map(async (defect) => {
         try {
           const inspections = await api.getDefectInspections(defect.id);
           return { ...defect, inspections: inspections.inspections || {} };
         } catch (error) {
-          console.warn(`하자 ${defect.id}의 측정값 조회 실패:`, error);
           return { ...defect, inspections: {} };
         }
       })
     );
-    
-    // 하자목록 표시
-    if (!defectsWithInspections || defectsWithInspections.length === 0) {
-      if (container) {
-        container.innerHTML = `
-          <div class="card" style="text-align: center; padding: 40px;">
-            <div style="color: #666;">등록된 하자가 없습니다.</div>
+
+    const baseUrl = api.baseURL.replace('/api', '');
+    container.innerHTML = defectsWithInspections.map((defect) => {
+      const hasInspections = Object.keys(defect.inspections || {}).length > 0;
+      const inspectionSummary = hasInspections
+        ? Object.entries(defect.inspections).map(([type, items]) => {
+            const typeNames = { air: '공기질', radon: '라돈', level: '레벨기', thermal: '열화상' };
+            return `${typeNames[type] || type} ${items.length}건`;
+          }).join(', ')
+        : '';
+      return `
+        <div class="defect-card">
+          <div class="defect-card-header">
+            <div>
+              <div class="defect-card-title">${escapeHTML(defect.location || '')} - ${escapeHTML(defect.trade || '')}</div>
+              <div class="defect-card-meta">케이스: ${defect.case_id} | ${formatDate(defect.created_at)}</div>
+            </div>
+            ${hasInspections ? '<span class="inspection-badge">점검완료</span>' : '<span class="inspection-badge pending">점검대기</span>'}
           </div>
-        `;
-      }
-    } else {
-      if (container) {
-        container.innerHTML = defectsWithInspections.map(defect => {
-        const hasInspections = Object.keys(defect.inspections || {}).length > 0;
-        const inspectionSummary = hasInspections 
-          ? Object.entries(defect.inspections).map(([type, items]) => {
-              const typeNames = { air: '공기질', radon: '라돈', level: '레벨기', thermal: '열화상' };
-              return `${typeNames[type] || type} ${items.length}건`;
-            }).join(', ')
-          : '';
-        
-        return `
-          <div class="defect-card">
-            <div class="defect-card-header">
-              <div>
-                <div class="defect-card-title">${escapeHTML(defect.location || '')} - ${escapeHTML(defect.trade || '')}</div>
-                <div class="defect-card-meta">케이스: ${defect.case_id} | ${formatDate(defect.created_at)}</div>
+          <div class="defect-card-content">
+            <div class="label">내용</div>
+            <div class="value">${escapeHTML(defect.content || '')}</div>
+            ${defect.memo ? `<div class="label">메모</div><div class="value">${escapeHTML(defect.memo)}</div>` : ''}
+            ${hasInspections ? `<div class="label">점검결과</div><div class="value" style="color: #10b981; font-size: 14px;">${inspectionSummary}</div>` : ''}
+            ${defect.photos && defect.photos.length > 0 ? `
+              <div class="label">사진</div>
+              <div class="gallery" style="display:flex;gap:8px;margin-top:4px;">
+                ${defect.photos.map((photo) => `
+                  <div class="thumb has-image" style="background-image:url('${baseUrl}${photo.url}');cursor:pointer;" onclick="showImageModal('${baseUrl}${photo.url}')">
+                    ${photo.kind === 'near' ? '전체' : '근접'}
+                  </div>
+                `).join('')}
               </div>
-              ${hasInspections ? '<span class="inspection-badge">점검완료</span>' : '<span class="inspection-badge pending">점검대기</span>'}
-            </div>
-            <div class="defect-card-content">
-              <div class="label">내용</div>
-              <div class="value">${escapeHTML(defect.content || '')}</div>
-              ${defect.memo ? `
-                <div class="label">메모</div>
-                <div class="value">${escapeHTML(defect.memo)}</div>
-              ` : ''}
-              ${hasInspections ? `
-                <div class="label">점검결과</div>
-                <div class="value" style="color: #10b981; font-size: 14px;">${inspectionSummary}</div>
-              ` : ''}
-              ${defect.photos && defect.photos.length > 0 ? `
-                <div class="label">사진</div>
-                <div class="gallery" style="display:flex;gap:8px;margin-top:4px;">
-                  ${defect.photos.map(photo => `
-                    <div class="thumb has-image" 
-                         style="background-image:url('https://mobile-app-new.onrender.com${photo.url}');cursor:pointer;" 
-                         onclick="showImageModal('https://mobile-app-new.onrender.com${photo.url}')">
-                      ${photo.kind === 'near' ? '전체' : '근접'}
-                    </div>
-                  `).join('')}
-                </div>
-              ` : ''}
-            </div>
-            <div class="hr"></div>
-            <div class="button-group" style="display: flex; gap: 8px; margin-top: 12px;">
-              <button class="button success" style="flex: 1;" onclick="openDefectInspection('${defect.id}', '${defect.case_id}')">
-                📊 점검결과 입력
-              </button>
-            </div>
+            ` : ''}
           </div>
-        `;
-        }).join('');
-      }
-    }
-    
+          <div class="hr"></div>
+          <div class="button-group" style="display: flex; gap: 8px; margin-top: 12px;">
+            <button class="button success" style="flex: 1;" onclick="openDefectInspection('${defect.id}', '${defect.case_id}')">📊 점검결과 입력</button>
+          </div>
+        </div>
+      `;
+    }).join('');
   } catch (error) {
     console.error('하자목록 조회 오류:', error);
     toast('하자목록을 불러오는데 실패했습니다', 'error');
-    if (container) {
-      container.innerHTML = `
-        <div class="card" style="text-align: center; padding: 40px;">
-          <div style="color: #e74c3c;">하자목록을 불러오는데 실패했습니다.</div>
-          <div style="color: #999; font-size: 12px; margin-top: 8px;">페이지를 새로고침해주세요.</div>
-        </div>
-      `;
-    }
+    container.innerHTML = `
+      <div class="card" style="text-align: center; padding: 40px;">
+        <div style="color: #e74c3c;">하자목록을 불러오는데 실패했습니다.</div>
+        <div style="color: #999; font-size: 12px; margin-top: 8px;">페이지를 새로고침해주세요.</div>
+      </div>
+    `;
   }
+}
+
+// 모든 하자 목록 조회 (사용자 목록 진입 전 예전 방식 유지 - 세션 복원 시 user-list로 가므로 사용처 없을 수 있음)
+async function loadAllDefects() {
+  if (!InspectorState.session) return;
+  await loadUserList();
+  route('user-list');
 }
 
 // 점검결과 입력 화면 열기
@@ -872,10 +945,15 @@ async function onPreviewReport() {
     return;
   }
 
+  if (!InspectorState.selectedHouseholdId) {
+    toast('사용자를 먼저 선택해주세요', 'error');
+    return;
+  }
+  
   setLoading(true);
   
   try {
-    const reportData = await api.getReportPreview();
+    const reportData = await api.getReportPreview(InspectorState.selectedHouseholdId);
     const cont = $('#report-preview');
     cont.innerHTML = '';
     
@@ -951,10 +1029,11 @@ async function previewReportAsPdf() {
     return;
   }
 
+  const householdId = InspectorState.selectedHouseholdId;
   setLoading(true);
   try {
     toast('PDF 생성 중...', 'info');
-    const generateResult = await api.generateReport(caseId);
+    const generateResult = await api.generateReport(caseId, householdId);
     
     console.log('PDF 생성 결과:', generateResult);
     
@@ -988,6 +1067,7 @@ async function downloadReportAsPdf() {
   }
   
   const caseId = InspectorState.currentCaseId;
+  const householdId = InspectorState.selectedHouseholdId;
   if (!caseId) {
     toast('케이스를 먼저 선택해주세요', 'error');
     return;
@@ -996,7 +1076,7 @@ async function downloadReportAsPdf() {
   setLoading(true);
   try {
     toast('PDF 생성 중...', 'info');
-    const generateResult = await api.generateReport(caseId);
+    const generateResult = await api.generateReport(caseId, householdId);
     
     console.log('PDF 생성 결과:', generateResult);
     
@@ -1030,6 +1110,7 @@ async function sendReportAsSMS() {
   }
   
   const caseId = InspectorState.currentCaseId;
+  const householdId = InspectorState.selectedHouseholdId;
   if (!caseId) {
     toast('케이스를 먼저 선택해주세요', 'error');
     return;
@@ -1040,7 +1121,7 @@ async function sendReportAsSMS() {
   
   setLoading(true);
   try {
-    const result = await api.sendReport(caseId, phoneNumber);
+    const result = await api.sendReport(caseId, phoneNumber, householdId);
     if (result.success) {
       toast('SMS로 보고서가 발송되었습니다', 'success');
     } else {
@@ -1068,17 +1149,16 @@ window.addEventListener('DOMContentLoaded', async () => {
   // 모든 화면 숨기기
   $$('.screen').forEach(el => el.classList.add('hidden'));
   
-  // 먼저 하자목록 화면 표시 (로딩 중에도 화면이 보이도록)
-  const defectListScreen = $('#defect-list');
-  if (defectListScreen) {
-    defectListScreen.classList.remove('hidden');
-    console.log('✅ 하자목록 화면 표시');
+  // 먼저 사용자 목록 화면 표시 (로딩 중에도 화면이 보이도록)
+  const userListScreen = $('#user-list');
+  if (userListScreen) {
+    userListScreen.classList.remove('hidden');
+    console.log('✅ 사용자 목록 화면 표시');
   } else {
-    console.error('❌ 하자목록 화면을 찾을 수 없습니다');
+    console.error('❌ 사용자 목록 화면을 찾을 수 없습니다');
   }
   
-  // 초기 로딩 메시지 표시 (버튼은 그대로 유지)
-  const container = $('#defect-list-container');
+  const container = $('#user-list-container');
   if (container) {
     container.innerHTML = `
       <div class="card" style="text-align: center; padding: 40px;">
@@ -1086,9 +1166,6 @@ window.addEventListener('DOMContentLoaded', async () => {
         <div style="color: #999; font-size: 12px; margin-top: 8px;">잠시만 기다려주세요</div>
       </div>
     `;
-    console.log('✅ 로딩 메시지 표시');
-  } else {
-    console.error('❌ 하자목록 컨테이너를 찾을 수 없습니다');
   }
   
   // 세션 복원 시도
@@ -1110,12 +1187,11 @@ window.addEventListener('DOMContentLoaded', async () => {
           console.log('✅ 토큰 유효성 확인 완료, 세션 복원 중...');
           InspectorState.session = session;
           
-          // 하자목록 로드
-          console.log('📋 하자목록 로드 시작...');
-          await loadAllDefects();
+          console.log('📋 사용자 목록 로드 시작...');
+          await loadUserList();
           
-          console.log('✅ 세션 복원 완료, 하자목록 화면으로 이동');
-          route('defect-list');
+          console.log('✅ 세션 복원 완료, 사용자 목록 화면으로 이동');
+          route('user-list');
           return; // 성공 시 여기서 종료
         } catch (error) {
           // 토큰이 만료되었거나 유효하지 않은 경우

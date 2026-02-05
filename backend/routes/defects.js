@@ -2,6 +2,7 @@
 const express = require('express');
 const pool = require('../database');
 const { authenticateToken, requireInspectorAccess } = require('../middleware/auth');
+const { decrypt } = require('../utils/encryption');
 
 const router = express.Router();
 
@@ -40,6 +41,87 @@ router.get('/', authenticateToken, async (req, res) => {
     
   } catch (error) {
     console.error('Get defects error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// 점검원용: 하자가 등록된 사용자(세대) 목록 (household_id 기준)
+router.get('/users', authenticateToken, requireInspectorAccess, async (req, res) => {
+  try {
+    const query = `
+      SELECT 
+        h.id AS household_id,
+        c.name AS complex_name,
+        h.dong,
+        h.ho,
+        h.resident_name,
+        h.resident_name_encrypted,
+        COUNT(d.id) AS defect_count
+      FROM household h
+      JOIN complex c ON h.complex_id = c.id
+      JOIN case_header ch ON ch.household_id = h.id
+      JOIN defect d ON d.case_id = ch.id
+      WHERE LOWER(TRIM(c.name)) <> 'admin'
+      GROUP BY h.id, c.name, h.dong, h.ho, h.resident_name, h.resident_name_encrypted
+      ORDER BY defect_count DESC, h.dong, h.ho
+      LIMIT 500
+    `;
+    const result = await pool.query(query);
+    const users = result.rows.map((row) => {
+      let name = row.resident_name || '';
+      if (row.resident_name_encrypted) {
+        try {
+          name = decrypt(row.resident_name_encrypted);
+        } catch (e) {
+          name = row.resident_name || '';
+        }
+      }
+      return {
+        household_id: row.household_id,
+        complex_name: row.complex_name || '',
+        dong: row.dong || '',
+        ho: row.ho || '',
+        resident_name: name,
+        defect_count: parseInt(row.defect_count, 10)
+      };
+    });
+    res.json({ success: true, users });
+  } catch (error) {
+    console.error('Get users with defects error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// 점검원용: 특정 사용자(세대)의 하자 목록 (household_id 기준)
+router.get('/by-household/:householdId', authenticateToken, requireInspectorAccess, async (req, res) => {
+  try {
+    const householdId = parseInt(req.params.householdId, 10);
+    if (Number.isNaN(householdId)) {
+      return res.status(400).json({ error: 'Invalid household_id' });
+    }
+    const query = `
+      SELECT 
+        d.id, d.case_id, d.location, d.trade, d.content, d.memo, 
+        d.created_at,
+        ch.type AS case_type, ch.created_at AS case_created_at
+      FROM defect d
+      JOIN case_header ch ON d.case_id = ch.id
+      WHERE ch.household_id = $1
+      ORDER BY d.created_at DESC
+      LIMIT 1000
+    `;
+    const result = await pool.query(query, [householdId]);
+    const defects = result.rows;
+    for (const defect of defects) {
+      const photoResult = await pool.query(
+        'SELECT id, kind, url, thumb_url, taken_at FROM photo WHERE defect_id = $1',
+        [defect.id]
+      );
+      defect.photos = photoResult.rows;
+    }
+    res.json({ success: true, defects, total: defects.length });
+  } catch (error) {
+    console.error('Get defects by household error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

@@ -11,10 +11,23 @@ const path = require('path');
 
 const router = express.Router();
 
+// 점검원(admin complex)이면 요청의 household_id로 보고서 대상 세대 사용
+async function getReportTargetHouseholdId(req) {
+  const tokenHouseholdId = req.user?.householdId;
+  const overrideId = req.query?.household_id || req.body?.household_id;
+  if (!overrideId) return tokenHouseholdId;
+  const r = await pool.query(
+    `SELECT c.name FROM household h JOIN complex c ON h.complex_id = c.id WHERE h.id = $1`,
+    [tokenHouseholdId]
+  );
+  const isInspector = r.rows[0] && (r.rows[0].name || '').toLowerCase() === 'admin';
+  return isInspector ? parseInt(overrideId, 10) : tokenHouseholdId;
+}
+
 // Get report preview
 router.get('/preview', authenticateToken, async (req, res) => {
   try {
-    const { householdId } = req.user;
+    const householdId = await getReportTargetHouseholdId(req);
 
     // Get household information from database (personal info is not in JWT token)
     const householdQuery = `
@@ -229,7 +242,7 @@ router.get('/preview', authenticateToken, async (req, res) => {
 router.post('/generate', authenticateToken, async (req, res) => {
   try {
     const { case_id, template = 'comprehensive-report' } = req.body;
-    const { householdId } = req.user;
+    const householdId = await getReportTargetHouseholdId(req);
 
     // Get household information from database (personal info is not in JWT token)
     const householdQuery = `
@@ -494,7 +507,7 @@ router.post('/generate-pptx', authenticateToken, (req, res) => {
 router.post('/send', authenticateToken, async (req, res) => {
   try {
     const { case_id, phone_number } = req.body;
-    const { householdId } = req.user;
+    const householdId = await getReportTargetHouseholdId(req);
 
     // Get household information from database (personal info is not in JWT token)
     const householdQuery = `

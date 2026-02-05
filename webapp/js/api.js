@@ -134,6 +134,16 @@ class APIClient {
     return await this.request(`/defects?case_id=${caseId}`);
   }
 
+  /** 점검원용: 하자가 등록된 사용자(세대) 목록 */
+  async getUsersWithDefects() {
+    return await this.request('/defects/users');
+  }
+
+  /** 점검원용: 특정 사용자(세대)의 하자 목록 */
+  async getDefectsByHousehold(householdId) {
+    return await this.request(`/defects/by-household/${householdId}`);
+  }
+
   async createDefect(defectData) {
     return await this.request('/defects', {
       method: 'POST',
@@ -203,24 +213,26 @@ class APIClient {
   }
 
   // Reports
-  async getReportPreview() {
-    return await this.request('/reports/preview');
+  async getReportPreview(householdId) {
+    const q = householdId != null ? `?household_id=${householdId}` : '';
+    return await this.request(`/reports/preview${q}`);
   }
 
-  async generateReport(caseId) {
+  async generateReport(caseId, householdId) {
+    const body = { case_id: caseId };
+    if (householdId != null) body.household_id = householdId;
     return await this.request('/reports/generate', {
       method: 'POST',
-      body: JSON.stringify({ case_id: caseId })
+      body: JSON.stringify(body)
     });
   }
 
-  async sendReport(caseId, phoneNumber = null) {
+  async sendReport(caseId, phoneNumber = null, householdId = null) {
+    const body = { case_id: caseId, phone_number: phoneNumber };
+    if (householdId != null) body.household_id = householdId;
     return await this.request('/reports/send', {
       method: 'POST',
-      body: JSON.stringify({ 
-        case_id: caseId,
-        phone_number: phoneNumber
-      })
+      body: JSON.stringify(body)
     });
   }
 
