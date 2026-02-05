@@ -156,12 +156,24 @@ class PDFMakeGenerator {
     };
     content.push(summaryTable);
 
-    // 하자 목록
+    // 점검 상세내용 (수치 포함)
+    content.push({
+      text: '점검 상세내용',
+      style: 'sectionHeader',
+      margin: [0, 10, 0, 10]
+    });
+    content.push({
+      text: '아래는 하자 목록 및 장비 점검 측정값(수치) 상세입니다.',
+      style: 'defectText',
+      margin: [0, 0, 0, 15]
+    });
+
+    // 하자 목록 (상세)
     if (data.defects && data.defects.length > 0) {
       content.push({
-        text: '하자 목록',
+        text: '하자 목록 (상세)',
         style: 'sectionHeader',
-        margin: [0, 20, 0, 10]
+        margin: [0, 15, 0, 10]
       });
 
       data.defects.forEach((defect, index) => {
@@ -230,12 +242,70 @@ class PDFMakeGenerator {
       });
     }
 
-    // 장비 점검 데이터
+    // 장비 점검 데이터 (점검 상세내용 - 수치 포함)
     if (data.has_equipment_data) {
-      // 공기질 측정
+      // 측정 수치 요약 테이블 (한눈에 보는 수치)
+      const summaryRows = [
+        [
+          { text: '구분', style: 'tableHeader', border: [true, true, true, true] },
+          { text: '위치', style: 'tableHeader', border: [true, true, true, true] },
+          { text: '공종', style: 'tableHeader', border: [true, true, true, true] },
+          { text: '측정 수치', style: 'tableHeader', border: [true, true, true, true] },
+          { text: '결과', style: 'tableHeader', border: [true, true, true, true] }
+        ]
+      ];
+      (data.air_measurements || []).forEach((item) => {
+        summaryRows.push([
+          { text: '공기질', style: 'metaText', border: [true, true, true, true] },
+          { text: item.location || '-', style: 'metaText', border: [true, true, true, true] },
+          { text: item.trade || '-', style: 'metaText', border: [true, true, true, true] },
+          { text: `TVOC ${item.tvoc ?? '-'} ${item.unit_tvoc || ''} / HCHO ${item.hcho ?? '-'} ${item.unit_hcho || ''} / CO2 ${item.co2 ?? '-'}`, style: 'metaText', border: [true, true, true, true], fontSize: 8 },
+          { text: item.result_text || item.result || '-', style: 'metaText', border: [true, true, true, true] }
+        ]);
+      });
+      (data.radon_measurements || []).forEach((item) => {
+        summaryRows.push([
+          { text: '라돈', style: 'metaText', border: [true, true, true, true] },
+          { text: item.location || '-', style: 'metaText', border: [true, true, true, true] },
+          { text: item.trade || '-', style: 'metaText', border: [true, true, true, true] },
+          { text: `${item.radon ?? '-'} ${item.unit || ''}`, style: 'metaText', border: [true, true, true, true] },
+          { text: item.result_text || item.result || '-', style: 'metaText', border: [true, true, true, true] }
+        ]);
+      });
+      (data.level_measurements || []).forEach((item) => {
+        summaryRows.push([
+          { text: '레벨기', style: 'metaText', border: [true, true, true, true] },
+          { text: item.location || '-', style: 'metaText', border: [true, true, true, true] },
+          { text: item.trade || '-', style: 'metaText', border: [true, true, true, true] },
+          { text: `좌 ${item.left_mm ?? '-'}mm / 우 ${item.right_mm ?? '-'}mm`, style: 'metaText', border: [true, true, true, true] },
+          { text: item.result_text || item.result || '-', style: 'metaText', border: [true, true, true, true] }
+        ]);
+      });
+      (data.thermal_inspections || []).forEach((item) => {
+        summaryRows.push([
+          { text: '열화상', style: 'metaText', border: [true, true, true, true] },
+          { text: item.location || '-', style: 'metaText', border: [true, true, true, true] },
+          { text: item.trade || '-', style: 'metaText', border: [true, true, true, true] },
+          { text: item.note || '-', style: 'metaText', border: [true, true, true, true] },
+          { text: item.result_text || item.result || '-', style: 'metaText', border: [true, true, true, true] }
+        ]);
+      });
+      if (summaryRows.length > 1) {
+        content.push({
+          text: '측정 수치 요약',
+          style: 'defectHeader',
+          margin: [0, 15, 0, 8]
+        });
+        content.push({
+          table: { widths: ['auto', '*', 'auto', '*', 'auto'], body: summaryRows },
+          margin: [0, 0, 0, 15]
+        });
+      }
+
+      // 공기질 측정 (상세)
       if (data.air_measurements && data.air_measurements.length > 0) {
         content.push({
-          text: '공기질 측정',
+          text: '공기질 측정 (상세)',
           style: 'sectionHeader',
           margin: [0, 20, 0, 10]
         });
@@ -251,9 +321,9 @@ class PDFMakeGenerator {
             ul: [
               { text: `위치: ${item.location || ''}`, style: 'defectText' },
               { text: `공종: ${item.trade || ''}`, style: 'defectText' },
-              { text: `TVOC: ${item.tvoc || 0} ${item.unit_tvoc || ''}`, style: 'defectText' },
-              { text: `HCHO: ${item.hcho || 0} ${item.unit_hcho || ''}`, style: 'defectText' },
-              { text: `CO2: ${item.co2 || 0}`, style: 'defectText' },
+              { text: `TVOC: ${item.tvoc ?? '-'} ${item.unit_tvoc || ''}`, style: 'defectText' },
+              { text: `HCHO: ${item.hcho ?? '-'} ${item.unit_hcho || ''}`, style: 'defectText' },
+              { text: `CO2: ${item.co2 ?? '-'}`, style: 'defectText' },
               { text: `결과: ${item.result_text || item.result || ''}`, style: 'defectText' }
             ],
             margin: [20, 0, 0, 10]
@@ -292,10 +362,10 @@ class PDFMakeGenerator {
         });
       }
 
-      // 라돈 측정
+      // 라돈 측정 (상세)
       if (data.radon_measurements && data.radon_measurements.length > 0) {
         content.push({
-          text: '라돈 측정',
+          text: '라돈 측정 (상세)',
           style: 'sectionHeader',
           margin: [0, 20, 0, 10]
         });
@@ -311,7 +381,7 @@ class PDFMakeGenerator {
             ul: [
               { text: `위치: ${item.location || ''}`, style: 'defectText' },
               { text: `공종: ${item.trade || ''}`, style: 'defectText' },
-              { text: `라돈: ${item.radon || 0} ${item.unit || ''}`, style: 'defectText' },
+              { text: `라돈: ${item.radon ?? '-'} ${item.unit || ''}`, style: 'defectText' },
               { text: `결과: ${item.result_text || item.result || ''}`, style: 'defectText' }
             ],
             margin: [20, 0, 0, 10]
@@ -350,10 +420,10 @@ class PDFMakeGenerator {
         });
       }
 
-      // 레벨기 측정
+      // 레벨기 측정 (상세)
       if (data.level_measurements && data.level_measurements.length > 0) {
         content.push({
-          text: '레벨기 측정',
+          text: '레벨기 측정 (상세)',
           style: 'sectionHeader',
           margin: [0, 20, 0, 10]
         });
@@ -369,8 +439,8 @@ class PDFMakeGenerator {
             ul: [
               { text: `위치: ${item.location || ''}`, style: 'defectText' },
               { text: `공종: ${item.trade || ''}`, style: 'defectText' },
-              { text: `좌측: ${item.left_mm || 0}mm`, style: 'defectText' },
-              { text: `우측: ${item.right_mm || 0}mm`, style: 'defectText' },
+              { text: `좌측: ${item.left_mm ?? '-'}mm`, style: 'defectText' },
+              { text: `우측: ${item.right_mm ?? '-'}mm`, style: 'defectText' },
               { text: `결과: ${item.result_text || item.result || ''}`, style: 'defectText' }
             ],
             margin: [20, 0, 0, 10]
@@ -409,10 +479,10 @@ class PDFMakeGenerator {
         });
       }
 
-      // 열화상 점검
+      // 열화상 점검 (상세)
       if (data.thermal_inspections && data.thermal_inspections.length > 0) {
         content.push({
-          text: '열화상 점검',
+          text: '열화상 점검 (상세)',
           style: 'sectionHeader',
           margin: [0, 20, 0, 10]
         });
