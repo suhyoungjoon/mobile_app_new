@@ -1,4 +1,7 @@
 // SMS service using Naver Cloud Platform
+// 실제 발송 비활성화: 개발 사항은 유지하되, 실제 SMS는 발송하지 않음 (환경변수 SMS_ACTUAL_SEND_ENABLED=true 시에만 발송)
+const SMS_ACTUAL_SEND_ENABLED = process.env.SMS_ACTUAL_SEND_ENABLED === 'true';
+
 const crypto = require('crypto');
 const axios = require('axios');
 const config = require('../config');
@@ -23,7 +26,13 @@ class SMSService {
   }
 
   // Send SMS using Naver Cloud Platform
+  // SMS_ACTUAL_SEND_ENABLED 가 true가 아니면 실제 발송 없이 모의 발송만 수행
   async sendSMS(to, message, options = {}) {
+    if (!SMS_ACTUAL_SEND_ENABLED) {
+      console.log('📱 [SMS 비활성화] 실제 발송 없이 모의 처리:', to);
+      return await this.sendMockSMS(to, message, options);
+    }
+
     try {
       const timestamp = Date.now().toString();
       const url = `/sms/v2/services/${this.serviceId}/messages`;
