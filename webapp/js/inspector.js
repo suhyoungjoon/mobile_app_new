@@ -210,10 +210,13 @@ async function loadUserList() {
     }
     const baseUrl = api.baseURL.replace('/api', '');
     container.innerHTML = users.map((u) => `
-      <div class="defect-card">
+      <div class="defect-card ${u.has_inspected ? 'has-inspected' : ''}">
         <div class="defect-card-header">
           <div class="defect-card-title">${escapeHTML(u.complex_name || '')} ${escapeHTML(u.dong || '')}동 ${escapeHTML(u.ho || '')}호</div>
-          <span class="inspection-badge">하자 ${u.defect_count}건</span>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            ${u.has_inspected ? '<span class="inspection-badge inspected">점검완료</span>' : ''}
+            <span class="inspection-badge">하자 ${u.defect_count}건</span>
+          </div>
         </div>
         <div class="defect-card-meta">${escapeHTML(u.resident_name || '')} · 하자 ${u.defect_count}건</div>
         <div class="button-group" style="display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap;">
@@ -281,8 +284,11 @@ async function previewReportForUser(householdId) {
     if (buttonGroup) buttonGroup.style.display = 'flex';
     cont.innerHTML = '';
     const baseUrl = api.baseURL.replace('/api', '');
-    if (reportData && reportData.defects && reportData.defects.length > 0) {
-      reportData.defects.forEach((d) => {
+    const defects = reportData && reportData.defects != null
+      ? (Array.isArray(reportData.defects) ? reportData.defects : [reportData.defects])
+      : [];
+    if (defects.length > 0) {
+      defects.forEach((d) => {
         const card = document.createElement('div');
         card.className = 'card';
         card.innerHTML = `
@@ -304,7 +310,7 @@ async function previewReportForUser(householdId) {
     } else {
       cont.innerHTML = `
         <div class="card" style="text-align: center; padding: 40px;">
-          <div style="color: #666;">${reportData && reportData.defects && reportData.defects.length === 0 ? '등록된 하자가 없습니다.' : '보고서 미리보기 데이터를 불러왔습니다.'}</div>
+          <div style="color: #666;">${defects.length === 0 ? '등록된 하자가 없습니다.' : '보고서 미리보기 데이터를 불러왔습니다.'}</div>
           <div style="color: #999; font-size: 12px; margin-top: 10px;">점검결과 유무와 관계없이 PDF 미리보기·다운로드를 이용할 수 있습니다.</div>
         </div>
       `;
@@ -1005,13 +1011,17 @@ async function onPreviewReport() {
       InspectorState.currentCaseId = reportData.case_id;
     }
     
-    if (reportData.defects && reportData.defects.length > 0) {
+    const defects = reportData.defects != null
+      ? (Array.isArray(reportData.defects) ? reportData.defects : [reportData.defects])
+      : [];
+    if (defects.length > 0) {
       // 하자가 있는 경우: 버튼 표시
       if (buttonGroup) {
         buttonGroup.style.display = 'flex';
       }
       
-      reportData.defects.forEach((d, index) => {
+      const baseUrl = api.baseURL.replace('/api', '');
+      defects.forEach((d, index) => {
         const card = document.createElement('div');
         card.className = 'card';
         card.innerHTML = `
@@ -1022,8 +1032,8 @@ async function onPreviewReport() {
             <div class="gallery" style="margin-top:8px;">
               ${d.photos.map(photo => `
                 <div class="thumb has-image" 
-                     style="background-image:url('https://mobile-app-new.onrender.com${photo.url}');cursor:pointer;" 
-                     onclick="showImageModal('https://mobile-app-new.onrender.com${photo.url}')">
+                     style="background-image:url('${baseUrl}${photo.url}');cursor:pointer;" 
+                     onclick="showImageModal('${baseUrl}${photo.url}')">
                   ${photo.kind === 'near' ? '근접' : '원거리'}
                 </div>
               `).join('')}

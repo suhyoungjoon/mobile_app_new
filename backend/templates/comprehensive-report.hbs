@@ -389,6 +389,26 @@
             font-style: italic;
         }
         
+        .defect-inspections {
+            margin-top: 12px;
+            padding: 12px;
+            background: #f8fafc;
+            border-radius: 6px;
+            border-left: 3px solid #10b981;
+        }
+        .defect-inspections h4 {
+            font-size: 14px;
+            color: #059669;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+        .inspection-line {
+            font-size: 12px;
+            color: #444;
+            margin: 4px 0;
+            line-height: 1.4;
+        }
+        
         .photos-section {
             margin-top: 15px;
         }
@@ -707,7 +727,7 @@
                 {{#each defects}}
                 <div class="defect-card">
                     <div class="defect-header">
-                        <div class="defect-title">하자 #{{@index}}</div>
+                        <div class="defect-title">하자 #{{index}}</div>
                         <div class="defect-meta">{{location}} / {{trade}}</div>
                     </div>
                     <div class="defect-body">
@@ -720,6 +740,24 @@
                         <div class="defect-memo">
                             <h4>메모</h4>
                             <p>{{memo}}</p>
+                        </div>
+                        {{/if}}
+                        
+                        {{#if inspections}}
+                        <div class="defect-inspections">
+                            <h4>점검내용 (본 하자)</h4>
+                            {{#if inspections.air}}{{#each inspections.air}}
+                            <p class="inspection-line">공기질: {{location}} / {{trade}} — TVOC {{tvoc}} {{unit_tvoc}} / HCHO {{hcho}} / CO2 {{co2}} ({{result_text}})</p>
+                            {{/each}}{{/if}}
+                            {{#if inspections.radon}}{{#each inspections.radon}}
+                            <p class="inspection-line">라돈: {{location}} — {{radon}} {{unit}} ({{result_text}})</p>
+                            {{/each}}{{/if}}
+                            {{#if inspections.level}}{{#each inspections.level}}
+                            <p class="inspection-line">레벨기: {{location}} — 좌 {{left_mm}}mm / 우 {{right_mm}}mm ({{result_text}})</p>
+                            {{/each}}{{/if}}
+                            {{#if inspections.thermal}}{{#each inspections.thermal}}
+                            <p class="inspection-line">열화상: {{location}} / {{trade}} — {{note}} ({{result_text}})</p>
+                            {{/each}}{{/if}}
                         </div>
                         {{/if}}
                         

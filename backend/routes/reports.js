@@ -24,214 +24,51 @@ async function getReportTargetHouseholdId(req) {
   return isInspector ? parseInt(overrideId, 10) : tokenHouseholdId;
 }
 
-// Get report preview
+// Get report preview — 사용자(세대) 기준: 등록된 모든 하자 + 하자별 점검내용
 router.get('/preview', authenticateToken, async (req, res) => {
   try {
     const householdId = await getReportTargetHouseholdId(req);
-
-    // Get household information from database (personal info is not in JWT token)
-    const householdQuery = `
-      SELECT h.dong, h.ho, h.resident_name, h.resident_name_encrypted,
-             c.name as complex_name
-      FROM household h
-      JOIN complex c ON h.complex_id = c.id
-      WHERE h.id = $1
-    `;
-    const householdResult = await pool.query(householdQuery, [householdId]);
-    
-    if (householdResult.rows.length === 0) {
+    const data = await loadHouseholdReportData(householdId);
+    if (!data) {
       return res.status(404).json({ error: 'Household not found' });
     }
-    
-    const household = householdResult.rows[0];
-    // Decrypt if encrypted, otherwise use plain text (for compatibility)
-    const complex = household.complex_name;
-    const dong = household.dong;
-    const ho = household.ho;
-    const name = household.resident_name_encrypted 
-      ? decrypt(household.resident_name_encrypted)
-      : household.resident_name;
 
-    const requestedCaseId = req.query.case_id || null;
+    const {
+      complex,
+      dong,
+      ho,
+      name,
+      defects,
+      total_defects: totalDefects,
+      total_thermal: totalThermal,
+      total_air: totalAir,
+      total_radon: totalRadon,
+      total_level: totalLevel,
+      total_equipment: totalEquipment,
+      has_equipment_data: hasEquipmentData
+    } = data;
 
-    // 지정된 case_id가 있으면 해당 케이스, 없으면 최신 케이스 사용 (점검원이 하자목록에서 들어온 경우 해당 케이스 반영)
-    const query = requestedCaseId
-      ? `
-      SELECT c.id, c.type, c.created_at,
-             json_agg(
-               json_build_object(
-                 'id', d.id,
-                 'location', d.location,
-                 'trade', d.trade,
-                 'content', d.content,
-                 'memo', d.memo,
-                 'photos', (
-                   SELECT json_agg(
-                     json_build_object(
-                       'kind', p.kind,
-                       'url', p.url
-                     )
-                   )
-                   FROM photo p WHERE p.defect_id = d.id
-                 )
-               )
-             ) FILTER (WHERE d.id IS NOT NULL) as defects
-      FROM case_header c
-      LEFT JOIN defect d ON c.id = d.case_id
-      WHERE c.household_id = $1 AND c.id = $2
-      GROUP BY c.id, c.type, c.created_at
-      `
-      : `
-      SELECT c.id, c.type, c.created_at,
-             json_agg(
-               json_build_object(
-                 'id', d.id,
-                 'location', d.location,
-                 'trade', d.trade,
-                 'content', d.content,
-                 'memo', d.memo,
-                 'photos', (
-                   SELECT json_agg(
-                     json_build_object(
-                       'kind', p.kind,
-                       'url', p.url
-                     )
-                   )
-                   FROM photo p WHERE p.defect_id = d.id
-                 )
-               )
-             ) FILTER (WHERE d.id IS NOT NULL) as defects
-      FROM case_header c
-      LEFT JOIN defect d ON c.id = d.case_id
-      WHERE c.household_id = $1
-      GROUP BY c.id, c.type, c.created_at
-      ORDER BY c.created_at DESC
-      LIMIT 1
-    `;
-
-    const queryParams = requestedCaseId ? [householdId, requestedCaseId] : [householdId];
-    const result = await pool.query(query, queryParams);
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'No cases found' });
-    }
-
-    const caseData = result.rows[0];
-    const caseId = caseData.id;
-    
-    // case_id를 응답에 포함
-    const defects = caseData.defects || [];
-
-    // Get equipment inspection data
-    const equipmentQuery = `
-      SELECT 
-        ii.type,
-        ii.location,
-        ii.trade,
-        ii.note,
-        ii.result,
-        ii.created_at,
-        -- Air measurements
-        am.tvoc,
-        am.hcho,
-        am.co2,
-        am.unit_tvoc,
-        am.unit_hcho,
-        -- Radon measurements
-        rm.radon,
-        rm.unit_radon,
-        -- Level measurements
-        lm.left_mm,
-        lm.right_mm,
-        -- Thermal photos
-        (
-          SELECT json_agg(
-            json_build_object(
-              'file_url', tp.file_url,
-              'caption', tp.caption,
-              'shot_at', tp.shot_at
-            )
-          )
-          FROM thermal_photo tp WHERE tp.item_id = ii.id
-        ) as photos
-      FROM inspection_item ii
-      LEFT JOIN air_measure am ON ii.id = am.item_id
-      LEFT JOIN radon_measure rm ON ii.id = rm.item_id
-      LEFT JOIN level_measure lm ON ii.id = lm.item_id
-      WHERE ii.case_id = $1
-      ORDER BY ii.created_at ASC
-    `;
-
-    const equipmentResult = await pool.query(equipmentQuery, [caseId]);
-    const equipmentData = equipmentResult.rows;
-
-    // Process equipment data by type
+    // 전체 점검 요약용 플랫 리스트 (기존 템플릿 호환)
     const airMeasurements = [];
     const radonMeasurements = [];
     const levelMeasurements = [];
     const thermalInspections = [];
-
-    equipmentData.forEach(item => {
-      const baseData = {
-        location: item.location,
-        trade: item.trade,
-        note: item.note,
-        result: item.result,
-        result_text: getResultText(item.result),
-        created_at: item.created_at
-      };
-
-      switch (item.type) {
-        case 'air':
-          airMeasurements.push({
-            ...baseData,
-            tvoc: item.tvoc,
-            hcho: item.hcho,
-            co2: item.co2,
-            unit_tvoc: item.unit_tvoc,
-            unit_hcho: item.unit_hcho
-          });
-          break;
-        case 'radon':
-          radonMeasurements.push({
-            ...baseData,
-            radon: item.radon,
-            unit: item.unit_radon
-          });
-          break;
-        case 'level':
-          levelMeasurements.push({
-            ...baseData,
-            left_mm: item.left_mm,
-            right_mm: item.right_mm
-          });
-          break;
-        case 'thermal':
-          thermalInspections.push({
-            ...baseData,
-            photos: item.photos || []
-          });
-          break;
-      }
+    defects.forEach((d) => {
+      (d.inspections.air || []).forEach((x) => airMeasurements.push(x));
+      (d.inspections.radon || []).forEach((x) => radonMeasurements.push(x));
+      (d.inspections.level || []).forEach((x) => levelMeasurements.push(x));
+      (d.inspections.thermal || []).forEach((x) => thermalInspections.push(x));
     });
 
-    // Calculate totals
-    const totalDefects = caseData.defects ? caseData.defects.length : 0;
-    const totalThermal = thermalInspections.length;
-    const totalAir = airMeasurements.length;
-    const totalRadon = radonMeasurements.length;
-    const totalLevel = levelMeasurements.length;
-    const totalEquipment = totalThermal + totalAir + totalRadon + totalLevel;
-    const hasEquipmentData = totalEquipment > 0;
-
-    // Generate comprehensive HTML report
+    const latestCase = defects.length > 0 ? defects[0].case_id : null;
+    const defectsWithIndex = defects.map((d, i) => ({ ...d, index: i + 1 }));
     const html = generateComprehensiveReportHTML({
       complex,
       dong,
       ho,
       name,
-      type: caseData.type,
-      created_at: caseData.created_at,
+      type: '종합점검',
+      created_at: defects.length > 0 ? defects[0].case_created_at : new Date(),
       generated_at: new Date(),
       total_defects: totalDefects,
       total_thermal: totalThermal,
@@ -240,7 +77,7 @@ router.get('/preview', authenticateToken, async (req, res) => {
       total_level: totalLevel,
       total_equipment: totalEquipment,
       has_equipment_data: hasEquipmentData,
-      defects: caseData.defects || [],
+      defects: defectsWithIndex,
       air_measurements: airMeasurements,
       radon_measurements: radonMeasurements,
       level_measurements: levelMeasurements,
@@ -249,10 +86,19 @@ router.get('/preview', authenticateToken, async (req, res) => {
 
     res.json({
       html,
-      case_id: caseData.id,
+      case_id: latestCase,
       defects_count: totalDefects,
       equipment_count: totalEquipment,
-      defects: caseData.defects || [],
+      defects: defects.map((d) => ({
+        id: d.id,
+        case_id: d.case_id,
+        location: d.location,
+        trade: d.trade,
+        content: d.content,
+        memo: d.memo,
+        photos: d.photos,
+        inspections: d.inspections
+      })),
       equipment_data: {
         air: airMeasurements,
         radon: radonMeasurements,
@@ -260,246 +106,67 @@ router.get('/preview', authenticateToken, async (req, res) => {
         thermal: thermalInspections
       }
     });
-
   } catch (error) {
     console.error('Report preview error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// Generate PDF report
+// Generate PDF report — 사용자(세대) 기준: 등록된 모든 하자 + 하자별 점검내용
 router.post('/generate', authenticateToken, async (req, res) => {
   try {
-    const { case_id, template = 'comprehensive-report' } = req.body;
+    const { template = 'comprehensive-report' } = req.body;
     const householdId = await getReportTargetHouseholdId(req);
 
-    // Get household information from database (personal info is not in JWT token)
-    const householdQuery = `
-      SELECT h.dong, h.ho, h.resident_name, h.resident_name_encrypted,
-             c.name as complex_name
-      FROM household h
-      JOIN complex c ON h.complex_id = c.id
-      WHERE h.id = $1
-    `;
-    const householdResult = await pool.query(householdQuery, [householdId]);
-    
-    if (householdResult.rows.length === 0) {
+    const data = await loadHouseholdReportData(householdId);
+    if (!data) {
       return res.status(404).json({ error: 'Household not found' });
     }
-    
-    const household = householdResult.rows[0];
-    // Decrypt if encrypted, otherwise use plain text (for compatibility)
-    const complex = household.complex_name || '';
-    const dong = household.dong || '';
-    const ho = household.ho || '';
-    const name = household.resident_name_encrypted 
-      ? decrypt(household.resident_name_encrypted)
-      : (household.resident_name || '');
-    
-    // 데이터 검증 로그
-    console.log('📊 Household 데이터 (PDF 생성):', {
-      complex_name: household.complex_name,
-      dong: household.dong,
-      ho: household.ho,
-      resident_name: household.resident_name,
-      has_encrypted: !!household.resident_name_encrypted,
-      final_complex: complex,
-      final_dong: dong,
-      final_ho: ho,
-      final_name: name
-    });
 
-    // Get case_id from request or use latest case
-    let targetCaseId = case_id;
+    const defectsWithIndex = data.defects.map((d, i) => ({
+      ...d,
+      index: i + 1,
+      location: d.location || '',
+      trade: d.trade || '',
+      content: d.content || '',
+      memo: d.memo || ''
+    }));
 
-    // If no case_id provided, get latest case
-    if (!targetCaseId) {
-      const latestCaseQuery = `
-        SELECT id FROM case_header 
-        WHERE household_id = $1 
-        ORDER BY created_at DESC 
-        LIMIT 1
-      `;
-      const latestCaseResult = await pool.query(latestCaseQuery, [householdId]);
-      if (latestCaseResult.rows.length === 0) {
-        return res.status(404).json({ error: 'No cases found' });
-      }
-      targetCaseId = latestCaseResult.rows[0].id;
-    }
-
-    // Get case data with defects (사진 정보 포함)
-    const caseQuery = `
-      SELECT c.id, c.type, c.created_at
-      FROM case_header c
-      WHERE c.id = $1 AND c.household_id = $2
-    `;
-
-    const caseResult = await pool.query(caseQuery, [targetCaseId, householdId]);
-    
-    if (caseResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Case not found' });
-    }
-
-    const caseData = caseResult.rows[0];
-    
-    // Get defects with photos
-    const defectsQuery = `
-      SELECT d.id, d.location, d.trade, d.content, d.memo, d.created_at
-      FROM defect d
-      WHERE d.case_id = $1
-      ORDER BY d.created_at DESC
-    `;
-    const defectsResult = await pool.query(defectsQuery, [targetCaseId]);
-    const defects = defectsResult.rows || [];
-    
-    // Fetch photos for each defect
-    for (const defect of defects) {
-      const photoQuery = `
-        SELECT id, kind, url, thumb_url, taken_at
-        FROM photo
-        WHERE defect_id = $1
-        ORDER BY kind, taken_at
-      `;
-      const photoResult = await pool.query(photoQuery, [defect.id]);
-      defect.photos = photoResult.rows || [];
-    }
-
-    // Get equipment inspection data
-    const equipmentQuery = `
-      SELECT 
-        ii.type,
-        ii.location,
-        ii.trade,
-        ii.note,
-        ii.result,
-        ii.created_at,
-        am.tvoc,
-        am.hcho,
-        am.co2,
-        am.unit_tvoc,
-        am.unit_hcho,
-        rm.radon,
-        rm.unit_radon,
-        lm.left_mm,
-        lm.right_mm,
-        (
-          SELECT json_agg(
-            json_build_object(
-              'file_url', tp.file_url,
-              'caption', tp.caption,
-              'shot_at', tp.shot_at
-            )
-          )
-          FROM thermal_photo tp WHERE tp.item_id = ii.id
-        ) as photos
-      FROM inspection_item ii
-      LEFT JOIN air_measure am ON ii.id = am.item_id
-      LEFT JOIN radon_measure rm ON ii.id = rm.item_id
-      LEFT JOIN level_measure lm ON ii.id = lm.item_id
-      WHERE ii.case_id = $1
-      ORDER BY ii.created_at ASC
-    `;
-
-    const equipmentResult = await pool.query(equipmentQuery, [targetCaseId]);
-    const equipmentData = equipmentResult.rows;
-
-    // Process equipment data
     const airMeasurements = [];
     const radonMeasurements = [];
     const levelMeasurements = [];
     const thermalInspections = [];
-
-    equipmentData.forEach(item => {
-      const baseData = {
-        location: item.location,
-        trade: item.trade,
-        note: item.note,
-        result: item.result,
-        result_text: getResultText(item.result),
-        created_at: item.created_at
-      };
-
-      switch (item.type) {
-        case 'air':
-          airMeasurements.push({
-            ...baseData,
-            tvoc: item.tvoc,
-            hcho: item.hcho,
-            co2: item.co2,
-            unit_tvoc: item.unit_tvoc,
-            unit_hcho: item.unit_hcho,
-            photos: item.photos || [] // 측정값 사진 포함
-          });
-          break;
-        case 'radon':
-          radonMeasurements.push({
-            ...baseData,
-            radon: item.radon,
-            unit: item.unit_radon,
-            photos: item.photos || [] // 측정값 사진 포함
-          });
-          break;
-        case 'level':
-          levelMeasurements.push({
-            ...baseData,
-            left_mm: item.left_mm,
-            right_mm: item.right_mm,
-            photos: item.photos || [] // 측정값 사진 포함
-          });
-          break;
-        case 'thermal':
-          thermalInspections.push({
-            ...baseData,
-            photos: item.photos || []
-          });
-          break;
-      }
+    data.defects.forEach((d) => {
+      (d.inspections.air || []).forEach((x) => airMeasurements.push(x));
+      (d.inspections.radon || []).forEach((x) => radonMeasurements.push(x));
+      (d.inspections.level || []).forEach((x) => levelMeasurements.push(x));
+      (d.inspections.thermal || []).forEach((x) => thermalInspections.push(x));
     });
 
-    // Prepare data for PDF generation
     const reportData = {
-      complex: complex || '',
-      dong: dong || '',
-      ho: ho || '',
-      name: name || '',
-      type: caseData.type || '',
-      created_at: caseData.created_at,
+      complex: data.complex || '',
+      dong: data.dong || '',
+      ho: data.ho || '',
+      name: data.name || '',
+      type: '종합점검',
+      created_at: data.defects.length > 0 ? data.defects[0].case_created_at : new Date(),
       generated_at: new Date().toISOString(),
-      total_defects: defects.length,
-      total_thermal: thermalInspections.length,
-      total_air: airMeasurements.length,
-      total_radon: radonMeasurements.length,
-      total_level: levelMeasurements.length,
-      total_equipment: thermalInspections.length + airMeasurements.length + radonMeasurements.length + levelMeasurements.length,
-      has_equipment_data: (thermalInspections.length + airMeasurements.length + radonMeasurements.length + levelMeasurements.length) > 0,
-      defects: defects.map((defect, index) => ({
-        ...defect,
-        index: index + 1,
-        location: defect.location || '',
-        trade: defect.trade || '',
-        content: defect.content || '',
-        memo: defect.memo || ''
-      })),
+      total_defects: data.total_defects,
+      total_thermal: data.total_thermal,
+      total_air: data.total_air,
+      total_radon: data.total_radon,
+      total_level: data.total_level,
+      total_equipment: data.total_equipment,
+      has_equipment_data: data.has_equipment_data,
+      defects: defectsWithIndex,
       air_measurements: airMeasurements,
       radon_measurements: radonMeasurements,
       level_measurements: levelMeasurements,
       thermal_inspections: thermalInspections
     };
-    
-    // 디버깅: 데이터 확인
-    console.log('📊 PDF 생성 데이터:', {
-      complex: reportData.complex,
-      dong: reportData.dong,
-      ho: reportData.ho,
-      name: reportData.name,
-      type: reportData.type,
-      total_defects: reportData.total_defects
-    });
 
-    // Generate PDF using comprehensive template
-    const pdfResult = await pdfGenerator.generatePDF('comprehensive-report', reportData, {
-      filename: `report-${targetCaseId}-${Date.now()}.pdf`
-    });
+    const filename = `report-${householdId}-${Date.now()}.pdf`;
+    const pdfResult = await pdfGenerator.generatePDF('comprehensive-report', reportData, { filename });
 
     res.json({
       success: true,
@@ -508,15 +175,14 @@ router.post('/generate', authenticateToken, async (req, res) => {
       url: pdfResult.url,
       download_url: `/api/reports/download/${pdfResult.filename}`,
       size: pdfResult.size,
-      case_id: targetCaseId
+      case_id: data.defects.length > 0 ? data.defects[0].case_id : null
     });
-
   } catch (error) {
     console.error('PDF generation error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       error: 'PDF generation failed',
-      message: error.message 
+      message: error.message
     });
   }
 });
@@ -532,135 +198,85 @@ router.post('/generate-pptx', authenticateToken, (req, res) => {
   });
 });
 
-// Send report (with PDF generation)
+// Send report (with PDF generation) — 사용자(세대) 기준 동일
 router.post('/send', authenticateToken, async (req, res) => {
   try {
-    const { case_id, phone_number } = req.body;
+    const { phone_number } = req.body;
     const householdId = await getReportTargetHouseholdId(req);
 
-    // Get household information from database (personal info is not in JWT token)
-    const householdQuery = `
-      SELECT h.dong, h.ho, h.resident_name, h.resident_name_encrypted,
-             h.phone, h.phone_encrypted,
-             c.name as complex_name
-      FROM household h
-      JOIN complex c ON h.complex_id = c.id
-      WHERE h.id = $1
-    `;
-    const householdResult = await pool.query(householdQuery, [householdId]);
-    
-    if (householdResult.rows.length === 0) {
+    const phoneResult = await pool.query(
+      'SELECT resident_name_encrypted, phone, phone_encrypted FROM household WHERE id = $1',
+      [householdId]
+    );
+    if (phoneResult.rows.length === 0) {
       return res.status(404).json({ error: 'Household not found' });
     }
-    
-    const household = householdResult.rows[0];
-    // Decrypt if encrypted, otherwise use plain text (for compatibility)
-    const complex = household.complex_name;
-    const dong = household.dong;
-    const ho = household.ho;
-    const name = household.resident_name_encrypted 
-      ? decrypt(household.resident_name_encrypted)
-      : household.resident_name;
-    const userPhone = household.phone_encrypted
-      ? decrypt(household.phone_encrypted)
-      : household.phone;
-
-    // Get case_id from request or use latest case
-    let targetCaseId = case_id;
+    const userPhone = phoneResult.rows[0].phone_encrypted
+      ? decrypt(phoneResult.rows[0].phone_encrypted)
+      : phoneResult.rows[0].phone;
     const targetPhone = phone_number || userPhone;
-
     if (!targetPhone) {
       return res.status(400).json({ error: 'Phone number is required' });
     }
 
-    // If no case_id provided, get latest case
-    if (!targetCaseId) {
-      const latestCaseQuery = `
-        SELECT id FROM case_header 
-        WHERE household_id = $1 
-        ORDER BY created_at DESC 
-        LIMIT 1
-      `;
-      const latestCaseResult = await pool.query(latestCaseQuery, [householdId]);
-      if (latestCaseResult.rows.length === 0) {
-        return res.status(404).json({ error: 'No cases found' });
-      }
-      targetCaseId = latestCaseResult.rows[0].id;
+    const data = await loadHouseholdReportData(householdId);
+    if (!data) {
+      return res.status(404).json({ error: 'Household not found' });
     }
 
-    // Get case data (same as generate endpoint)
-    const caseQuery = `
-      SELECT c.id, c.type, c.created_at
-      FROM case_header c
-      WHERE c.id = $1 AND c.household_id = $2
-    `;
-
-    const caseResult = await pool.query(caseQuery, [targetCaseId, householdId]);
-    
-    if (caseResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Case not found' });
-    }
-
-    const caseData = caseResult.rows[0];
-    
-    // Get defects with photos
-    const defectsQuery = `
-      SELECT d.id, d.location, d.trade, d.content, d.memo, d.created_at
-      FROM defect d
-      WHERE d.case_id = $1
-      ORDER BY d.created_at DESC
-    `;
-    const defectsResult = await pool.query(defectsQuery, [targetCaseId]);
-    const defects = defectsResult.rows || [];
-    
-    // Fetch photos for each defect
-    for (const defect of defects) {
-      const photoQuery = `
-        SELECT id, kind, url, thumb_url, taken_at
-        FROM photo
-        WHERE defect_id = $1
-        ORDER BY kind, taken_at
-      `;
-      const photoResult = await pool.query(photoQuery, [defect.id]);
-      defect.photos = photoResult.rows || [];
-    }
-
-    // Prepare data for PDF generation (simplified for SMS)
-    const reportData = {
-      complex,
-      dong,
-      ho,
-      name,
-      type: caseData.type,
-      created_at: caseData.created_at,
-      generated_at: new Date().toISOString(),
-      total_defects: defects.length,
-      defects: defects.map((defect, index) => ({
-        ...defect,
-        index: index + 1
-      }))
-    };
-
-    // Generate PDF
-    const pdfResult = await pdfGenerator.generateSimpleReportPDF(reportData, defects, {
-      filename: `report-${targetCaseId}-${Date.now()}.pdf`
+    const defectsWithIndex = data.defects.map((d, i) => ({
+      ...d,
+      index: i + 1,
+      location: d.location || '',
+      trade: d.trade || '',
+      content: d.content || '',
+      memo: d.memo || ''
+    }));
+    const airMeasurements = [];
+    const radonMeasurements = [];
+    const levelMeasurements = [];
+    const thermalInspections = [];
+    data.defects.forEach((d) => {
+      (d.inspections.air || []).forEach((x) => airMeasurements.push(x));
+      (d.inspections.radon || []).forEach((x) => radonMeasurements.push(x));
+      (d.inspections.level || []).forEach((x) => levelMeasurements.push(x));
+      (d.inspections.thermal || []).forEach((x) => thermalInspections.push(x));
     });
-
-    // Send SMS notification
-    const caseInfo = {
-      complex,
-      dong,
-      ho,
-      name,
-      defectCount: defects.length
+    const reportData = {
+      complex: data.complex || '',
+      dong: data.dong || '',
+      ho: data.ho || '',
+      name: data.name || '',
+      type: '종합점검',
+      created_at: data.defects.length > 0 ? data.defects[0].case_created_at : new Date(),
+      generated_at: new Date().toISOString(),
+      total_defects: data.total_defects,
+      total_thermal: data.total_thermal,
+      total_air: data.total_air,
+      total_radon: data.total_radon,
+      total_level: data.total_level,
+      total_equipment: data.total_equipment,
+      has_equipment_data: data.has_equipment_data,
+      defects: defectsWithIndex,
+      air_measurements: airMeasurements,
+      radon_measurements: radonMeasurements,
+      level_measurements: levelMeasurements,
+      thermal_inspections: thermalInspections
     };
 
-    // Construct full URL for SMS
+    const filename = `report-${householdId}-${Date.now()}.pdf`;
+    const pdfResult = await pdfGenerator.generatePDF('comprehensive-report', reportData, { filename });
+
     const baseUrl = process.env.BACKEND_URL || 'https://mobile-app-new.onrender.com';
     const fullPdfUrl = `${baseUrl}${pdfResult.url}`;
-
+    const caseInfo = {
+      complex: data.complex,
+      dong: data.dong,
+      ho: data.ho,
+      name: data.name,
+      defectCount: data.total_defects
+    };
     const smsResult = await smsService.sendReportNotification(targetPhone, fullPdfUrl, caseInfo);
-    
     if (!smsResult.success && !smsResult.mock) {
       console.warn('SMS notification failed:', smsResult.error);
     }
@@ -675,15 +291,14 @@ router.post('/send', authenticateToken, async (req, res) => {
       size: pdfResult.size,
       sms_sent: smsResult.success,
       sms_mock: smsResult.mock || false,
-      case_id: targetCaseId
+      case_id: data.defects.length > 0 ? data.defects[0].case_id : null
     });
-
   } catch (error) {
     console.error('Send report error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       error: 'Failed to send report',
-      message: error.message 
+      message: error.message
     });
   }
 });
@@ -775,6 +390,107 @@ function getResultText(result) {
     'na': '해당없음'
   };
   return resultMap[result] || result;
+}
+
+// 사용자(세대) 기준 보고서 데이터: 해당 세대의 모든 하자 + 하자별 점검내용(inspection_item by defect_id)
+async function loadHouseholdReportData(householdId) {
+  const householdResult = await pool.query(
+    `SELECT h.dong, h.ho, h.resident_name, h.resident_name_encrypted, c.name as complex_name
+     FROM household h JOIN complex c ON h.complex_id = c.id WHERE h.id = $1`,
+    [householdId]
+  );
+  if (householdResult.rows.length === 0) return null;
+  const household = householdResult.rows[0];
+  const complex = household.complex_name || '';
+  const dong = household.dong || '';
+  const ho = household.ho || '';
+  const name = household.resident_name_encrypted
+    ? decrypt(household.resident_name_encrypted)
+    : (household.resident_name || '');
+
+  const defectsResult = await pool.query(
+    `SELECT d.id, d.case_id, d.location, d.trade, d.content, d.memo, d.created_at,
+            c.type as case_type, c.created_at as case_created_at
+     FROM defect d
+     JOIN case_header c ON d.case_id = c.id
+     WHERE c.household_id = $1
+     ORDER BY c.created_at DESC, d.created_at DESC`,
+    [householdId]
+  );
+  const defects = defectsResult.rows || [];
+
+  const inspectionItemQuery = `
+    SELECT ii.type, ii.location, ii.trade, ii.note, ii.result, ii.created_at,
+           am.tvoc, am.hcho, am.co2, am.unit_tvoc, am.unit_hcho,
+           rm.radon, rm.unit_radon,
+           lm.left_mm, lm.right_mm,
+           (SELECT json_agg(json_build_object('file_url', tp.file_url, 'caption', tp.caption, 'shot_at', tp.shot_at))
+            FROM thermal_photo tp WHERE tp.item_id = ii.id) as photos
+    FROM inspection_item ii
+    LEFT JOIN air_measure am ON ii.id = am.item_id
+    LEFT JOIN radon_measure rm ON ii.id = rm.item_id
+    LEFT JOIN level_measure lm ON ii.id = lm.item_id
+    WHERE ii.defect_id = $1
+    ORDER BY ii.created_at ASC
+  `;
+
+  let totalThermal = 0, totalAir = 0, totalRadon = 0, totalLevel = 0;
+
+  for (const defect of defects) {
+    const photoResult = await pool.query(
+      'SELECT id, kind, url, thumb_url, taken_at FROM photo WHERE defect_id = $1 ORDER BY kind, taken_at',
+      [defect.id]
+    );
+    defect.photos = photoResult.rows || [];
+
+    const itemResult = await pool.query(inspectionItemQuery, [defect.id]);
+    const air = [], radon = [], level = [], thermal = [];
+    (itemResult.rows || []).forEach((item) => {
+      const base = {
+        location: item.location,
+        trade: item.trade,
+        note: item.note,
+        result: item.result,
+        result_text: getResultText(item.result),
+        created_at: item.created_at
+      };
+      switch (item.type) {
+        case 'air':
+          air.push({ ...base, tvoc: item.tvoc, hcho: item.hcho, co2: item.co2, unit_tvoc: item.unit_tvoc, unit_hcho: item.unit_hcho });
+          totalAir++;
+          break;
+        case 'radon':
+          radon.push({ ...base, radon: item.radon, unit: item.unit_radon });
+          totalRadon++;
+          break;
+        case 'level':
+          level.push({ ...base, left_mm: item.left_mm, right_mm: item.right_mm });
+          totalLevel++;
+          break;
+        case 'thermal':
+          thermal.push({ ...base, photos: item.photos || [] });
+          totalThermal++;
+          break;
+      }
+    });
+    defect.inspections = { air, radon, level, thermal };
+  }
+
+  const totalEquipment = totalThermal + totalAir + totalRadon + totalLevel;
+  return {
+    complex,
+    dong,
+    ho,
+    name,
+    defects,
+    total_defects: defects.length,
+    total_thermal: totalThermal,
+    total_air: totalAir,
+    total_radon: totalRadon,
+    total_level: totalLevel,
+    total_equipment: totalEquipment,
+    has_equipment_data: totalEquipment > 0
+  };
 }
 
 // Comprehensive HTML report generator

@@ -202,29 +202,17 @@ class PDFMakeGenerator {
         if (defect.photos && defect.photos.length > 0) {
           defect.photos.forEach((photo) => {
             try {
-              // photo.url 형식: /uploads/filename.jpg
-              // 실제 파일 경로로 변환: backend/uploads/filename.jpg
-              const urlPath = photo.url.replace(/^\//, ''); // 앞의 / 제거
+              const urlPath = photo.url.replace(/^\//, '');
               const photoPath = path.join(__dirname, '..', urlPath);
-              
-              // 파일이 존재하는지 확인
               if (fs.existsSync(photoPath)) {
-                // pdfmake에서 이미지 포함
                 content.push({
                   image: photoPath,
                   width: 150,
                   margin: [20, 5, 0, 5],
                   alignment: 'left'
                 });
-                
-                // 사진 종류 표시 (near/far)
-                const photoKindText = photo.kind === 'near' ? '근접 사진' : 
-                                     photo.kind === 'far' ? '원거리 사진' : '사진';
-                content.push({
-                  text: `[${photoKindText}]`,
-                  style: 'photoCaption',
-                  margin: [20, 0, 0, 10]
-                });
+                const photoKindText = photo.kind === 'near' ? '근접 사진' : photo.kind === 'far' ? '원거리 사진' : '사진';
+                content.push({ text: `[${photoKindText}]`, style: 'photoCaption', margin: [20, 0, 0, 10] });
               } else {
                 console.warn(`⚠️ 사진 파일을 찾을 수 없습니다: ${photoPath}`);
               }
@@ -232,6 +220,60 @@ class PDFMakeGenerator {
               console.error(`❌ 사진 처리 오류 (하자 #${defect.index || index + 1}):`, error.message);
             }
           });
+        }
+
+        // 하자별 점검내용 (해당 하자에 등록된 inspection_item)
+        const insp = defect.inspections;
+        if (insp) {
+          const air = insp.air || [];
+          const radon = insp.radon || [];
+          const level = insp.level || [];
+          const thermal = insp.thermal || [];
+          const hasAny = air.length || radon.length || level.length || thermal.length;
+          if (hasAny) {
+            content.push({ text: '점검내용 (본 하자)', style: 'defectHeader', margin: [20, 12, 0, 5] });
+            if (air.length > 0) {
+              air.forEach((item) => {
+                content.push({
+                  text: `공기질: ${item.location || '-'} / ${item.trade || '-'} — TVOC ${item.tvoc ?? '-'} ${item.unit_tvoc || ''} / HCHO ${item.hcho ?? '-'} / CO2 ${item.co2 ?? '-'} (${item.result_text || item.result || '-'})`,
+                  style: 'defectText',
+                  margin: [20, 0, 0, 2],
+                  fontSize: 8
+                });
+              });
+            }
+            if (radon.length > 0) {
+              radon.forEach((item) => {
+                content.push({
+                  text: `라돈: ${item.location || '-'} — ${item.radon ?? '-'} ${item.unit || ''} (${item.result_text || item.result || '-'})`,
+                  style: 'defectText',
+                  margin: [20, 0, 0, 2],
+                  fontSize: 8
+                });
+              });
+            }
+            if (level.length > 0) {
+              level.forEach((item) => {
+                content.push({
+                  text: `레벨기: ${item.location || '-'} — 좌 ${item.left_mm ?? '-'}mm / 우 ${item.right_mm ?? '-'}mm (${item.result_text || item.result || '-'})`,
+                  style: 'defectText',
+                  margin: [20, 0, 0, 2],
+                  fontSize: 8
+                });
+              });
+            }
+            if (thermal.length > 0) {
+              thermal.forEach((item) => {
+                content.push({
+                  text: `열화상: ${item.location || '-'} / ${item.trade || '-'} — ${item.note || '-'} (${item.result_text || item.result || '-'})`,
+                  style: 'defectText',
+                  margin: [20, 0, 0, 2],
+                  fontSize: 8
+                });
+              });
+            }
+            content.push({ text: '', margin: [0, 4, 0, 0] });
+          }
         }
       });
     } else {

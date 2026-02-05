@@ -46,24 +46,30 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 // 점검원용: 하자가 등록된 사용자(세대) 목록 (household_id 기준)
+// 점검결과( inspection_item )가 하나라도 있는 사용자는 상단 정렬 + has_inspected 표시
 router.get('/users', authenticateToken, requireInspectorAccess, async (req, res) => {
   try {
     const query = `
-      SELECT 
-        h.id AS household_id,
-        c.name AS complex_name,
-        h.dong,
-        h.ho,
-        h.resident_name,
-        h.resident_name_encrypted,
-        COUNT(d.id) AS defect_count
-      FROM household h
-      JOIN complex c ON h.complex_id = c.id
-      JOIN case_header ch ON ch.household_id = h.id
-      JOIN defect d ON d.case_id = ch.id
-      WHERE LOWER(TRIM(c.name)) <> 'admin'
-      GROUP BY h.id, c.name, h.dong, h.ho, h.resident_name, h.resident_name_encrypted
-      ORDER BY defect_count DESC, h.dong, h.ho
+      WITH household_defects AS (
+        SELECT 
+          h.id AS household_id,
+          c.name AS complex_name,
+          h.dong,
+          h.ho,
+          h.resident_name,
+          h.resident_name_encrypted,
+          COUNT(d.id) AS defect_count,
+          COUNT(ii.id) AS inspected_count
+        FROM household h
+        JOIN complex c ON h.complex_id = c.id
+        JOIN case_header ch ON ch.household_id = h.id
+        JOIN defect d ON d.case_id = ch.id
+        LEFT JOIN inspection_item ii ON ii.defect_id = d.id
+        WHERE LOWER(TRIM(c.name)) <> 'admin'
+        GROUP BY h.id, c.name, h.dong, h.ho, h.resident_name, h.resident_name_encrypted
+      )
+      SELECT * FROM household_defects
+      ORDER BY (inspected_count > 0) DESC, defect_count DESC, dong, ho
       LIMIT 500
     `;
     const result = await pool.query(query);
@@ -76,13 +82,15 @@ router.get('/users', authenticateToken, requireInspectorAccess, async (req, res)
           name = row.resident_name || '';
         }
       }
+      const inspectedCount = parseInt(row.inspected_count, 10) || 0;
       return {
         household_id: row.household_id,
         complex_name: row.complex_name || '',
         dong: row.dong || '',
         ho: row.ho || '',
         resident_name: name,
-        defect_count: parseInt(row.defect_count, 10)
+        defect_count: parseInt(row.defect_count, 10),
+        has_inspected: inspectedCount > 0
       };
     });
     res.json({ success: true, users });
