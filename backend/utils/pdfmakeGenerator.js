@@ -45,11 +45,13 @@ class PDFMakeGenerator {
     const notoSansKRMedium = path.join(this.fontsDir, 'NotoSansKR-Medium.ttf');
 
     if (fs.existsSync(notoSansKRRegular)) {
-      // 한글 폰트가 있으면 추가
+      // 한글 폰트가 있으면 추가 (pdfmake는 normal/bold/italics/bolditalics 4종 필요)
+      const boldPath = fs.existsSync(notoSansKRBold) ? notoSansKRBold : notoSansKRRegular;
       this.fonts.NotoSansKR = {
         normal: notoSansKRRegular,
-        bold: fs.existsSync(notoSansKRBold) ? notoSansKRBold : notoSansKRRegular,
-        medium: fs.existsSync(notoSansKRMedium) ? notoSansKRMedium : notoSansKRRegular
+        bold: boldPath,
+        italics: notoSansKRRegular,
+        bolditalics: boldPath
       };
       this.defaultFont = 'NotoSansKR';
       console.log('✅ Noto Sans KR 폰트를 사용합니다.');
