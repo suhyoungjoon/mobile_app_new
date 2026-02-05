@@ -944,8 +944,10 @@ async function saveDefectInspection() {
       
       toast('점검결과가 저장되었습니다', 'success');
       
-      // 하자 목록 화면으로 돌아가서 갱신
-      await loadAllDefects();
+      // 하자 목록 갱신 후 같은 화면 유지 (점검완료 뱃지 반영)
+      if (InspectorState.selectedHouseholdId) {
+        await loadDefectsForHousehold(InspectorState.selectedHouseholdId);
+      }
       route('defect-list');
       
     } else {
@@ -991,7 +993,7 @@ async function onPreviewReport() {
   setLoading(true);
   
   try {
-    const reportData = await api.getReportPreview(InspectorState.selectedHouseholdId);
+    const reportData = await api.getReportPreview(InspectorState.selectedHouseholdId, InspectorState.currentCaseId);
     const cont = $('#report-preview');
     cont.innerHTML = '';
     

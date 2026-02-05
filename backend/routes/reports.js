@@ -52,8 +52,36 @@ router.get('/preview', authenticateToken, async (req, res) => {
       ? decrypt(household.resident_name_encrypted)
       : household.resident_name;
 
-    // Get latest case with defects and equipment inspections from database
-    const query = `
+    const requestedCaseId = req.query.case_id || null;
+
+    // 지정된 case_id가 있으면 해당 케이스, 없으면 최신 케이스 사용 (점검원이 하자목록에서 들어온 경우 해당 케이스 반영)
+    const query = requestedCaseId
+      ? `
+      SELECT c.id, c.type, c.created_at,
+             json_agg(
+               json_build_object(
+                 'id', d.id,
+                 'location', d.location,
+                 'trade', d.trade,
+                 'content', d.content,
+                 'memo', d.memo,
+                 'photos', (
+                   SELECT json_agg(
+                     json_build_object(
+                       'kind', p.kind,
+                       'url', p.url
+                     )
+                   )
+                   FROM photo p WHERE p.defect_id = d.id
+                 )
+               )
+             ) FILTER (WHERE d.id IS NOT NULL) as defects
+      FROM case_header c
+      LEFT JOIN defect d ON c.id = d.case_id
+      WHERE c.household_id = $1 AND c.id = $2
+      GROUP BY c.id, c.type, c.created_at
+      `
+      : `
       SELECT c.id, c.type, c.created_at,
              json_agg(
                json_build_object(
@@ -81,7 +109,8 @@ router.get('/preview', authenticateToken, async (req, res) => {
       LIMIT 1
     `;
 
-    const result = await pool.query(query, [householdId]);
+    const queryParams = requestedCaseId ? [householdId, requestedCaseId] : [householdId];
+    const result = await pool.query(query, queryParams);
     
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'No cases found' });

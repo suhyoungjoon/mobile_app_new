@@ -213,8 +213,11 @@ class APIClient {
   }
 
   // Reports
-  async getReportPreview(householdId) {
-    const q = householdId != null ? `?household_id=${householdId}` : '';
+  async getReportPreview(householdId, caseId) {
+    const params = new URLSearchParams();
+    if (householdId != null) params.set('household_id', householdId);
+    if (caseId != null) params.set('case_id', caseId);
+    const q = params.toString() ? `?${params.toString()}` : '';
     return await this.request(`/reports/preview${q}`);
   }
 

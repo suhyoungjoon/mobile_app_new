@@ -97,9 +97,11 @@ CREATE INDEX idx_resolution_defect ON defect_resolution(defect_id);
 CREATE INDEX idx_admin_email ON admin_user(email);
 
 -- Equipment inspection tables (Phase 1)
+-- 점검결과는 하자별로 연결: defect_id 로 어떤 하자에 대한 측정인지 구분
 CREATE TABLE inspection_item (
   id TEXT PRIMARY KEY,
   case_id TEXT REFERENCES case_header(id),
+  defect_id TEXT REFERENCES defect(id),
   type TEXT CHECK (type IN ('thermal','air','radon','level')),
   location TEXT NOT NULL,
   trade TEXT,
@@ -145,6 +147,7 @@ CREATE TABLE thermal_photo (
 
 -- Additional indexes for equipment inspection
 CREATE INDEX idx_inspection_case ON inspection_item(case_id);
+CREATE INDEX idx_inspection_defect ON inspection_item(defect_id);
 CREATE INDEX idx_inspection_type ON inspection_item(type);
 CREATE INDEX idx_air_measure_item ON air_measure(item_id);
 CREATE INDEX idx_radon_measure_item ON radon_measure(item_id);
