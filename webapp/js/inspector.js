@@ -265,14 +265,23 @@ async function previewReportForUser(householdId) {
   InspectorState.selectedHouseholdDisplay = u ? { complex_name: u.complex_name, dong: u.dong, ho: u.ho, resident_name: u.resident_name } : null;
   setLoading(true);
   try {
-    const reportData = await api.getReportPreview(householdId);
-    if (reportData.case_id) InspectorState.currentCaseId = reportData.case_id;
+    let reportData;
+    try {
+      reportData = await api.getReportPreview(householdId);
+    } catch (e) {
+      reportData = null;
+    }
+    if (reportData && reportData.case_id) InspectorState.currentCaseId = reportData.case_id;
+    else if (InspectorState.selectedHouseholdId) {
+      const defRes = await api.getDefectsByHousehold(InspectorState.selectedHouseholdId);
+      if (defRes.defects && defRes.defects.length > 0) InspectorState.currentCaseId = defRes.defects[0].case_id;
+    }
     const cont = $('#report-preview');
     const buttonGroup = document.querySelector('#report .button-group');
     if (buttonGroup) buttonGroup.style.display = 'flex';
     cont.innerHTML = '';
     const baseUrl = api.baseURL.replace('/api', '');
-    if (reportData.defects && reportData.defects.length > 0) {
+    if (reportData && reportData.defects && reportData.defects.length > 0) {
       reportData.defects.forEach((d) => {
         const card = document.createElement('div');
         card.className = 'card';
@@ -293,11 +302,10 @@ async function previewReportForUser(householdId) {
         cont.appendChild(card);
       });
     } else {
-      if (buttonGroup) buttonGroup.style.display = 'none';
       cont.innerHTML = `
         <div class="card" style="text-align: center; padding: 40px;">
-          <div style="color: #666;">등록된 하자가 없습니다.</div>
-          <div style="color: #999; font-size: 12px; margin-top: 10px;">하자를 등록하면 PDF 보고서를 생성할 수 있습니다.</div>
+          <div style="color: #666;">${reportData && reportData.defects && reportData.defects.length === 0 ? '등록된 하자가 없습니다.' : '보고서 미리보기 데이터를 불러왔습니다.'}</div>
+          <div style="color: #999; font-size: 12px; margin-top: 10px;">점검결과 유무와 관계없이 PDF 미리보기·다운로드를 이용할 수 있습니다.</div>
         </div>
       `;
     }
@@ -310,7 +318,7 @@ async function previewReportForUser(householdId) {
   }
 }
 
-// 사용자 목록에서 해당 사용자 보고서 다운로드
+// 사용자 목록에서 해당 사용자 보고서 다운로드 (점검결과 없어도 가능)
 async function downloadReportForUser(householdId) {
   if (!InspectorState.session) {
     toast('로그인이 필요합니다', 'error');
@@ -318,9 +326,18 @@ async function downloadReportForUser(householdId) {
   }
   setLoading(true);
   try {
-    toast('보고서 데이터 조회 중...', 'info');
-    const reportData = await api.getReportPreview(householdId);
-    const caseId = reportData.case_id;
+    let caseId = null;
+    try {
+      toast('보고서 데이터 조회 중...', 'info');
+      const reportData = await api.getReportPreview(householdId);
+      caseId = reportData && reportData.case_id ? reportData.case_id : null;
+    } catch (e) {
+      console.warn('보고서 미리보기 조회 실패, 하자 목록으로 case_id 조회:', e);
+    }
+    if (!caseId) {
+      const defRes = await api.getDefectsByHousehold(householdId);
+      if (defRes.defects && defRes.defects.length > 0) caseId = defRes.defects[0].case_id;
+    }
     if (!caseId) {
       toast('해당 사용자의 케이스가 없습니다', 'error');
       return;
@@ -431,12 +448,6 @@ async function loadAllDefectsDirectly() {
               <div class="value" style="color: #10b981; font-size: 14px;">${inspectionSummary}</div>
             ` : ''}
           </div>
-          <div class="hr"></div>
-          <div class="button-group" style="display: flex; gap: 8px; margin-top: 12px;">
-            <button class="button success" style="flex: 1;" onclick="openDefectInspection('${defect.id}', '${defect.case_id}')">
-              📊 점검결과 입력
-            </button>
-          </div>
         </div>
       `;
     }).join('');
@@ -526,10 +537,6 @@ async function loadDefectsForHousehold(householdId) {
               </div>
             ` : ''}
           </div>
-          <div class="hr"></div>
-          <div class="button-group" style="display: flex; gap: 8px; margin-top: 12px;">
-            <button class="button success" style="flex: 1;" onclick="openDefectInspection('${defect.id}', '${defect.case_id}')">📊 점검결과 입력</button>
-          </div>
         </div>
       `;
     }).join('');
@@ -550,6 +557,34 @@ async function loadAllDefects() {
   if (!InspectorState.session) return;
   await loadUserList();
   route('user-list');
+}
+
+// 하자 선택 모달 열기 (점검결과 입력 단일 버튼용)
+function openDefectSelectModal() {
+  const list = InspectorState.allDefects || [];
+  if (list.length === 0) {
+    toast('등록된 하자가 없습니다', 'error');
+    return;
+  }
+  const modal = $('#defect-select-modal');
+  const listEl = $('#defect-select-modal-list');
+  if (!modal || !listEl) return;
+  listEl.innerHTML = list.map((d) => `
+    <div class="defect-card" style="margin-bottom:8px;">
+      <div style="font-weight:700;">${escapeHTML(d.location || '')} - ${escapeHTML(d.trade || '')}</div>
+      <div class="small" style="color:#666;margin-top:4px;">${escapeHTML((d.content || '').slice(0, 60))}${(d.content || '').length > 60 ? '…' : ''}</div>
+      <button type="button" class="button success" style="width:100%;margin-top:8px;" onclick="closeDefectSelectModal(); openDefectInspection('${d.id}', '${d.case_id}')">선택</button>
+    </div>
+  `).join('');
+  modal.classList.remove('hidden');
+  modal.style.display = 'flex';
+}
+function closeDefectSelectModal() {
+  const modal = $('#defect-select-modal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
 }
 
 // 점검결과 입력 화면 열기

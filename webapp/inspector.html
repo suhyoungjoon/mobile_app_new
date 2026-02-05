@@ -104,8 +104,9 @@
         <button class="button ghost" onclick="onLogout()" style="width: auto; padding: 8px 12px;">로그아웃</button>
       </div>
       
-      <div style="margin-bottom: 16px;">
+      <div style="margin-bottom: 16px; display: flex; flex-direction: column; gap: 10px;">
         <button class="button success" onclick="onPreviewReport()" style="width: 100%;">📄 보고서 미리보기</button>
+        <button class="button" onclick="openDefectSelectModal()" style="width: 100%;">📊 점검결과 입력</button>
       </div>
       
       <div id="defect-list-container">
@@ -331,6 +332,17 @@
   </div>
 
   <div class="toast"></div>
+</div>
+
+<!-- 하자 선택 모달 (점검결과 입력 시) -->
+<div id="defect-select-modal" class="modal-overlay hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:none;align-items:center;justify-content:center;padding:16px;" onclick="if(event.target===this) closeDefectSelectModal()">
+  <div class="card" style="max-width:400px;width:100%;max-height:80vh;overflow:auto;" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h3 style="margin:0;">점검결과를 입력할 하자를 선택하세요</h3>
+      <button type="button" class="button ghost" onclick="closeDefectSelectModal()" style="padding:4px 8px;">✕</button>
+    </div>
+    <div id="defect-select-modal-list"></div>
+  </div>
 </div>
 
 <script src="js/api.js"></script>
