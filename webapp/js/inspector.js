@@ -246,7 +246,10 @@ function selectUser(householdId) {
     resident_name: u.resident_name
   } : null;
   const titleEl = $('#defect-list-title');
-  if (titleEl) titleEl.textContent = u ? `하자목록 - ${u.dong || ''}동 ${u.ho || ''}호` : '하자목록';
+  if (titleEl) {
+    const apt = (u && u.complex_name) ? `${u.complex_name} ` : '';
+    titleEl.textContent = u ? `하자목록 - ${apt}${u.dong || ''}동 ${u.ho || ''}호` : '하자목록';
+  }
   loadDefectsForHousehold(householdId);
   route('defect-list');
 }

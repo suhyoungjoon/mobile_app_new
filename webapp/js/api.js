@@ -565,21 +565,21 @@ class APIClient {
 
   // 레벨기 측정 등록
   async createAirMeasurementForDefect(caseId, defectId, location, trade, tvoc, hcho, co2, note, result = 'normal') {
-    return await this.request('/api/inspections/air', {
+    return await this.request('/inspections/air', {
       method: 'POST',
       body: JSON.stringify({ caseId, defectId, location, trade, tvoc, hcho, co2, note, result })
     });
   }
 
   async createRadonMeasurementForDefect(caseId, defectId, location, trade, radon, unitRadon = 'Bq/m³', note, result = 'normal') {
-    return await this.request('/api/inspections/radon', {
+    return await this.request('/inspections/radon', {
       method: 'POST',
       body: JSON.stringify({ caseId, defectId, location, trade, radon, unit_radon: unitRadon, note, result })
     });
   }
 
   async createLevelMeasurementForDefect(caseId, defectId, location, trade, leftMm, rightMm, note, result = 'normal') {
-    return await this.request('/api/inspections/level', {
+    return await this.request('/inspections/level', {
       method: 'POST',
       body: JSON.stringify({ caseId, defectId, location, trade, left_mm: leftMm, right_mm: rightMm, note, result })
     });
