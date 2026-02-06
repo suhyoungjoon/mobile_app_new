@@ -221,8 +221,8 @@ class APIClient {
     return await this.request(`/reports/preview${q}`);
   }
 
-  async generateReport(caseId, householdId) {
-    const body = { case_id: caseId };
+  async generateReport(caseId, householdId, options = {}) {
+    const body = { case_id: caseId, ...options };
     if (householdId != null) body.household_id = householdId;
     return await this.request('/reports/generate', {
       method: 'POST',

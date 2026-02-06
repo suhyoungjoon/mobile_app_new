@@ -1140,8 +1140,8 @@ async function downloadReportAsPdf() {
   
   const caseId = InspectorState.currentCaseId;
   const householdId = InspectorState.selectedHouseholdId;
-  if (!caseId) {
-    toast('케이스를 먼저 선택해주세요', 'error');
+  if (!householdId) {
+    toast('대상 세대를 먼저 선택해주세요', 'error');
     return;
   }
 
@@ -1150,25 +1150,50 @@ async function downloadReportAsPdf() {
     toast('PDF 생성 중...', 'info');
     const generateResult = await api.generateReport(caseId, householdId);
     
-    console.log('PDF 생성 결과:', generateResult);
-    
     if (!generateResult || !generateResult.success) {
       const errorMsg = generateResult?.message || generateResult?.error || 'PDF 생성에 실패했습니다';
       throw new Error(errorMsg);
     }
-
-    if (!generateResult.filename) {
-      throw new Error('PDF 파일명을 받지 못했습니다. 서버 응답을 확인해주세요.');
-    }
+    if (!generateResult.filename) throw new Error('PDF 파일명을 받지 못했습니다.');
 
     toast('PDF 다운로드 중...', 'info');
     await api.downloadReport(generateResult.filename);
-    
     toast('PDF 다운로드가 완료되었습니다', 'success');
-    
   } catch (error) {
     console.error('PDF 다운로드 오류:', error);
     toast(error.message || 'PDF 다운로드에 실패했습니다', 'error');
+  } finally {
+    setLoading(false);
+  }
+}
+
+// 최종보고서 다운로드 (템플릿 PDF + 점검결과 치환)
+async function downloadFinalReportAsPdf() {
+  if (!InspectorState.session) {
+    toast('로그인이 필요합니다', 'error');
+    return;
+  }
+  const householdId = InspectorState.selectedHouseholdId;
+  if (!householdId) {
+    toast('대상 세대를 먼저 선택해주세요', 'error');
+    return;
+  }
+
+  setLoading(true);
+  try {
+    toast('최종보고서 생성 중...', 'info');
+    const generateResult = await api.generateReport(InspectorState.currentCaseId, householdId, { template: 'final-report' });
+    if (!generateResult || !generateResult.success) {
+      throw new Error(generateResult?.message || generateResult?.error || '최종보고서 생성에 실패했습니다');
+    }
+    if (!generateResult.filename) throw new Error('파일명을 받지 못했습니다.');
+
+    toast('다운로드 중...', 'info');
+    await api.downloadReport(generateResult.filename);
+    toast('최종보고서 다운로드가 완료되었습니다', 'success');
+  } catch (error) {
+    console.error('최종보고서 다운로드 오류:', error);
+    toast(error.message || '최종보고서 다운로드에 실패했습니다', 'error');
   } finally {
     setLoading(false);
   }

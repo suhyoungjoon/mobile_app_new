@@ -4,6 +4,7 @@ const pool = require('../database');
 const { authenticateToken } = require('../middleware/auth');
 // PDF 생성기: pdfmake 사용 (한글 폰트 지원, 보고서는 PDF 전용)
 const pdfGenerator = require('../utils/pdfmakeGenerator');
+const finalReportGenerator = require('../utils/finalReportGenerator');
 const smsService = require('../utils/smsService');
 const { decrypt } = require('../utils/encryption');
 const fs = require('fs');
@@ -167,12 +168,17 @@ router.post('/generate', authenticateToken, async (req, res) => {
       thermal_inspections: thermalInspections
     };
 
-    const filename = `report-${householdId}-${Date.now()}.pdf`;
-    const pdfResult = await pdfGenerator.generatePDF('comprehensive-report', reportData, { filename });
+    let pdfResult;
+    if (template === 'final-report') {
+      pdfResult = await finalReportGenerator.generateFinalReport(reportData, pdfGenerator);
+    } else {
+      const filename = `report-${householdId}-${Date.now()}.pdf`;
+      pdfResult = await pdfGenerator.generatePDF('comprehensive-report', reportData, { filename });
+    }
 
     res.json({
       success: true,
-      message: 'PDF generated successfully',
+      message: template === 'final-report' ? '최종보고서가 생성되었습니다' : 'PDF generated successfully',
       filename: pdfResult.filename,
       url: pdfResult.url,
       download_url: `/api/reports/download/${pdfResult.filename}`,

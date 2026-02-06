@@ -132,7 +132,12 @@ class PDFMakeGenerator {
     };
     content.push(metaTable);
 
-    // 점검 요약
+    this._buildInspectionContent(data, content);
+    this._buildCompanyAndFooter(content);
+    return this._getDocumentDefinition(content);
+  }
+
+  _buildInspectionContent(data, content) {
     content.push({
       text: '점검 요약',
       style: 'sectionHeader',
@@ -618,8 +623,9 @@ class PDFMakeGenerator {
         });
       }
     }
+  }
 
-    // 회사 소개 (PowerPoint 템플릿에서 가져옴)
+  _buildCompanyAndFooter(content) {
     content.push({
       text: [
         { text: '인싸이트아이는 ', style: 'companyText' },
@@ -636,29 +642,27 @@ class PDFMakeGenerator {
       alignment: 'left',
       margin: [0, 30, 0, 10]
     });
-
     content.push({
       text: '고객과 함께 미래를 만드는 데 중심적인 역할을 하는 기업이 되겠습니다.',
       style: 'companyVision',
       alignment: 'left',
       margin: [0, 0, 0, 10]
     });
-
     content.push({
       text: '고객과 함께 성장합니다 - Innovative Partner',
       style: 'companyTagline',
       alignment: 'left',
       margin: [0, 0, 0, 30]
     });
-
-    // 푸터
     content.push({
       text: '인싸이트아이',
       style: 'footerText',
       alignment: 'center',
       margin: [0, 30, 0, 10]
     });
+  }
 
+  _getDocumentDefinition(content) {
     return {
       content,
       defaultStyle: {
@@ -746,6 +750,58 @@ class PDFMakeGenerator {
       pageSize: 'A4',
       pageMargins: [40, 60, 40, 60]
     };
+  }
+
+  buildInspectionResultsOnlyDefinition(data) {
+    const content = [];
+    content.push({
+      text: '점검결과',
+      style: 'sectionHeader',
+      margin: [0, 0, 0, 15]
+    });
+    const metaTable = {
+      table: {
+        widths: ['auto', '*', 'auto', '*'],
+        body: [
+          [
+            { text: '입 주 자 성 함', style: 'tableHeader', border: [true, true, true, true] },
+            { text: `: ${data.name || ''}`, style: 'metaText', border: [false, true, true, true] },
+            { text: '점검일짜', style: 'tableHeader', border: [true, true, true, true] },
+            { text: `: ${this.formatDate(data.created_at)}`, style: 'metaText', border: [false, true, true, true] }
+          ],
+          [
+            { text: '아파트명', style: 'tableHeader', border: [true, true, true, true] },
+            { text: `: ${data.complex || ''}`, style: 'metaText', border: [false, true, true, true] },
+            { text: '동호수', style: 'tableHeader', border: [true, true, true, true] },
+            { text: `: ${data.dong || ''}동 ${data.ho || ''}호`, style: 'metaText', border: [false, true, true, true] }
+          ]
+        ]
+      },
+      margin: [0, 0, 0, 20]
+    };
+    content.push(metaTable);
+    this._buildInspectionContent(data, content);
+    return this._getDocumentDefinition(content);
+  }
+
+  async generateInspectionResultsPDF(data, options = {}) {
+    const filename = options.filename || `inspection-results-${uuidv4()}.pdf`;
+    const docDefinition = this.buildInspectionResultsOnlyDefinition(data);
+    return new Promise((resolve, reject) => {
+      try {
+        const pdfDoc = this.printer.createPdfKitDocument(docDefinition);
+        const outputPath = path.join(this.outputDir, filename);
+        const writeStream = fs.createWriteStream(outputPath);
+        pdfDoc.pipe(writeStream);
+        pdfDoc.end();
+        writeStream.on('finish', () => {
+          resolve({ filename, path: outputPath });
+        });
+        writeStream.on('error', (err) => reject(err));
+      } catch (error) {
+        reject(error);
+      }
+    });
   }
 
   async generatePDF(templateName, data, options = {}) {

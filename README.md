@@ -2,6 +2,8 @@
 
 기획서 요구사항을 반영한 하자 표준 데이터베이스와 YouTube 동영상 기반 하자 확인 시스템을 포함한 공사하자보수관리 모바일 웹앱입니다.
 
+**📖 사용·운영 메뉴얼**: [MANUAL.md](./MANUAL.md) — 접속 방법, 역할별 사용법, 보고서 정책, 프로젝트 구조, 로컬/배포 요약
+
 ## 🚀 프로젝트 개요
 
 InsightI는 건설 현장에서 발생하는 하자를 체계적으로 관리하고 보고서를 자동 생성하는 시스템입니다.
@@ -104,8 +106,19 @@ insighti_precheck_mockup_v1/
 │   └── azure-resources.json  # ARM 템플릿
 ├── scripts/                # 테스트 스크립트
 ├── docker-compose.yml      # 로컬 개발 환경
+├── MANUAL.md               # 사용·운영 통합 메뉴얼 (역할별, 보고서, 접속, 구조)
 └── README.md               # 이 파일
 ```
+
+### 문서 정리
+| 문서 | 용도 |
+|------|------|
+| **MANUAL.md** | 일상 사용·운영용 통합 메뉴얼 (접속, 역할별 흐름, 보고서, 로컬/배포) |
+| **README.md** | 프로젝트 소개, 기능 목록, 아키텍처, 설치 개요 |
+| **ACCESS_GUIDE.md** | 접속 URL, SSO 등 상세 접속 방법 |
+| **DEPLOYMENT_GUIDE.md** | Vercel/Render 배포 절차 |
+| **INSPECTOR_SCREEN_GUIDE.md** | 점검원 화면 상세 (일부는 MANUAL.md 4.2와 동일) |
+| **ADMIN_MANUAL.md** | 관리자 기능 상세 |
 
 ## ✨ v4.0.0 주요 업데이트
 

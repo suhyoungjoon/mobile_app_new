@@ -185,6 +185,15 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'case_id, location, trade, and content are required' });
     }
 
+    // case 소유권 검증: 해당 케이스가 요청자(household) 소유인지 확인
+    const caseCheck = await pool.query(
+      'SELECT id FROM case_header WHERE id = $1 AND household_id = $2',
+      [case_id, householdId]
+    );
+    if (caseCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Case not found or access denied' });
+    }
+
     // Generate defect ID with timestamp to ensure uniqueness
     const timestamp = Date.now();
     const random = Math.floor(Math.random() * 1000);
