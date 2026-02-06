@@ -62,6 +62,7 @@ router.get('/preview', authenticateToken, async (req, res) => {
 
     const latestCase = defects.length > 0 ? defects[0].case_id : null;
     const defectsWithIndex = defects.map((d, i) => ({ ...d, index: i + 1 }));
+    const baseUrl = process.env.BACKEND_URL || (req.protocol + '://' + req.get('host')) || '';
     const html = generateComprehensiveReportHTML({
       complex,
       dong,
@@ -81,7 +82,8 @@ router.get('/preview', authenticateToken, async (req, res) => {
       air_measurements: airMeasurements,
       radon_measurements: radonMeasurements,
       level_measurements: levelMeasurements,
-      thermal_inspections: thermalInspections
+      thermal_inspections: thermalInspections,
+      baseUrl: baseUrl.replace(/\/$/, '')
     });
 
     res.json({
@@ -420,10 +422,13 @@ async function loadHouseholdReportData(householdId) {
   const defects = defectsResult.rows || [];
 
   const inspectionItemQuery = `
-    SELECT ii.type, ii.location, ii.trade, ii.note, ii.result, ii.created_at,
-           am.tvoc, am.hcho, am.co2, am.unit_tvoc, am.unit_hcho,
+    SELECT ii.type, ii.location, ii.trade, ii.serial_no, ii.note, ii.result, ii.created_at,
+           am.process_type, am.tvoc, am.hcho, am.co2, am.unit_tvoc, am.unit_hcho,
            rm.radon, rm.unit_radon,
            lm.left_mm, lm.right_mm,
+           lm.point1_left_mm, lm.point1_right_mm, lm.point2_left_mm, lm.point2_right_mm,
+           lm.point3_left_mm, lm.point3_right_mm, lm.point4_left_mm, lm.point4_right_mm,
+           lm.reference_mm,
            (SELECT json_agg(json_build_object('file_url', tp.file_url, 'caption', tp.caption, 'shot_at', tp.shot_at))
             FROM thermal_photo tp WHERE tp.item_id = ii.id) as photos
     FROM inspection_item ii
@@ -449,24 +454,65 @@ async function loadHouseholdReportData(householdId) {
       const base = {
         location: item.location,
         trade: item.trade,
+        serial_no: item.serial_no,
         note: item.note,
         result: item.result,
         result_text: getResultText(item.result),
         created_at: item.created_at
       };
       switch (item.type) {
-        case 'air':
-          air.push({ ...base, tvoc: item.tvoc, hcho: item.hcho, co2: item.co2, unit_tvoc: item.unit_tvoc, unit_hcho: item.unit_hcho });
+        case 'air': {
+          const processTypeLabel = item.process_type === 'flush_out' ? 'Flush-out' : item.process_type === 'bake_out' ? 'Bake-out' : '-';
+          air.push({
+            ...base,
+            process_type: item.process_type,
+            process_type_label: processTypeLabel,
+            tvoc: item.tvoc,
+            hcho: item.hcho,
+            co2: item.co2,
+            unit_tvoc: item.unit_tvoc,
+            unit_hcho: item.unit_hcho
+          });
           totalAir++;
           break;
+        }
         case 'radon':
           radon.push({ ...base, radon: item.radon, unit: item.unit_radon });
           totalRadon++;
           break;
-        case 'level':
-          level.push({ ...base, left_mm: item.left_mm, right_mm: item.right_mm });
+        case 'level': {
+          const refMm = item.reference_mm != null ? item.reference_mm : 150;
+          const has4 = item.point1_left_mm != null || item.point1_right_mm != null || item.point2_left_mm != null || item.point2_right_mm != null || item.point3_left_mm != null || item.point3_right_mm != null || item.point4_left_mm != null || item.point4_right_mm != null;
+          const p1 = has4 ? `${item.point1_left_mm ?? '-'}/${item.point1_right_mm ?? '-'}` : `${item.left_mm ?? '-'}/${item.right_mm ?? '-'}`;
+          const p2 = has4 ? `${item.point2_left_mm ?? '-'}/${item.point2_right_mm ?? '-'}` : '-';
+          const p3 = has4 ? `${item.point3_left_mm ?? '-'}/${item.point3_right_mm ?? '-'}` : '-';
+          const p4 = has4 ? `${item.point4_left_mm ?? '-'}/${item.point4_right_mm ?? '-'}` : '-';
+          const levelSummary = has4
+            ? `1번 좌${item.point1_left_mm ?? '-'}/우${item.point1_right_mm ?? '-'} 2번 좌${item.point2_left_mm ?? '-'}/우${item.point2_right_mm ?? '-'} 3번 좌${item.point3_left_mm ?? '-'}/우${item.point3_right_mm ?? '-'} 4번 좌${item.point4_left_mm ?? '-'}/우${item.point4_right_mm ?? '-'} (기준 ${refMm}mm)`
+            : `좌 ${item.left_mm ?? '-'}mm / 우 ${item.right_mm ?? '-'}mm`;
+          level.push({
+            ...base,
+            left_mm: item.left_mm,
+            right_mm: item.right_mm,
+            point1_left_mm: item.point1_left_mm,
+            point1_right_mm: item.point1_right_mm,
+            point2_left_mm: item.point2_left_mm,
+            point2_right_mm: item.point2_right_mm,
+            point3_left_mm: item.point3_left_mm,
+            point3_right_mm: item.point3_right_mm,
+            point4_left_mm: item.point4_left_mm,
+            point4_right_mm: item.point4_right_mm,
+            reference_mm: item.reference_mm,
+            level_reference_mm: refMm,
+            level_p1_text: p1,
+            level_p2_text: p2,
+            level_p3_text: p3,
+            level_p4_text: p4,
+            level_summary_text: levelSummary
+          });
           totalLevel++;
           break;
+        }
         case 'thermal':
           thermal.push({ ...base, photos: item.photos || [] });
           totalThermal++;
@@ -501,8 +547,11 @@ function generateComprehensiveReportHTML(data) {
   
   const templatePath = path.join(__dirname, '../templates/comprehensive-report.hbs');
   const templateSource = fs.readFileSync(templatePath, 'utf8');
+  handlebars.registerHelper('eq', function (a, b, options) {
+    return (a === b) ? options.fn(this) : options.inverse(this);
+  });
   const template = handlebars.compile(templateSource);
-  
+
   // Add formatDate helper
   const templateData = {
     ...data,

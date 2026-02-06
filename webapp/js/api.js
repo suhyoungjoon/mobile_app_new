@@ -566,11 +566,13 @@ class APIClient {
     });
   }
 
-  // 레벨기 측정 등록
-  async createAirMeasurementForDefect(caseId, defectId, location, trade, tvoc, hcho, co2, note, result = 'normal') {
+  // 공기질 측정 등록 (하자별, processType: flush_out | bake_out)
+  async createAirMeasurementForDefect(caseId, defectId, location, trade, tvoc, hcho, co2, note, result = 'normal', processType = null) {
+    const body = { caseId, defectId, location, trade, tvoc, hcho, co2, note, result };
+    if (processType) body.process_type = processType;
     return await this.request('/inspections/air', {
       method: 'POST',
-      body: JSON.stringify({ caseId, defectId, location, trade, tvoc, hcho, co2, note, result })
+      body: JSON.stringify(body)
     });
   }
 
@@ -581,10 +583,20 @@ class APIClient {
     });
   }
 
-  async createLevelMeasurementForDefect(caseId, defectId, location, trade, leftMm, rightMm, note, result = 'normal') {
+  async createLevelMeasurementForDefect(caseId, defectId, location, trade, levelPoints, note, result = 'normal') {
+    const body = { caseId, defectId, location, trade, note, result };
+    if (levelPoints.reference_mm != null) body.reference_mm = levelPoints.reference_mm;
+    body.point1_left_mm = levelPoints.p1_left;
+    body.point1_right_mm = levelPoints.p1_right;
+    body.point2_left_mm = levelPoints.p2_left;
+    body.point2_right_mm = levelPoints.p2_right;
+    body.point3_left_mm = levelPoints.p3_left;
+    body.point3_right_mm = levelPoints.p3_right;
+    body.point4_left_mm = levelPoints.p4_left;
+    body.point4_right_mm = levelPoints.p4_right;
     return await this.request('/inspections/level', {
       method: 'POST',
-      body: JSON.stringify({ caseId, defectId, location, trade, left_mm: leftMm, right_mm: rightMm, note, result })
+      body: JSON.stringify(body)
     });
   }
 

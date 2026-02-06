@@ -324,7 +324,7 @@ async function previewReportForUser(householdId) {
   }
 }
 
-// 사용자 목록에서 해당 사용자 보고서 다운로드 (점검결과 없어도 가능)
+// 사용자 목록에서 해당 사용자 보고서 다운로드 (하자 없어도 PDF 생성 가능 — 세대 기준)
 async function downloadReportForUser(householdId) {
   if (!InspectorState.session) {
     toast('로그인이 필요합니다', 'error');
@@ -334,22 +334,17 @@ async function downloadReportForUser(householdId) {
   try {
     let caseId = null;
     try {
-      toast('보고서 데이터 조회 중...', 'info');
       const reportData = await api.getReportPreview(householdId);
       caseId = reportData && reportData.case_id ? reportData.case_id : null;
     } catch (e) {
-      console.warn('보고서 미리보기 조회 실패, 하자 목록으로 case_id 조회:', e);
+      console.warn('보고서 미리보기 조회 실패:', e);
     }
     if (!caseId) {
       const defRes = await api.getDefectsByHousehold(householdId);
       if (defRes.defects && defRes.defects.length > 0) caseId = defRes.defects[0].case_id;
     }
-    if (!caseId) {
-      toast('해당 사용자의 케이스가 없습니다', 'error');
-      return;
-    }
     toast('PDF 생성 중...', 'info');
-    const generateResult = await api.generateReport(caseId, householdId);
+    const generateResult = await api.generateReport(caseId || null, householdId);
     if (!generateResult || !generateResult.success || !generateResult.filename) {
       throw new Error(generateResult?.message || generateResult?.error || 'PDF 생성에 실패했습니다');
     }
@@ -811,6 +806,9 @@ function resetDefectInspectionForm() {
     // InspectorState 사진 정보 초기화
     InspectorState.measurementPhotos = {};
     
+    const refInput = $('#defect-level-reference');
+    if (refInput) refInput.value = '150';
+    
     showDefectInspectionTab('air');
     toast('폼이 초기화되었습니다');
   }
@@ -846,6 +844,7 @@ async function saveDefectInspection() {
     if (tabType === '공기질') {
       const location = $('#defect-air-location').value.trim();
       const trade = $('#defect-air-trade').value.trim();
+      const processType = $('#defect-air-process-type').value || null;
       const tvoc = $('#defect-air-tvoc').value;
       const hcho = $('#defect-air-hcho').value;
       const co2 = $('#defect-air-co2').value;
@@ -862,7 +861,7 @@ async function saveDefectInspection() {
         tvoc ? parseFloat(tvoc) : null,
         hcho ? parseFloat(hcho) : null,
         co2 ? parseFloat(co2) : null,
-        note, result
+        note, result, processType
       );
       
     } else if (tabType === '라돈') {
@@ -886,19 +885,42 @@ async function saveDefectInspection() {
     } else if (tabType === '레벨기') {
       const location = $('#defect-level-location').value.trim();
       const trade = $('#defect-level-trade').value.trim();
-      const leftMm = $('#defect-level-left').value;
-      const rightMm = $('#defect-level-right').value;
+      const referenceMm = $('#defect-level-reference').value;
+      const p1l = $('#defect-level-p1-left').value;
+      const p1r = $('#defect-level-p1-right').value;
+      const p2l = $('#defect-level-p2-left').value;
+      const p2r = $('#defect-level-p2-right').value;
+      const p3l = $('#defect-level-p3-left').value;
+      const p3r = $('#defect-level-p3-right').value;
+      const p4l = $('#defect-level-p4-left').value;
+      const p4r = $('#defect-level-p4-right').value;
       const note = $('#defect-level-note').value.trim();
       const result = $('#defect-level-result').value;
       
-      if (!location || !leftMm || !rightMm) {
-        toast('위치와 좌우측 수치를 모두 입력해주세요', 'error');
+      const levelPoints = {
+        reference_mm: referenceMm ? parseFloat(referenceMm) : 150,
+        p1_left: p1l === '' ? null : parseFloat(p1l),
+        p1_right: p1r === '' ? null : parseFloat(p1r),
+        p2_left: p2l === '' ? null : parseFloat(p2l),
+        p2_right: p2r === '' ? null : parseFloat(p2r),
+        p3_left: p3l === '' ? null : parseFloat(p3l),
+        p3_right: p3r === '' ? null : parseFloat(p3r),
+        p4_left: p4l === '' ? null : parseFloat(p4l),
+        p4_right: p4r === '' ? null : parseFloat(p4r)
+      };
+      const hasAny = [p1l, p1r, p2l, p2r, p3l, p3r, p4l, p4r].some(v => v !== '');
+      
+      if (!location) {
+        toast('위치를 입력해주세요', 'error');
+        return;
+      }
+      if (!hasAny) {
+        toast('4개 측정점 중 최소 1개 이상 좌/우 값을 입력해주세요', 'error');
         return;
       }
       
       response = await api.createLevelMeasurementForDefect(
-        caseId, defectId, location, trade,
-        parseFloat(leftMm), parseFloat(rightMm), note, result
+        caseId, defectId, location, trade, levelPoints, note, result
       );
       
     } else if (tabType === '열화상') {
@@ -1147,39 +1169,6 @@ async function downloadReportAsPdf() {
   } catch (error) {
     console.error('PDF 다운로드 오류:', error);
     toast(error.message || 'PDF 다운로드에 실패했습니다', 'error');
-  } finally {
-    setLoading(false);
-  }
-}
-
-// SMS로 보고서 보내기
-async function sendReportAsSMS() {
-  if (!InspectorState.session) {
-    toast('로그인이 필요합니다', 'error');
-    return;
-  }
-  
-  const caseId = InspectorState.currentCaseId;
-  const householdId = InspectorState.selectedHouseholdId;
-  if (!caseId) {
-    toast('케이스를 먼저 선택해주세요', 'error');
-    return;
-  }
-
-  const phoneNumber = prompt('보고서를 받을 전화번호를 입력하세요 (예: 010-0000-0000)');
-  if (!phoneNumber) return;
-  
-  setLoading(true);
-  try {
-    const result = await api.sendReport(caseId, phoneNumber, householdId);
-    if (result.success) {
-      toast('SMS로 보고서가 발송되었습니다', 'success');
-    } else {
-      throw new Error(result.message || '보고서 발송에 실패했습니다');
-    }
-  } catch (error) {
-    console.error('보고서 발송 오류:', error);
-    toast(error.message || '보고서 발송에 실패했습니다', 'error');
   } finally {
     setLoading(false);
   }

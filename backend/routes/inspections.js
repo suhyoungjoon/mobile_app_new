@@ -18,7 +18,9 @@ const ValidationRules = {
   },
   level: {
     left_mm: { min: -50, max: 50, decimal: 1 },
-    right_mm: { min: -50, max: 50, decimal: 1 }
+    right_mm: { min: -50, max: 50, decimal: 1 },
+    point_mm: { min: -10, max: 10, decimal: 1 },
+    reference_mm: { min: 1, max: 999, decimal: 1 }
   }
 };
 
@@ -105,10 +107,14 @@ router.post('/thermal/:itemId/photos', authenticateToken, requireInspectorAccess
 // 공기질 측정 등록
 router.post('/air', authenticateToken, requireInspectorAccess, async (req, res) => {
   try {
-    const { caseId, defectId, location, trade, tvoc, hcho, co2, note, result = 'normal' } = req.body;
+    const { caseId, defectId, location, trade, process_type, tvoc, hcho, co2, note, result = 'normal' } = req.body;
     
     if (!caseId || !location) {
       return res.status(400).json({ error: '케이스 ID와 위치는 필수입니다' });
+    }
+    
+    if (process_type != null && process_type !== '' && !['flush_out', 'bake_out'].includes(process_type)) {
+      return res.status(400).json({ error: '공정 유형은 flush_out 또는 bake_out 이어야 합니다' });
     }
     
     // 입력값 검증
@@ -141,15 +147,16 @@ router.post('/air', authenticateToken, requireInspectorAccess, async (req, res) 
       
       const itemResult = await client.query(itemQuery, [itemId, caseId, defectId || null, location, trade, note, result]);
       
-      // 공기질 측정값 저장
+      // 공기질 측정값 저장 (process_type: Flush-out / Bake-out)
       const measureQuery = `
-        INSERT INTO air_measure (item_id, tvoc, hcho, co2)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO air_measure (item_id, process_type, tvoc, hcho, co2)
+        VALUES ($1, $2, $3, $4, $5)
         RETURNING *
       `;
       
       const measureResult = await client.query(measureQuery, [
-        itemId, 
+        itemId,
+        process_type && ['flush_out', 'bake_out'].includes(process_type) ? process_type : null,
         tvoc ? parseFloat(tvoc) : null,
         hcho ? parseFloat(hcho) : null,
         co2 ? parseFloat(co2) : null
@@ -247,37 +254,62 @@ router.post('/radon', authenticateToken, requireInspectorAccess, async (req, res
   }
 });
 
-// 레벨기 측정 등록
+// 레벨기 측정 등록 (4 point ±10mm, 기준 150mm)
 router.post('/level', authenticateToken, requireInspectorAccess, async (req, res) => {
   try {
-    const { caseId, defectId, location, trade, left_mm, right_mm, note, result = 'normal' } = req.body;
+    const {
+      caseId, defectId, location, trade, note, result = 'normal',
+      left_mm, right_mm,
+      point1_left_mm, point1_right_mm, point2_left_mm, point2_right_mm,
+      point3_left_mm, point3_right_mm, point4_left_mm, point4_right_mm,
+      reference_mm
+    } = req.body;
     
     if (!caseId || !location) {
       return res.status(400).json({ error: '케이스 ID와 위치는 필수입니다' });
     }
     
-    if (left_mm === null || left_mm === undefined || right_mm === null || right_mm === undefined) {
-      return res.status(400).json({ error: '좌측과 우측 수치는 모두 필수입니다' });
+    const pointRules = ValidationRules.level.point_mm;
+    const refRules = ValidationRules.level.reference_mm;
+    const points = [
+      [point1_left_mm, point1_right_mm],
+      [point2_left_mm, point2_right_mm],
+      [point3_left_mm, point3_right_mm],
+      [point4_left_mm, point4_right_mm]
+    ];
+    
+    const has4Point = points.some(([l, r]) => l != null && l !== '' || r != null && r !== '');
+    const hasLegacy = left_mm != null && left_mm !== '' && right_mm != null && right_mm !== '';
+    
+    if (!has4Point && !hasLegacy) {
+      return res.status(400).json({ error: '4개 측정점(좌/우) 또는 기존 좌/우 수치를 입력해주세요' });
     }
     
-    // 입력값 검증
-    if (!validateInput(left_mm, ValidationRules.level.left_mm)) {
-      return res.status(400).json({ error: '좌측 수치가 유효하지 않습니다 (-50~+50, 소수점 1자리)' });
+    for (let i = 0; i < points.length; i++) {
+      const [l, r] = points[i];
+      if (l != null && l !== '' && !validateInput(l, pointRules)) {
+        return res.status(400).json({ error: `${i + 1}번 좌측 수치가 유효하지 않습니다 (±10mm, 소수점 1자리)` });
+      }
+      if (r != null && r !== '' && !validateInput(r, pointRules)) {
+        return res.status(400).json({ error: `${i + 1}번 우측 수치가 유효하지 않습니다 (±10mm, 소수점 1자리)` });
+      }
     }
     
-    if (!validateInput(right_mm, ValidationRules.level.right_mm)) {
-      return res.status(400).json({ error: '우측 수치가 유효하지 않습니다 (-50~+50, 소수점 1자리)' });
+    if (reference_mm != null && reference_mm !== '' && !validateInput(reference_mm, refRules)) {
+      return res.status(400).json({ error: '기준(mm) 값이 유효하지 않습니다 (1~999, 소수점 1자리)' });
+    }
+    
+    if (hasLegacy && (left_mm == null || right_mm == null || !validateInput(left_mm, ValidationRules.level.left_mm) || !validateInput(right_mm, ValidationRules.level.right_mm))) {
+      return res.status(400).json({ error: '기존 좌/우 수치는 -50~+50, 소수점 1자리여야 합니다' });
     }
     
     const itemId = uuidv4();
     
-    // 트랜잭션 시작
     const client = await pool.connect();
     
     try {
       await client.query('BEGIN');
       
-      // 점검 항목 생성 (defect_id 포함)
       const itemQuery = `
         INSERT INTO inspection_item (id, case_id, defect_id, type, location, trade, note, result)
         VALUES ($1, $2, $3, 'level', $4, $5, $6, $7)
@@ -286,17 +318,28 @@ router.post('/level', authenticateToken, requireInspectorAccess, async (req, res
       
       const itemResult = await client.query(itemQuery, [itemId, caseId, defectId || null, location, trade, note, result]);
       
-      // 레벨기 측정값 저장
+      const parseOpt = (v) => (v != null && v !== '' ? parseFloat(v) : null);
+      
       const measureQuery = `
-        INSERT INTO level_measure (item_id, left_mm, right_mm)
-        VALUES ($1, $2, $3)
+        INSERT INTO level_measure (
+          item_id, left_mm, right_mm,
+          point1_left_mm, point1_right_mm, point2_left_mm, point2_right_mm,
+          point3_left_mm, point3_right_mm, point4_left_mm, point4_right_mm,
+          reference_mm
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         RETURNING *
       `;
       
       const measureResult = await client.query(measureQuery, [
-        itemId, 
-        parseFloat(left_mm), 
-        parseFloat(right_mm)
+        itemId,
+        hasLegacy ? parseFloat(left_mm) : (parseOpt(point1_left_mm) ?? null),
+        hasLegacy ? parseFloat(right_mm) : (parseOpt(point1_right_mm) ?? null),
+        parseOpt(point1_left_mm), parseOpt(point1_right_mm),
+        parseOpt(point2_left_mm), parseOpt(point2_right_mm),
+        parseOpt(point3_left_mm), parseOpt(point3_right_mm),
+        parseOpt(point4_left_mm), parseOpt(point4_right_mm),
+        reference_mm != null && reference_mm !== '' ? parseFloat(reference_mm) : 150
       ]);
       
       await client.query('COMMIT');
@@ -329,9 +372,12 @@ router.get('/:caseId', authenticateToken, async (req, res) => {
     const query = `
       SELECT 
         ii.*,
-        am.tvoc, am.hcho, am.co2, am.unit_tvoc, am.unit_hcho,
+        am.process_type, am.tvoc, am.hcho, am.co2, am.unit_tvoc, am.unit_hcho,
         rm.radon, rm.unit_radon,
         lm.left_mm, lm.right_mm,
+        lm.point1_left_mm, lm.point1_right_mm, lm.point2_left_mm, lm.point2_right_mm,
+        lm.point3_left_mm, lm.point3_right_mm, lm.point4_left_mm, lm.point4_right_mm,
+        lm.reference_mm,
         tp.file_url as thermal_photo_url, tp.caption as thermal_caption
       FROM inspection_item ii
       LEFT JOIN air_measure am ON ii.id = am.item_id
@@ -374,9 +420,12 @@ router.get('/defects/:defectId', authenticateToken, async (req, res) => {
     const query = `
       SELECT 
         ii.*,
-        am.tvoc, am.hcho, am.co2, am.unit_tvoc, am.unit_hcho,
+        am.process_type, am.tvoc, am.hcho, am.co2, am.unit_tvoc, am.unit_hcho,
         rm.radon, rm.unit_radon,
         lm.left_mm, lm.right_mm,
+        lm.point1_left_mm, lm.point1_right_mm, lm.point2_left_mm, lm.point2_right_mm,
+        lm.point3_left_mm, lm.point3_right_mm, lm.point4_left_mm, lm.point4_right_mm,
+        lm.reference_mm,
         tp.file_url as thermal_photo_url, tp.caption as thermal_caption
       FROM inspection_item ii
       LEFT JOIN air_measure am ON ii.id = am.item_id

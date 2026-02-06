@@ -234,8 +234,9 @@ class PDFMakeGenerator {
             content.push({ text: '점검내용 (본 하자)', style: 'defectHeader', margin: [20, 12, 0, 5] });
             if (air.length > 0) {
               air.forEach((item) => {
+                const processLabel = item.process_type === 'flush_out' ? ' Flush-out' : item.process_type === 'bake_out' ? ' Bake-out' : '';
                 content.push({
-                  text: `공기질: ${item.location || '-'} / ${item.trade || '-'} — TVOC ${item.tvoc ?? '-'} ${item.unit_tvoc || ''} / HCHO ${item.hcho ?? '-'} / CO2 ${item.co2 ?? '-'} (${item.result_text || item.result || '-'})`,
+                  text: `공기질: ${item.location || '-'} / ${item.trade || '-'}${processLabel} — TVOC ${item.tvoc ?? '-'} ${item.unit_tvoc || ''} / HCHO ${item.hcho ?? '-'} / CO2 ${item.co2 ?? '-'} (${item.result_text || item.result || '-'})`,
                   style: 'defectText',
                   margin: [20, 0, 0, 2],
                   fontSize: 8
@@ -254,8 +255,13 @@ class PDFMakeGenerator {
             }
             if (level.length > 0) {
               level.forEach((item) => {
+                const has4 = item.point1_left_mm != null || item.point1_right_mm != null || item.point2_left_mm != null || item.point2_right_mm != null || item.point3_left_mm != null || item.point3_right_mm != null || item.point4_left_mm != null || item.point4_right_mm != null;
+                const refMm = item.reference_mm != null ? item.reference_mm : 150;
+                const levelStr = has4
+                  ? `1번 좌 ${item.point1_left_mm ?? '-'}/우 ${item.point1_right_mm ?? '-'}  2번 좌 ${item.point2_left_mm ?? '-'}/우 ${item.point2_right_mm ?? '-'}  3번 좌 ${item.point3_left_mm ?? '-'}/우 ${item.point3_right_mm ?? '-'}  4번 좌 ${item.point4_left_mm ?? '-'}/우 ${item.point4_right_mm ?? '-'}  (기준 ${refMm}mm)`
+                  : `좌 ${item.left_mm ?? '-'}mm / 우 ${item.right_mm ?? '-'}mm`;
                 content.push({
-                  text: `레벨기: ${item.location || '-'} — 좌 ${item.left_mm ?? '-'}mm / 우 ${item.right_mm ?? '-'}mm (${item.result_text || item.result || '-'})`,
+                  text: `레벨기: ${item.location || '-'} — ${levelStr} (${item.result_text || item.result || '-'})`,
                   style: 'defectText',
                   margin: [20, 0, 0, 2],
                   fontSize: 8
@@ -297,10 +303,11 @@ class PDFMakeGenerator {
         ]
       ];
       (data.air_measurements || []).forEach((item) => {
+        const processLabel = item.process_type === 'flush_out' ? ' Flush-out' : item.process_type === 'bake_out' ? ' Bake-out' : '';
         summaryRows.push([
           { text: '공기질', style: 'metaText', border: [true, true, true, true] },
           { text: item.location || '-', style: 'metaText', border: [true, true, true, true] },
-          { text: item.trade || '-', style: 'metaText', border: [true, true, true, true] },
+          { text: (item.trade || '-') + processLabel, style: 'metaText', border: [true, true, true, true] },
           { text: `TVOC ${item.tvoc ?? '-'} ${item.unit_tvoc || ''} / HCHO ${item.hcho ?? '-'} ${item.unit_hcho || ''} / CO2 ${item.co2 ?? '-'}`, style: 'metaText', border: [true, true, true, true], fontSize: 8 },
           { text: item.result_text || item.result || '-', style: 'metaText', border: [true, true, true, true] }
         ]);
@@ -315,11 +322,16 @@ class PDFMakeGenerator {
         ]);
       });
       (data.level_measurements || []).forEach((item) => {
+        const has4 = item.point1_left_mm != null || item.point1_right_mm != null || item.point2_left_mm != null || item.point2_right_mm != null || item.point3_left_mm != null || item.point3_right_mm != null || item.point4_left_mm != null || item.point4_right_mm != null;
+        const refMm = item.reference_mm != null ? item.reference_mm : 150;
+        const levelStr = has4
+          ? `1번 좌${item.point1_left_mm ?? '-'}/우${item.point1_right_mm ?? '-'} 2번 좌${item.point2_left_mm ?? '-'}/우${item.point2_right_mm ?? '-'} 3번 좌${item.point3_left_mm ?? '-'}/우${item.point3_right_mm ?? '-'} 4번 좌${item.point4_left_mm ?? '-'}/우${item.point4_right_mm ?? '-'} (기준${refMm}mm)`
+          : `좌 ${item.left_mm ?? '-'}mm / 우 ${item.right_mm ?? '-'}mm`;
         summaryRows.push([
           { text: '레벨기', style: 'metaText', border: [true, true, true, true] },
           { text: item.location || '-', style: 'metaText', border: [true, true, true, true] },
           { text: item.trade || '-', style: 'metaText', border: [true, true, true, true] },
-          { text: `좌 ${item.left_mm ?? '-'}mm / 우 ${item.right_mm ?? '-'}mm`, style: 'metaText', border: [true, true, true, true] },
+          { text: levelStr, style: 'metaText', border: [true, true, true, true], fontSize: 8 },
           { text: item.result_text || item.result || '-', style: 'metaText', border: [true, true, true, true] }
         ]);
       });
@@ -353,21 +365,25 @@ class PDFMakeGenerator {
         });
 
         data.air_measurements.forEach((item, index) => {
+          const title = item.serial_no ? `측정 #${index + 1} (일련번호: ${item.serial_no})` : `측정 #${index + 1}`;
           content.push({
-            text: `측정 #${index + 1}`,
+            text: title,
             style: 'defectHeader',
             margin: [0, 10, 0, 5]
           });
 
+          const processLabel = item.process_type === 'flush_out' ? 'Flush-out' : item.process_type === 'bake_out' ? 'Bake-out' : '-';
+          const airBullets = [
+            { text: `위치: ${item.location || ''}`, style: 'defectText' },
+            { text: `공종: ${item.trade || ''}`, style: 'defectText' },
+            { text: `공정 유형: ${processLabel}`, style: 'defectText' },
+            { text: `TVOC: ${item.tvoc ?? '-'} ${item.unit_tvoc || ''}`, style: 'defectText' },
+            { text: `HCHO: ${item.hcho ?? '-'} ${item.unit_hcho || ''}`, style: 'defectText' },
+            { text: `CO2: ${item.co2 ?? '-'}`, style: 'defectText' },
+            { text: `결과: ${item.result_text || item.result || ''}`, style: 'defectText' }
+          ];
           content.push({
-            ul: [
-              { text: `위치: ${item.location || ''}`, style: 'defectText' },
-              { text: `공종: ${item.trade || ''}`, style: 'defectText' },
-              { text: `TVOC: ${item.tvoc ?? '-'} ${item.unit_tvoc || ''}`, style: 'defectText' },
-              { text: `HCHO: ${item.hcho ?? '-'} ${item.unit_hcho || ''}`, style: 'defectText' },
-              { text: `CO2: ${item.co2 ?? '-'}`, style: 'defectText' },
-              { text: `결과: ${item.result_text || item.result || ''}`, style: 'defectText' }
-            ],
+            ul: airBullets,
             margin: [20, 0, 0, 10]
           });
           
@@ -471,20 +487,32 @@ class PDFMakeGenerator {
         });
 
         data.level_measurements.forEach((item, index) => {
+          const title = item.serial_no ? `측정 #${index + 1} (일련번호: ${item.serial_no})` : `측정 #${index + 1}`;
           content.push({
-            text: `측정 #${index + 1}`,
+            text: title,
             style: 'defectHeader',
             margin: [0, 10, 0, 5]
           });
 
+          const has4 = item.point1_left_mm != null || item.point1_right_mm != null || item.point2_left_mm != null || item.point2_right_mm != null || item.point3_left_mm != null || item.point3_right_mm != null || item.point4_left_mm != null || item.point4_right_mm != null;
+          const refMm = item.reference_mm != null ? item.reference_mm : 150;
+          const levelBullets = [
+            { text: `위치: ${item.location || ''}`, style: 'defectText' },
+            { text: `공종: ${item.trade || ''}`, style: 'defectText' },
+            { text: `기준: ${refMm}mm`, style: 'defectText' }
+          ];
+          if (has4) {
+            levelBullets.push({ text: `1번: 좌 ${item.point1_left_mm ?? '-'}mm / 우 ${item.point1_right_mm ?? '-'}mm`, style: 'defectText' });
+            levelBullets.push({ text: `2번: 좌 ${item.point2_left_mm ?? '-'}mm / 우 ${item.point2_right_mm ?? '-'}mm`, style: 'defectText' });
+            levelBullets.push({ text: `3번: 좌 ${item.point3_left_mm ?? '-'}mm / 우 ${item.point3_right_mm ?? '-'}mm`, style: 'defectText' });
+            levelBullets.push({ text: `4번: 좌 ${item.point4_left_mm ?? '-'}mm / 우 ${item.point4_right_mm ?? '-'}mm`, style: 'defectText' });
+          } else {
+            levelBullets.push({ text: `좌측: ${item.left_mm ?? '-'}mm`, style: 'defectText' });
+            levelBullets.push({ text: `우측: ${item.right_mm ?? '-'}mm`, style: 'defectText' });
+          }
+          levelBullets.push({ text: `결과: ${item.result_text || item.result || ''}`, style: 'defectText' });
           content.push({
-            ul: [
-              { text: `위치: ${item.location || ''}`, style: 'defectText' },
-              { text: `공종: ${item.trade || ''}`, style: 'defectText' },
-              { text: `좌측: ${item.left_mm ?? '-'}mm`, style: 'defectText' },
-              { text: `우측: ${item.right_mm ?? '-'}mm`, style: 'defectText' },
-              { text: `결과: ${item.result_text || item.result || ''}`, style: 'defectText' }
-            ],
+            ul: levelBullets,
             margin: [20, 0, 0, 10]
           });
           

@@ -597,6 +597,7 @@
                     <tr>
                         <th>위치</th>
                         <th>공정</th>
+                        <th>공정 유형</th>
                         <th>TVOC (mg/m³)</th>
                         <th>HCHO (mg/m³)</th>
                         <th>CO2 (ppm)</th>
@@ -609,6 +610,7 @@
                     <tr>
                         <td>{{location}}</td>
                         <td>{{trade}}</td>
+                        <td>{{process_type_label}}</td>
                         <td>{{tvoc}}</td>
                         <td>{{hcho}}</td>
                         <td>{{co2}}</td>
@@ -657,8 +659,11 @@
                     <tr>
                         <th>위치</th>
                         <th>공정</th>
-                        <th>좌측 (mm)</th>
-                        <th>우측 (mm)</th>
+                        <th>기준 (mm)</th>
+                        <th>1번 좌/우</th>
+                        <th>2번 좌/우</th>
+                        <th>3번 좌/우</th>
+                        <th>4번 좌/우</th>
                         <th>결과</th>
                         <th>메모</th>
                     </tr>
@@ -668,8 +673,11 @@
                     <tr>
                         <td>{{location}}</td>
                         <td>{{trade}}</td>
-                        <td>{{left_mm}}</td>
-                        <td>{{right_mm}}</td>
+                        <td>{{level_reference_mm}}</td>
+                        <td>{{level_p1_text}}</td>
+                        <td>{{level_p2_text}}</td>
+                        <td>{{level_p3_text}}</td>
+                        <td>{{level_p4_text}}</td>
                         <td><span class="status-badge status-{{result}}">{{result_text}}</span></td>
                         <td>{{note}}</td>
                     </tr>
@@ -706,7 +714,7 @@
                         <div class="thermal-photos">
                             {{#each photos}}
                             <div class="thermal-photo">
-                                <img src="{{file_url}}" alt="열화상 사진" />
+                                <img src="{{#if @root.baseUrl}}{{@root.baseUrl}}{{/if}}{{file_url}}" alt="열화상 사진" />
                                 <div class="caption">{{caption}}</div>
                             </div>
                             {{/each}}
@@ -747,13 +755,13 @@
                         <div class="defect-inspections">
                             <h4>점검내용 (본 하자)</h4>
                             {{#if inspections.air}}{{#each inspections.air}}
-                            <p class="inspection-line">공기질: {{location}} / {{trade}} — TVOC {{tvoc}} {{unit_tvoc}} / HCHO {{hcho}} / CO2 {{co2}} ({{result_text}})</p>
+                            <p class="inspection-line">공기질: {{location}} / {{trade}}{{#if process_type_label}} {{process_type_label}}{{/if}} — TVOC {{tvoc}} {{unit_tvoc}} / HCHO {{hcho}} / CO2 {{co2}} ({{result_text}})</p>
                             {{/each}}{{/if}}
                             {{#if inspections.radon}}{{#each inspections.radon}}
                             <p class="inspection-line">라돈: {{location}} — {{radon}} {{unit}} ({{result_text}})</p>
                             {{/each}}{{/if}}
                             {{#if inspections.level}}{{#each inspections.level}}
-                            <p class="inspection-line">레벨기: {{location}} — 좌 {{left_mm}}mm / 우 {{right_mm}}mm ({{result_text}})</p>
+                            <p class="inspection-line">레벨기: {{location}} — {{level_summary_text}} ({{result_text}})</p>
                             {{/each}}{{/if}}
                             {{#if inspections.thermal}}{{#each inspections.thermal}}
                             <p class="inspection-line">열화상: {{location}} / {{trade}} — {{note}} ({{result_text}})</p>
@@ -764,6 +772,18 @@
                         <div class="photos-section">
                             <h4>사진</h4>
                             <div class="photos-grid">
+                                {{#if photos}}
+                                {{#each photos}}
+                                <div class="photo-item">
+                                    <div class="photo-label">{{#if kind}}{{#eq kind 'near'}}근거리{{else}}원거리{{/eq}}{{else}}사진{{/if}}</div>
+                                    {{#if url}}
+                                    <img src="{{#if @root.baseUrl}}{{@root.baseUrl}}{{/if}}{{url}}" alt="하자 사진" class="photo-img" style="max-width:100%; height:auto; border-radius:4px;" />
+                                    {{else}}
+                                    <div class="photo-placeholder">사진 없음</div>
+                                    {{/if}}
+                                </div>
+                                {{/each}}
+                                {{else}}
                                 <div class="photo-item">
                                     <div class="photo-label">근거리</div>
                                     <div class="photo-placeholder">사진 없음</div>
@@ -772,6 +792,7 @@
                                     <div class="photo-label">원거리</div>
                                     <div class="photo-placeholder">사진 없음</div>
                                 </div>
+                                {{/if}}
                             </div>
                         </div>
                     </div>

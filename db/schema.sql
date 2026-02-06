@@ -105,6 +105,7 @@ CREATE TABLE inspection_item (
   type TEXT CHECK (type IN ('thermal','air','radon','level')),
   location TEXT NOT NULL,
   trade TEXT,
+  serial_no TEXT,
   note TEXT,
   result TEXT CHECK (result IN ('normal','check','na')),
   created_at TIMESTAMP DEFAULT now()
@@ -113,6 +114,7 @@ CREATE TABLE inspection_item (
 CREATE TABLE air_measure (
   id SERIAL PRIMARY KEY,
   item_id TEXT REFERENCES inspection_item(id),
+  process_type TEXT CHECK (process_type IN ('flush_out','bake_out')),
   tvoc DECIMAL(5,2),
   hcho DECIMAL(5,2),
   co2 DECIMAL(5,2),
@@ -134,6 +136,15 @@ CREATE TABLE level_measure (
   item_id TEXT REFERENCES inspection_item(id),
   left_mm DECIMAL(5,1),
   right_mm DECIMAL(5,1),
+  point1_left_mm DECIMAL(5,1),
+  point1_right_mm DECIMAL(5,1),
+  point2_left_mm DECIMAL(5,1),
+  point2_right_mm DECIMAL(5,1),
+  point3_left_mm DECIMAL(5,1),
+  point3_right_mm DECIMAL(5,1),
+  point4_left_mm DECIMAL(5,1),
+  point4_right_mm DECIMAL(5,1),
+  reference_mm DECIMAL(5,1) DEFAULT 150,
   created_at TIMESTAMP DEFAULT now()
 );
 

@@ -132,7 +132,6 @@
       <div class="button-group" style="margin-top: 10px; display: flex; gap: 10px;">
         <button class="button" onclick="previewReportAsPdf()">PDF 미리보기</button>
         <button class="button" onclick="downloadReportAsPdf()">PDF 다운로드</button>
-        <button class="button success" onclick="sendReportAsSMS()">SMS 발송</button>
       </div>
     </div>
 
@@ -168,6 +167,15 @@
           <div class="form-group">
             <label class="form-label">공정</label>
             <input id="defect-air-trade" class="input" placeholder="예: 마감, 바닥재" />
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">공정 유형 (Flush-out / Bake-out)</label>
+            <select id="defect-air-process-type" class="input">
+              <option value="">선택 안 함</option>
+              <option value="flush_out">Flush-out</option>
+              <option value="bake_out">Bake-out</option>
+            </select>
           </div>
           
           <div class="form-row">
@@ -260,7 +268,7 @@
           </div>
         </div>
 
-        <!-- 레벨기 탭 -->
+        <!-- 레벨기 탭 (4 point ±10mm, 기준 150mm) -->
         <div id="defect-level-tab" class="equipment-tab-content hidden">
           <div class="form-group">
             <label class="form-label">위치</label>
@@ -272,14 +280,49 @@
             <input id="defect-level-trade" class="input" placeholder="예: 바닥, 타일" />
           </div>
           
+          <div class="form-group">
+            <label class="form-label">기준 (mm)</label>
+            <input id="defect-level-reference" type="number" step="0.1" min="1" max="999" value="150" class="input" placeholder="150" />
+          </div>
+          
           <div class="form-row">
             <div class="form-group">
-              <label class="form-label">좌측 (mm)</label>
-              <input id="defect-level-left" type="number" step="0.1" min="-50" max="50" class="input" placeholder="0.0" />
+              <label class="form-label">1번 좌 (mm) ±10</label>
+              <input id="defect-level-p1-left" type="number" step="0.1" min="-10" max="10" class="input" placeholder="0.0" />
             </div>
             <div class="form-group">
-              <label class="form-label">우측 (mm)</label>
-              <input id="defect-level-right" type="number" step="0.1" min="-50" max="50" class="input" placeholder="0.0" />
+              <label class="form-label">1번 우 (mm) ±10</label>
+              <input id="defect-level-p1-right" type="number" step="0.1" min="-10" max="10" class="input" placeholder="0.0" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">2번 좌 (mm) ±10</label>
+              <input id="defect-level-p2-left" type="number" step="0.1" min="-10" max="10" class="input" placeholder="0.0" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">2번 우 (mm) ±10</label>
+              <input id="defect-level-p2-right" type="number" step="0.1" min="-10" max="10" class="input" placeholder="0.0" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">3번 좌 (mm) ±10</label>
+              <input id="defect-level-p3-left" type="number" step="0.1" min="-10" max="10" class="input" placeholder="0.0" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">3번 우 (mm) ±10</label>
+              <input id="defect-level-p3-right" type="number" step="0.1" min="-10" max="10" class="input" placeholder="0.0" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">4번 좌 (mm) ±10</label>
+              <input id="defect-level-p4-left" type="number" step="0.1" min="-10" max="10" class="input" placeholder="0.0" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">4번 우 (mm) ±10</label>
+              <input id="defect-level-p4-right" type="number" step="0.1" min="-10" max="10" class="input" placeholder="0.0" />
             </div>
           </div>
           
