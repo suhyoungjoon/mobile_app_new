@@ -171,14 +171,23 @@ router.post('/generate', authenticateToken, async (req, res) => {
     let pdfResult;
     if (template === 'final-report') {
       pdfResult = await finalReportGenerator.generateFinalReport(reportData, pdfGenerator);
+    } else if (template === 'summary-report') {
+      const dong = reportData.dong || '';
+      const ho = reportData.ho || '';
+      const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 12);
+      const filename = `수기보고서_${dong}-${ho}_${timestamp}.pdf`;
+      pdfResult = await pdfGenerator.generateSummaryReportPDF(reportData, { filename });
     } else {
       const filename = `report-${householdId}-${Date.now()}.pdf`;
       pdfResult = await pdfGenerator.generatePDF('comprehensive-report', reportData, { filename });
     }
 
+    const successMessage = template === 'final-report' ? '최종보고서가 생성되었습니다'
+      : template === 'summary-report' ? '수기보고서가 생성되었습니다'
+      : 'PDF generated successfully';
     res.json({
       success: true,
-      message: template === 'final-report' ? '최종보고서가 생성되었습니다' : 'PDF generated successfully',
+      message: successMessage,
       filename: pdfResult.filename,
       url: pdfResult.url,
       download_url: `/api/reports/download/${pdfResult.filename}`,

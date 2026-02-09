@@ -752,6 +752,86 @@ class PDFMakeGenerator {
     };
   }
 
+  /**
+   * 수기보고서: 세대별 하자 리스트 (하자위치 | 공종 | 내용 | 특이사항 | 사진파일)
+   */
+  buildSummaryReportDefinition(data) {
+    const content = [];
+    content.push({
+      text: '수기보고서 (점검결과 요약)',
+      style: 'sectionHeader',
+      alignment: 'center',
+      margin: [0, 0, 0, 10]
+    });
+    content.push({
+      text: [
+        { text: '세대: ', bold: true },
+        { text: `${data.dong || ''}동 ${data.ho || ''}호` },
+        { text: '  |  입주자: ', bold: true },
+        { text: data.name || '-' }
+      ],
+      fontSize: 10,
+      margin: [0, 0, 0, 15]
+    });
+    const defects = data.defects || [];
+    const headerRow = [
+      { text: '하자 위치', style: 'tableHeader', fillColor: '#e5e7eb', border: [true, true, true, true] },
+      { text: '공종', style: 'tableHeader', fillColor: '#374151', color: '#fff', border: [true, true, true, true] },
+      { text: '내용', style: 'tableHeader', fillColor: '#374151', color: '#fff', border: [true, true, true, true] },
+      { text: '특이사항', style: 'tableHeader', fillColor: '#374151', color: '#fff', border: [true, true, true, true] },
+      { text: '사진파일', style: 'tableHeader', fillColor: '#374151', color: '#ef4444', border: [true, true, true, true] }
+    ];
+    const bodyRows = defects.map((d, idx) => {
+      const photoLabels = (d.photos || []).map((p, i) => {
+        const a = String(idx).padStart(4, '0');
+        const b = String(i + 1).padStart(4, '0');
+        return `${a},${b}`;
+      });
+      return [
+        { text: d.location || '-', border: [true, true, true, true] },
+        { text: d.trade || '-', border: [true, true, true, true] },
+        { text: d.content || '-', border: [true, true, true, true] },
+        { text: d.memo || '-', border: [true, true, true, true] },
+        { text: photoLabels.length ? photoLabels.join(', ') : '-', color: '#ef4444', border: [true, true, true, true] }
+      ];
+    });
+    if (bodyRows.length === 0) {
+      bodyRows.push([
+        { text: '등록된 하자가 없습니다.', colSpan: 5, alignment: 'center', border: [true, true, true, true] },
+        {}, {}, {}, {}
+      ]);
+    }
+    content.push({
+      table: {
+        widths: [60, 80, '*', 80, 70],
+        body: [headerRow, ...bodyRows]
+      }
+    });
+    content.push({ text: '\n' });
+    return this._getDocumentDefinition(content);
+  }
+
+  async generateSummaryReportPDF(data, options = {}) {
+    const filename = options.filename || `summary-report-${uuidv4()}.pdf`;
+    const docDefinition = this.buildSummaryReportDefinition(data);
+    return new Promise((resolve, reject) => {
+      try {
+        const pdfDoc = this.printer.createPdfKitDocument(docDefinition);
+        const outputPath = path.join(this.outputDir, filename);
+        const writeStream = fs.createWriteStream(outputPath);
+        pdfDoc.pipe(writeStream);
+        pdfDoc.end();
+        writeStream.on('finish', () => {
+          const size = fs.statSync(outputPath).size;
+          resolve({ filename, path: outputPath, url: `/reports/${filename}`, size });
+        });
+        writeStream.on('error', (err) => reject(err));
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
   buildInspectionResultsOnlyDefinition(data) {
     const content = [];
     content.push({

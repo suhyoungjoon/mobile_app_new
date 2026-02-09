@@ -1199,6 +1199,38 @@ async function downloadFinalReportAsPdf() {
   }
 }
 
+// 수기보고서 다운로드 (세대별 하자 리스트: 하자위치 | 공종 | 내용 | 특이사항 | 사진파일)
+async function downloadSummaryReportAsPdf() {
+  if (!InspectorState.session) {
+    toast('로그인이 필요합니다', 'error');
+    return;
+  }
+  const householdId = InspectorState.selectedHouseholdId;
+  if (!householdId) {
+    toast('대상 세대를 먼저 선택해주세요', 'error');
+    return;
+  }
+
+  setLoading(true);
+  try {
+    toast('수기보고서 생성 중...', 'info');
+    const generateResult = await api.generateReport(InspectorState.currentCaseId, householdId, { template: 'summary-report' });
+    if (!generateResult || !generateResult.success) {
+      throw new Error(generateResult?.message || generateResult?.error || '수기보고서 생성에 실패했습니다');
+    }
+    if (!generateResult.filename) throw new Error('파일명을 받지 못했습니다.');
+
+    toast('다운로드 중...', 'info');
+    await api.downloadReport(generateResult.filename);
+    toast('수기보고서 다운로드가 완료되었습니다', 'success');
+  } catch (error) {
+    console.error('수기보고서 다운로드 오류:', error);
+    toast(error.message || '수기보고서 다운로드에 실패했습니다', 'error');
+  } finally {
+    setLoading(false);
+  }
+}
+
 // 앱 초기화
 window.addEventListener('DOMContentLoaded', async () => {
   console.log('🚀 점검원 화면 초기화 시작');
