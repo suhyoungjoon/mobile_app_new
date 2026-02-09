@@ -753,6 +753,206 @@ class PDFMakeGenerator {
   }
 
   /**
+   * 점검결과 양식 PDF (인사이트아이_점검결과양식.pdf 구조)
+   * 1p: 세대주 내용(빨간 점선박스), 2p~: 하자별 육안/열화상/공기질/레벨기 (각 영역 빨간 점선박스, 내용은 페이지 넘김 가능)
+   */
+  _redBox(content) {
+    return {
+      table: {
+        widths: ['*'],
+        body: [[
+          {
+            stack: Array.isArray(content) ? content : [content],
+            fillColor: '#ffebee',
+            border: [true, true, true, true],
+            margin: [8, 8]
+          }
+        ]]
+      },
+      layout: 'noBorders',
+      margin: [0, 4, 0, 8]
+    };
+  }
+
+  buildInspectionFormDefinition(data) {
+    const content = [];
+    const createdDate = data.defects && data.defects.length > 0
+      ? data.defects[0].case_created_at
+      : data.created_at || new Date();
+
+    // 1p: 세대주 내용 (빨간 점선박스)
+    content.push({
+      text: '점검결과 양식',
+      style: 'sectionHeader',
+      alignment: 'center',
+      margin: [0, 0, 0, 16]
+    });
+    content.push(this._redBox([
+      { text: `세대주(입주자): ${data.name || '-'}`, fontSize: 11, margin: [0, 0, 0, 4] },
+      { text: `동호수: ${data.dong || ''}동 ${data.ho || ''}호`, fontSize: 11, margin: [0, 0, 0, 4] },
+      { text: `아파트명: ${data.complex || '-'}`, fontSize: 11, margin: [0, 0, 0, 4] },
+      { text: `점검일: ${this.formatDate(createdDate)}`, fontSize: 11 }
+    ]));
+
+    const defects = data.defects || [];
+    if (defects.length === 0) {
+      content.push(this._redBox({ text: '등록된 하자가 없습니다.', alignment: 'center' }));
+      return this._getDocumentDefinition(content);
+    }
+
+    for (let di = 0; di < defects.length; di++) {
+      const defect = defects[di];
+      const insp = defect.inspections || {};
+      const air = insp.air || [];
+      const radon = insp.radon || [];
+      const level = insp.level || [];
+      const thermal = insp.thermal || [];
+
+      content.push({
+        text: `하자 #${di + 1}  ${defect.location || ''} / ${defect.trade || ''}`,
+        style: 'defectHeader',
+        margin: [0, 16, 0, 8]
+      });
+
+      // 2p 스타일: 육안점검 — 왼쪽 사진, 오른쪽 빨간박스 점검내용
+      const hasVisualPhotos = defect.photos && defect.photos.length > 0;
+      const visualContent = [
+        { text: '육안점검', fontSize: 11, bold: true, margin: [0, 0, 0, 6] },
+        { text: `위치: ${defect.location || '-'}`, fontSize: 10, margin: [0, 0, 0, 2] },
+        { text: `공종: ${defect.trade || '-'}`, fontSize: 10, margin: [0, 0, 0, 2] },
+        { text: `내용: ${defect.content || '-'}`, fontSize: 10, margin: [0, 0, 0, 2] },
+        { text: `특이사항(메모): ${defect.memo || '-'}`, fontSize: 10 }
+      ];
+      if (hasVisualPhotos) {
+        const leftCol = [];
+        defect.photos.forEach((photo) => {
+          try {
+            const urlPath = (photo.url || '').replace(/^\//, '');
+            const photoPath = path.join(__dirname, '..', urlPath);
+            if (fs.existsSync(photoPath)) {
+              leftCol.push({ image: photoPath, width: 140, margin: [0, 0, 0, 4] });
+              leftCol.push({ text: photo.kind === 'near' ? '근접' : photo.kind === 'far' ? '원거리' : '사진', fontSize: 8, color: '#666' });
+            }
+          } catch (e) { /* ignore */ }
+        });
+        content.push({
+          table: {
+            widths: [160, '*'],
+            body: [[
+              { stack: leftCol.length ? leftCol : [{ text: '(사진 없음)', fontSize: 9, color: '#999' }], border: [false, false, false, false] },
+              { stack: visualContent, fillColor: '#ffebee', border: [true, true, true, true], margin: [8, 8] }
+            ]]
+          },
+          layout: 'noBorders',
+          margin: [0, 0, 0, 12]
+        });
+      } else {
+        content.push(this._redBox(visualContent));
+      }
+
+      // 3p 스타일: 열화상점검 — 왼쪽 사진, 오른쪽 빨간박스
+      const thermalPhotos = [];
+      thermal.forEach((t) => {
+        (t.photos || []).forEach((p) => {
+          if (p && p.file_url) {
+            const u = (p.file_url || '').replace(/^\//, '');
+            const fp = path.join(__dirname, '..', u);
+            if (fs.existsSync(fp)) thermalPhotos.push(fp);
+          }
+        });
+      });
+      const thermalTexts = thermal.map((t) => {
+        const ser = t.serial_no ? ` [일련: ${t.serial_no}]` : '';
+        return `위치 ${t.location || '-'} / ${t.trade || '-'}${ser} — ${t.note || '-'} (${t.result_text || t.result || '-'})`;
+      }).join('\n');
+      if (thermalPhotos.length > 0 || thermal.length > 0) {
+        content.push({ text: '열화상점검', style: 'defectHeader', margin: [0, 10, 0, 6] });
+        const leftThermal = thermalPhotos.slice(0, 3).map((fp) => ({ image: fp, width: 140, margin: [0, 0, 0, 4] }));
+        const rightThermalStack = thermal.length > 0
+          ? [{ text: thermalTexts, fontSize: 10 }]
+          : [{ text: '열화상 점검 내용 없음', fontSize: 10, color: '#666' }];
+        content.push({
+          table: {
+            widths: [160, '*'],
+            body: [[
+              { stack: leftThermal.length ? leftThermal : [{ text: '(사진 없음)', fontSize: 9, color: '#999' }], border: [false, false, false, false] },
+              { stack: rightThermalStack, fillColor: '#ffebee', border: [true, true, true, true], margin: [8, 8] }
+            ]]
+          },
+          layout: 'noBorders',
+          margin: [0, 0, 0, 12]
+        });
+      }
+
+      // 4~5p 스타일: 공기질측정 — 빨간박스에 측정값·점검내용 (양식: TVOC/HCHO/Radon mg/m³, Bq/m³, Flush-out/Bake-out)
+      if (air.length > 0 || radon.length > 0) {
+        content.push({ text: '공기질측정', style: 'defectHeader', margin: [0, 10, 0, 6] });
+        air.forEach((item) => {
+          const processLabel = item.process_type === 'flush_out' ? 'Flush-out' : item.process_type === 'bake_out' ? 'Bake-out' : '-';
+          const ut = item.unit_tvoc || 'mg/m³';
+          const uh = item.unit_hcho || 'mg/m³';
+          const ser = item.serial_no ? `  [일련: ${item.serial_no}]` : '';
+          content.push(this._redBox([
+            { text: `위치: ${item.location || '-'}  /  공종: ${item.trade || '-'}  (${processLabel})${ser}`, fontSize: 10, margin: [0, 0, 0, 4] },
+            { text: `TVOC (${ut}): ${item.tvoc ?? '-'}  /  HCHO (${uh}): ${item.hcho ?? '-'}  /  CO2 (ppm): ${item.co2 ?? '-'}`, fontSize: 10, margin: [0, 0, 0, 2] },
+            { text: `메모: ${item.note || '-'}  /  결과: ${item.result_text || item.result || '-'}`, fontSize: 10 }
+          ]));
+        });
+        radon.forEach((item) => {
+          const ur = item.unit || 'Bq/m³';
+          const ser = item.serial_no ? `  [일련: ${item.serial_no}]` : '';
+          content.push(this._redBox([
+            { text: `위치: ${item.location || '-'}  /  공종: ${item.trade || '-'}${ser}`, fontSize: 10, margin: [0, 0, 0, 4] },
+            { text: `Radon (${ur}): ${item.radon ?? '-'}`, fontSize: 10, margin: [0, 0, 0, 2] },
+            { text: `메모: ${item.note || '-'}  /  결과: ${item.result_text || item.result || '-'}`, fontSize: 10 }
+          ]));
+        });
+      }
+
+      // 6p 스타일: 레벨기 점검 — 빨간박스에 측정값·점검내용 (양식: 4 point ±10mm, mm 단위)
+      if (level.length > 0) {
+        content.push({ text: '레벨기 점검', style: 'defectHeader', margin: [0, 10, 0, 6] });
+        level.forEach((item) => {
+          const refMm = item.level_reference_mm != null ? item.level_reference_mm : (item.reference_mm != null ? item.reference_mm : 150);
+          const has4 = item.point1_left_mm != null || item.point1_right_mm != null || item.point2_left_mm != null || item.point2_right_mm != null;
+          const ser = item.serial_no ? `  [일련: ${item.serial_no}]` : '';
+          const line1 = has4
+            ? `4 point ±10mm  —  1번: ${item.point1_left_mm ?? '-'}mm / ${item.point1_right_mm ?? '-'}mm  2번: ${item.point2_left_mm ?? '-'}mm / ${item.point2_right_mm ?? '-'}mm  3번: ${item.point3_left_mm ?? '-'}mm / ${item.point3_right_mm ?? '-'}mm  4번: ${item.point4_left_mm ?? '-'}mm / ${item.point4_right_mm ?? '-'}mm  (참조 ${refMm}mm)`
+            : `좌 ${item.left_mm ?? '-'}mm / 우 ${item.right_mm ?? '-'}mm`;
+          content.push(this._redBox([
+            { text: `위치: ${item.location || '-'}  /  공종: ${item.trade || '-'}${ser}`, fontSize: 10, margin: [0, 0, 0, 4] },
+            { text: line1, fontSize: 10, margin: [0, 0, 0, 2] },
+            { text: `메모: ${item.note || '-'}  /  결과: ${item.result_text || item.result || '-'}`, fontSize: 10 }
+          ]));
+        });
+      }
+    }
+
+    return this._getDocumentDefinition(content);
+  }
+
+  async generateInspectionFormPDF(data, options = {}) {
+    const filename = options.filename || `점검결과양식-${uuidv4()}.pdf`;
+    const docDefinition = this.buildInspectionFormDefinition(data);
+    return new Promise((resolve, reject) => {
+      try {
+        const pdfDoc = this.printer.createPdfKitDocument(docDefinition);
+        const outputPath = path.join(this.outputDir, filename);
+        const writeStream = fs.createWriteStream(outputPath);
+        pdfDoc.pipe(writeStream);
+        pdfDoc.end();
+        writeStream.on('finish', () => {
+          const size = fs.statSync(outputPath).size;
+          resolve({ filename, path: outputPath, url: `/reports/${filename}`, size });
+        });
+        writeStream.on('error', (err) => reject(err));
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  /**
    * 수기보고서: 세대별 하자 리스트 (하자위치 | 공종 | 내용 | 특이사항 | 사진파일)
    */
   buildSummaryReportDefinition(data) {

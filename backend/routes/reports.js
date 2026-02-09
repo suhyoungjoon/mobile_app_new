@@ -177,6 +177,12 @@ router.post('/generate', authenticateToken, async (req, res) => {
       const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 12);
       const filename = `수기보고서_${dong}-${ho}_${timestamp}.pdf`;
       pdfResult = await pdfGenerator.generateSummaryReportPDF(reportData, { filename });
+    } else if (template === 'inspection-form') {
+      const dong = reportData.dong || '';
+      const ho = reportData.ho || '';
+      const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 12);
+      const filename = `점검결과양식_${dong}-${ho}_${timestamp}.pdf`;
+      pdfResult = await pdfGenerator.generateInspectionFormPDF(reportData, { filename });
     } else {
       const filename = `report-${householdId}-${Date.now()}.pdf`;
       pdfResult = await pdfGenerator.generatePDF('comprehensive-report', reportData, { filename });
@@ -184,6 +190,7 @@ router.post('/generate', authenticateToken, async (req, res) => {
 
     const successMessage = template === 'final-report' ? '최종보고서가 생성되었습니다'
       : template === 'summary-report' ? '수기보고서가 생성되었습니다'
+      : template === 'inspection-form' ? '점검결과 양식이 생성되었습니다'
       : 'PDF generated successfully';
     res.json({
       success: true,

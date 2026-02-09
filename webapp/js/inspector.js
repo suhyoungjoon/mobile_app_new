@@ -1231,6 +1231,38 @@ async function downloadSummaryReportAsPdf() {
   }
 }
 
+// 점검결과 양식 다운로드 (1p 세대주, 2p~ 육안/열화상/공기질/레벨기)
+async function downloadInspectionFormAsPdf() {
+  if (!InspectorState.session) {
+    toast('로그인이 필요합니다', 'error');
+    return;
+  }
+  const householdId = InspectorState.selectedHouseholdId;
+  if (!householdId) {
+    toast('대상 세대를 먼저 선택해주세요', 'error');
+    return;
+  }
+
+  setLoading(true);
+  try {
+    toast('점검결과 양식 생성 중...', 'info');
+    const generateResult = await api.generateReport(InspectorState.currentCaseId, householdId, { template: 'inspection-form' });
+    if (!generateResult || !generateResult.success) {
+      throw new Error(generateResult?.message || generateResult?.error || '점검결과 양식 생성에 실패했습니다');
+    }
+    if (!generateResult.filename) throw new Error('파일명을 받지 못했습니다.');
+
+    toast('다운로드 중...', 'info');
+    await api.downloadReport(generateResult.filename);
+    toast('점검결과 양식 다운로드가 완료되었습니다', 'success');
+  } catch (error) {
+    console.error('점검결과 양식 다운로드 오류:', error);
+    toast(error.message || '점검결과 양식 다운로드에 실패했습니다', 'error');
+  } finally {
+    setLoading(false);
+  }
+}
+
 // 앱 초기화
 window.addEventListener('DOMContentLoaded', async () => {
   console.log('🚀 점검원 화면 초기화 시작');
