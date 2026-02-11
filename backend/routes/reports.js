@@ -471,7 +471,7 @@ async function loadHouseholdReportData(householdId) {
     defect.photos = photoResult.rows || [];
 
     const itemResult = await pool.query(inspectionItemQuery, [defect.id]);
-    const air = [], radon = [], level = [], thermal = [];
+    const air = [], radon = [], level = [], thermal = [], visual = [];
     (itemResult.rows || []).forEach((item) => {
       const base = {
         location: item.location,
@@ -539,9 +539,12 @@ async function loadHouseholdReportData(householdId) {
           thermal.push({ ...base, photos: item.photos || [] });
           totalThermal++;
           break;
+        case 'visual':
+          visual.push({ ...base });
+          break;
       }
     });
-    defect.inspections = { air, radon, level, thermal };
+    defect.inspections = { air, radon, level, thermal, visual };
   }
 
   const totalEquipment = totalThermal + totalAir + totalRadon + totalLevel;

@@ -7,6 +7,7 @@ const InspectorState = {
   session: null,
   currentDefectId: null,
   currentCaseId: null,
+  currentDefect: null, // 점검결과 입력 시 하자 정보 (육안 저장 시 location/trade 사용)
   allDefects: [],
   selectedHouseholdId: null,
   selectedHouseholdDisplay: null, // { complex_name, dong, ho, resident_name }
@@ -603,6 +604,8 @@ async function openDefectInspection(defectId, caseId) {
     // 하자 정보 조회
     const defect = await api.getDefect(defectId);
     
+    InspectorState.currentDefect = defect;
+
     // 하자 정보 표시
     const detailsEl = $('#defect-inspection-details');
     if (detailsEl) {
@@ -612,6 +615,26 @@ async function openDefectInspection(defectId, caseId) {
         <div><strong>내용:</strong> ${escapeHTML(defect.content || '')}</div>
       `;
     }
+
+    // 육안 탭용 요약 + 기존 육안 점검의견 로드
+    const visualSummaryEl = $('#defect-visual-defect-summary');
+    if (visualSummaryEl) {
+      visualSummaryEl.innerHTML = `
+        <div><strong>위치:</strong> ${escapeHTML(defect.location || '-')}</div>
+        <div><strong>공종:</strong> ${escapeHTML(defect.trade || '-')}</div>
+        <div><strong>내용:</strong> ${escapeHTML(defect.content || '-')}</div>
+        <div><strong>메모:</strong> ${escapeHTML(defect.memo || '-')}</div>
+      `;
+    }
+    const visualNoteEl = $('#defect-visual-note');
+    if (visualNoteEl) visualNoteEl.value = '';
+    try {
+      const inspRes = await api.getDefectInspections(defectId);
+      if (inspRes && inspRes.inspections && inspRes.inspections.visual && inspRes.inspections.visual.length > 0) {
+        const latest = inspRes.inspections.visual[inspRes.inspections.visual.length - 1];
+        if (latest.note && visualNoteEl) visualNoteEl.value = latest.note;
+      }
+    } catch (_) { /* 무시 */ }
     
     // 첫 번째 탭으로 이동
     showDefectInspectionTab('air');
@@ -808,6 +831,8 @@ function resetDefectInspectionForm() {
     
     const refInput = $('#defect-level-reference');
     if (refInput) refInput.value = '150';
+    const visualNoteInput = $('#defect-visual-note');
+    if (visualNoteInput) visualNoteInput.value = '';
     
     showDefectInspectionTab('air');
     toast('폼이 초기화되었습니다');
@@ -941,13 +966,20 @@ async function saveDefectInspection() {
         caseId, defectId, location, '', note, 'normal'
       );
       
+    } else if (tabType === '육안') {
+      const note = $('#defect-visual-note').value.trim();
+      const defect = InspectorState.currentDefect || {};
+      const location = (defect.location && defect.location.trim()) || '육안';
+      const trade = (defect.trade && defect.trade.trim()) || null;
+      response = await api.createVisualInspectionForDefect(caseId, defectId, note, location, trade);
+      
     } else {
       toast('잘못된 측정 타입입니다', 'error');
       return;
     }
     
     if (response && response.success) {
-      // 측정값 저장 성공 후 사진 업로드 (사진이 있는 경우)
+      // 측정값 저장 성공 후 사진 업로드 (사진이 있는 경우, 육안은 사진 없음)
       const measurementType = tabType === '공기질' ? 'air' : 
                              tabType === '라돈' ? 'radon' : 
                              tabType === '레벨기' ? 'level' : 

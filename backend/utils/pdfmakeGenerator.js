@@ -807,6 +807,7 @@ class PDFMakeGenerator {
       const radon = insp.radon || [];
       const level = insp.level || [];
       const thermal = insp.thermal || [];
+      const visualItems = insp.visual || [];
 
       content.push({
         text: `하자 #${di + 1}  ${defect.location || ''} / ${defect.trade || ''}`,
@@ -814,14 +815,18 @@ class PDFMakeGenerator {
         margin: [0, 16, 0, 8]
       });
 
-      // 2p 스타일: 육안점검 — 왼쪽 사진, 오른쪽 빨간박스 점검내용
+      // 2p 스타일: 육안점검 — 왼쪽 사진, 오른쪽 빨간박스 점검내용 (점검원 점검의견 포함)
       const hasVisualPhotos = defect.photos && defect.photos.length > 0;
+      const visualNoteText = visualItems.length > 0
+        ? visualItems.map((v) => v.note || '').filter(Boolean).join(' / ') || '-'
+        : '-';
       const visualContent = [
         { text: '육안점검', fontSize: 11, bold: true, margin: [0, 0, 0, 6] },
         { text: `위치: ${defect.location || '-'}`, fontSize: 10, margin: [0, 0, 0, 2] },
         { text: `공종: ${defect.trade || '-'}`, fontSize: 10, margin: [0, 0, 0, 2] },
         { text: `내용: ${defect.content || '-'}`, fontSize: 10, margin: [0, 0, 0, 2] },
-        { text: `특이사항(메모): ${defect.memo || '-'}`, fontSize: 10 }
+        { text: `특이사항(메모): ${defect.memo || '-'}`, fontSize: 10, margin: [0, 0, 0, 2] },
+        { text: `점검의견: ${visualNoteText}`, fontSize: 10 }
       ];
       if (hasVisualPhotos) {
         const leftCol = [];
@@ -1032,6 +1037,172 @@ class PDFMakeGenerator {
     });
   }
 
+  /**
+   * 최종보고서용 점검결과 본문만 생성 (헤더 제외). 11p·14p·17p·20p 본문에 넣을 내용.
+   * 템플릿 헤더(육안점검/열화상점검/공기질점검/레벨기점검)는 그대로 두고, 그 아래에 이 내용만 넣음.
+   */
+  buildFinalReportInspectionOverlayDefinition(data) {
+    const content = [];
+    const defects = data.defects || [];
+    const airList = data.air_measurements || [];
+    const radonList = data.radon_measurements || [];
+    const levelList = data.level_measurements || [];
+    const thermalList = data.thermal_inspections || [];
+
+    // ----- 페이지 1: 육안점검 본문만 (헤더는 템플릿 유지) -----
+    if (defects.length === 0) {
+      content.push({ text: '등록된 하자 없음.', fontSize: 10, margin: [0, 0, 0, 8] });
+    } else {
+      defects.forEach((defect, idx) => {
+        const insp = defect.inspections || {};
+        const visualItems = insp.visual || [];
+        const visualNote = visualItems.length > 0
+          ? visualItems.map((v) => v.note || '').filter(Boolean).join(' / ') || '-'
+          : '-';
+        content.push({
+          text: `하자 #${idx + 1}  ${defect.location || '-'} / ${defect.trade || '-'}`,
+          fontSize: 11,
+          bold: true,
+          margin: [0, 8, 0, 4]
+        });
+        content.push({
+          ul: [
+            `위치: ${defect.location || '-'}`,
+            `공종: ${defect.trade || '-'}`,
+            `내용: ${defect.content || '-'}`,
+            `메모: ${defect.memo || '-'}`,
+            `점검의견: ${visualNote}`
+          ],
+          fontSize: 9,
+          margin: [15, 0, 0, 6]
+        });
+        if (defect.photos && defect.photos.length > 0) {
+          defect.photos.slice(0, 2).forEach((photo) => {
+            try {
+              const urlPath = (photo.url || '').replace(/^\//, '');
+              const photoPath = path.join(__dirname, '..', urlPath);
+              if (fs.existsSync(photoPath)) {
+                content.push({ image: photoPath, width: 120, margin: [15, 4, 0, 4] });
+                content.push({ text: photo.kind === 'near' ? '근접' : photo.kind === 'far' ? '원거리' : '사진', fontSize: 8, color: '#666', margin: [15, 0, 0, 4] });
+              }
+            } catch (e) { /* ignore */ }
+          });
+        }
+      });
+    }
+    content.push({ text: '', pageBreak: 'after' });
+
+    // ----- 페이지 2: 열화상점검 본문만 -----
+    if (thermalList.length === 0) {
+      content.push({ text: '열화상 점검 결과 없음.', fontSize: 10, margin: [0, 0, 0, 8] });
+    } else {
+      thermalList.forEach((item, idx) => {
+        content.push({
+          text: `측정 #${idx + 1}  ${item.location || '-'} / ${item.trade || '-'}`,
+          fontSize: 11,
+          bold: true,
+          margin: [0, 8, 0, 4]
+        });
+        content.push({
+          ul: [
+            `위치: ${item.location || '-'}`,
+            `공종: ${item.trade || '-'}`,
+            `점검내용: ${item.note || '-'}`,
+            `결과: ${item.result_text || item.result || '-'}`
+          ],
+          fontSize: 9,
+          margin: [15, 0, 0, 8]
+        });
+        if (item.photos && item.photos.length > 0) {
+          item.photos.slice(0, 2).forEach((p) => {
+            if (p && p.file_url) {
+              try {
+                const urlPath = (p.file_url || '').replace(/^\//, '');
+                const photoPath = path.join(__dirname, '..', urlPath);
+                if (fs.existsSync(photoPath)) {
+                  content.push({ image: photoPath, width: 120, margin: [15, 4, 0, 4] });
+                }
+              } catch (e) { /* ignore */ }
+            }
+          });
+        }
+      });
+    }
+    content.push({ text: '', pageBreak: 'after' });
+
+    // ----- 페이지 3: 공기질점검 본문만 -----
+    if (airList.length === 0 && radonList.length === 0) {
+      content.push({ text: '공기질/라돈 측정 결과 없음.', fontSize: 10, margin: [0, 0, 0, 8] });
+    } else {
+      airList.forEach((item, idx) => {
+        const processLabel = item.process_type === 'flush_out' ? 'Flush-out' : item.process_type === 'bake_out' ? 'Bake-out' : '-';
+        content.push({
+          text: `공기질 #${idx + 1}  ${item.location || '-'} / ${item.trade || '-'} (${processLabel})`,
+          fontSize: 11,
+          bold: true,
+          margin: [0, 8, 0, 4]
+        });
+        content.push({
+          ul: [
+            `TVOC: ${item.tvoc ?? '-'} ${item.unit_tvoc || 'mg/m³'}`,
+            `HCHO: ${item.hcho ?? '-'} ${item.unit_hcho || 'mg/m³'}`,
+            `CO2: ${item.co2 ?? '-'} ppm`,
+            `메모: ${item.note || '-'}`,
+            `결과: ${item.result_text || item.result || '-'}`
+          ],
+          fontSize: 9,
+          margin: [15, 0, 0, 8]
+        });
+      });
+      radonList.forEach((item, idx) => {
+        content.push({
+          text: `라돈 #${idx + 1}  ${item.location || '-'} / ${item.trade || '-'}`,
+          fontSize: 11,
+          bold: true,
+          margin: [0, 8, 0, 4]
+        });
+        content.push({
+          ul: [
+            `라돈: ${item.radon ?? '-'} ${item.unit || 'Bq/m³'}`,
+            `메모: ${item.note || '-'}`,
+            `결과: ${item.result_text || item.result || '-'}`
+          ],
+          fontSize: 9,
+          margin: [15, 0, 0, 8]
+        });
+      });
+    }
+    content.push({ text: '', pageBreak: 'after' });
+
+    // ----- 페이지 4: 레벨기점검 본문만 -----
+    if (levelList.length === 0) {
+      content.push({ text: '레벨기 측정 결과 없음.', fontSize: 10, margin: [0, 0, 0, 8] });
+    } else {
+      levelList.forEach((item, idx) => {
+        const has4 = item.point1_left_mm != null || item.point1_right_mm != null || item.point2_left_mm != null || item.point2_right_mm != null || item.point3_left_mm != null || item.point3_right_mm != null || item.point4_left_mm != null || item.point4_right_mm != null;
+        const refMm = item.reference_mm != null ? item.reference_mm : 150;
+        const levelStr = has4
+          ? `1번 좌${item.point1_left_mm ?? '-'}/우${item.point1_right_mm ?? '-'} 2번 좌${item.point2_left_mm ?? '-'}/우${item.point2_right_mm ?? '-'} 3번 좌${item.point3_left_mm ?? '-'}/우${item.point3_right_mm ?? '-'} 4번 좌${item.point4_left_mm ?? '-'}/우${item.point4_right_mm ?? '-'} (기준 ${refMm}mm)`
+          : `좌 ${item.left_mm ?? '-'}mm / 우 ${item.right_mm ?? '-'}mm`;
+        content.push({
+          text: `측정 #${idx + 1}  ${item.location || '-'} / ${item.trade || '-'}`,
+          fontSize: 11,
+          bold: true,
+          margin: [0, 8, 0, 4]
+        });
+        content.push({
+          ul: [
+            `측정값: ${levelStr}`,
+            `결과: ${item.result_text || item.result || '-'}`
+          ],
+          fontSize: 9,
+          margin: [15, 0, 0, 8]
+        });
+      });
+    }
+    return this._getDocumentDefinition(content);
+  }
+
   buildInspectionResultsOnlyDefinition(data) {
     const content = [];
     content.push({
@@ -1077,6 +1248,25 @@ class PDFMakeGenerator {
         writeStream.on('finish', () => {
           resolve({ filename, path: outputPath });
         });
+        writeStream.on('error', (err) => reject(err));
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  /** 최종보고서용: 4페이지만 생성 (11p·14p·17p·20p 오버레이용) */
+  async generateFinalReportInspectionOverlayPDF(data, options = {}) {
+    const filename = options.filename || `final-overlay-${uuidv4()}.pdf`;
+    const docDefinition = this.buildFinalReportInspectionOverlayDefinition(data);
+    return new Promise((resolve, reject) => {
+      try {
+        const pdfDoc = this.printer.createPdfKitDocument(docDefinition);
+        const outputPath = path.join(this.outputDir, filename);
+        const writeStream = fs.createWriteStream(outputPath);
+        pdfDoc.pipe(writeStream);
+        pdfDoc.end();
+        writeStream.on('finish', () => resolve({ filename, path: outputPath }));
         writeStream.on('error', (err) => reject(err));
       } catch (error) {
         reject(error);

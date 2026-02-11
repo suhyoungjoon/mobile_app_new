@@ -522,6 +522,14 @@ class APIClient {
     return await this.createThermalInspection(caseId, defectId, location, trade, note, result);
   }
 
+  // 육안점검 항목 저장 (점검원 점검의견)
+  async createVisualInspectionForDefect(caseId, defectId, note, location = '육안', trade = null) {
+    return await this.request('/inspections/visual', {
+      method: 'POST',
+      body: JSON.stringify({ caseId, defectId, note, location, trade })
+    });
+  }
+
   // 열화상 사진 업로드
   async uploadThermalPhoto(itemId, fileUrl, caption) {
     return await this.request(`/inspections/thermal/${itemId}/photos`, {

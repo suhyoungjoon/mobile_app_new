@@ -1,31 +1,26 @@
 /**
- * 최종보고서: 템플릿 PDF(인사이트아이_보고서_전체.pdf)의 점검결과 구간만
- * 실제 점검 데이터로 생성한 PDF로 치환하여 병합.
- * 16~23p 구간은 템플릿 페이지를 배경으로 유지하고, 내용 영역에만 점검 결과를 오버레이하여
- * 템플릿의 이미지(로고·아이콘 등, 사진 제외)는 그대로 사용합니다.
+ * 최종보고서 순서:
+ * 1~10p: 템플릿 그대로
+ * 11p: 육안점검 설명 (템플릿) → 다음: 육안점검결과(1p)
+ * 14p: 열화상점검 설명 (템플릿) → 다음: 열화상점검결과(2p)
+ * 17p: 공기질점검 설명 (템플릿) → 다음: 공기질점검결과(3p)
+ * 20p: 레벨기점검 설명 (템플릿) → 다음: 레벨기점검결과(4p)
+ * 21p~: 템플릿 그대로
+ * (템플릿 12·13·15·16·18·19p는 사용하지 않고, 설명→결과 순으로만 배치)
  */
 const fs = require('fs');
 const path = require('path');
-const { PDFDocument, rgb } = require('pdf-lib');
+const { PDFDocument } = require('pdf-lib');
 
 const TEMPLATE_FILENAME = '인사이트아이_보고서_전체.pdf';
 const TEMPLATE_DIR = path.join(__dirname, '..', 'templates');
 const REPORTS_DIR = path.join(__dirname, '..', 'reports');
 
-// 템플릿 PDF에서 점검결과로 치환할 페이지 구간 (1-based). 그 앞/뒤는 템플릿 유지
-const INSPECTION_START_PAGE = 16;  // 1-based
-const INSPECTION_END_PAGE = 23;    // 1-based
-
-// 16~23p에서 "내용만 덮을" 영역 (pt). 이 영역 밖(상·하·좌·우)은 템플릿 이미지가 그대로 보임
-// A4 기준 (595 x 842). 필요 시 템플릿 레이아웃에 맞게 조정
-const CONTENT_LEFT = 45;
-const CONTENT_BOTTOM = 45;
-const CONTENT_WIDTH = 505;
-const CONTENT_HEIGHT = 752;
+// 사용할 설명 페이지만 (1-based 11, 14, 17, 20 → 0-based 10, 13, 16, 19). 그 사이 템플릿 12·13·15·16·18·19는 건너뜀
+const DESCRIPTION_PAGES_1_BASED = [11, 14, 17, 20];
+const DESCRIPTION_TEMPLATE_INDICES = DESCRIPTION_PAGES_1_BASED.map((p) => p - 1); // 10, 13, 16, 19
 
 async function generateFinalReport(reportData, pdfmakeGenerator, options = {}) {
-  const preserveTemplateImages = options.preserveTemplateImages !== false;
-
   const templatePath = path.join(TEMPLATE_DIR, TEMPLATE_FILENAME);
   if (!fs.existsSync(templatePath)) {
     throw new Error(`최종보고서 템플릿을 찾을 수 없습니다: ${TEMPLATE_FILENAME}. templates 폴더에 파일을 넣어주세요.`);
@@ -41,83 +36,45 @@ async function generateFinalReport(reportData, pdfmakeGenerator, options = {}) {
   const templatePdf = await PDFDocument.load(templateBytes);
   const templatePageCount = templatePdf.getPageCount();
 
-  const tempInspectionFilename = `inspection-${Date.now()}.pdf`;
-  const inspectionResult = await pdfmakeGenerator.generateInspectionResultsPDF(reportData, {
-    filename: tempInspectionFilename
+  const tempResultsFilename = `final-results-${Date.now()}.pdf`;
+  const resultsPdfBlob = await pdfmakeGenerator.generateFinalReportInspectionOverlayPDF(reportData, {
+    filename: tempResultsFilename
   });
-  const inspectionBytes = fs.readFileSync(inspectionResult.path);
-  const inspectionPdf = await PDFDocument.load(inspectionBytes);
-  const inspectionPageCount = inspectionPdf.getPageCount();
+  const resultsBytes = fs.readFileSync(resultsPdfBlob.path);
+  const resultsPdf = await PDFDocument.load(resultsBytes);
+  const resultsPageCount = resultsPdf.getPageCount();
 
   const mergedPdf = await PDFDocument.create();
 
-  const beforeEnd = Math.min(INSPECTION_START_PAGE - 1, templatePageCount);
-  const beforeIndices = Array.from({ length: beforeEnd }, (_, i) => i);
-  if (beforeIndices.length > 0) {
-    const copiedBefore = await mergedPdf.copyPages(templatePdf, beforeIndices);
-    copiedBefore.forEach((p) => mergedPdf.addPage(p));
+  // 1~10p: 템플릿 0~9 그대로
+  for (let i = 0; i < 10 && i < templatePageCount; i++) {
+    const [p] = await mergedPdf.copyPages(templatePdf, [i]);
+    mergedPdf.addPage(p);
   }
 
-  if (preserveTemplateImages && templatePageCount >= INSPECTION_END_PAGE) {
-    // 16~23p: 템플릿 페이지를 배경으로 복사한 뒤, 내용 영역만 흰색으로 덮고 점검 결과 PDF를 그 위에 그림
-    const templateInspectionIndices = Array.from(
-      { length: INSPECTION_END_PAGE - INSPECTION_START_PAGE + 1 },
-      (_, i) => INSPECTION_START_PAGE - 1 + i
-    );
-    const copiedTemplateInspection = await mergedPdf.copyPages(templatePdf, templateInspectionIndices);
-
-    for (let i = 0; i < copiedTemplateInspection.length; i++) {
-      const page = copiedTemplateInspection[i];
-      // 내용 영역만 흰색 사각형으로 덮어서 템플릿 글자/표는 가리고, 바깥쪽 이미지는 유지
-      page.drawRectangle({
-        x: CONTENT_LEFT,
-        y: CONTENT_BOTTOM,
-        width: CONTENT_WIDTH,
-        height: CONTENT_HEIGHT,
-        color: rgb(1, 1, 1)
-      });
-      // 해당하는 점검 결과 페이지를 내용 영역에 맞춰 그리기
-      if (i < inspectionPageCount) {
-        const [embeddedInspectionPage] = await mergedPdf.embedPdf(inspectionPdf, [i]);
-        page.drawPage(embeddedInspectionPage, {
-          x: CONTENT_LEFT,
-          y: CONTENT_BOTTOM,
-          width: CONTENT_WIDTH,
-          height: CONTENT_HEIGHT
-        });
-      }
-      mergedPdf.addPage(page);
+  // 11p(설명) → 육안결과 → 14p(설명) → 열화상결과 → 17p(설명) → 공기질결과 → 20p(설명) → 레벨기결과 (템플릿 12·13·15·16·18·19는 사용 안 함)
+  for (let k = 0; k < DESCRIPTION_TEMPLATE_INDICES.length; k++) {
+    const templateIdx = DESCRIPTION_TEMPLATE_INDICES[k];
+    if (templateIdx >= templatePageCount) continue;
+    const [descPage] = await mergedPdf.copyPages(templatePdf, [templateIdx]);
+    mergedPdf.addPage(descPage);
+    if (k < resultsPageCount) {
+      const [resultPage] = await mergedPdf.copyPages(resultsPdf, [k]);
+      mergedPdf.addPage(resultPage);
     }
-
-    // 점검 결과가 8페이지를 넘으면 나머지는 그대로 추가 (템플릿 배경 없음)
-    if (inspectionPageCount > copiedTemplateInspection.length) {
-      const extraIndices = Array.from(
-        { length: inspectionPageCount - copiedTemplateInspection.length },
-        (_, i) => copiedTemplateInspection.length + i
-      );
-      const copiedExtra = await mergedPdf.copyPages(inspectionPdf, extraIndices);
-      copiedExtra.forEach((p) => mergedPdf.addPage(p));
-    }
-  } else {
-    // 기존 방식: 16~23p 전체를 점검 결과 PDF로 교체 (템플릿 이미지 미사용)
-    const inspectionIndices = Array.from({ length: inspectionPageCount }, (_, i) => i);
-    const copiedInspection = await mergedPdf.copyPages(inspectionPdf, inspectionIndices);
-    copiedInspection.forEach((p) => mergedPdf.addPage(p));
   }
 
-  const afterStart = INSPECTION_END_PAGE;
-  if (afterStart < templatePageCount) {
-    const afterIndices = [];
-    for (let i = afterStart; i < templatePageCount; i++) afterIndices.push(i);
-    const copiedAfter = await mergedPdf.copyPages(templatePdf, afterIndices);
-    copiedAfter.forEach((p) => mergedPdf.addPage(p));
+  // 21p~: 템플릿 20번째 페이지부터 끝까지
+  for (let i = 20; i < templatePageCount; i++) {
+    const [p] = await mergedPdf.copyPages(templatePdf, [i]);
+    mergedPdf.addPage(p);
   }
 
   const mergedBytes = await mergedPdf.save();
   fs.writeFileSync(finalPath, mergedBytes);
 
   try {
-    fs.unlinkSync(inspectionResult.path);
+    fs.unlinkSync(resultsPdfBlob.path);
   } catch (e) {
     // ignore
   }
@@ -134,6 +91,6 @@ async function generateFinalReport(reportData, pdfmakeGenerator, options = {}) {
 module.exports = {
   generateFinalReport,
   TEMPLATE_FILENAME,
-  INSPECTION_START_PAGE,
-  INSPECTION_END_PAGE
+  DESCRIPTION_PAGES_1_BASED,
+  DESCRIPTION_TEMPLATE_INDICES
 };

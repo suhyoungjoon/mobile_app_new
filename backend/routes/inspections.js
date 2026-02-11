@@ -72,6 +72,36 @@ router.post('/thermal', authenticateToken, requireInspectorAccess, async (req, r
   }
 });
 
+// 육안점검 항목 생성 (점검원 점검의견)
+router.post('/visual', authenticateToken, requireInspectorAccess, async (req, res) => {
+  try {
+    const { caseId, defectId, location, trade, note, result = 'normal' } = req.body;
+
+    if (!caseId || !defectId) {
+      return res.status(400).json({ error: '케이스 ID와 하자 ID는 필수입니다' });
+    }
+
+    const itemId = uuidv4();
+    const loc = (location && String(location).trim()) || '육안';
+
+    const query = `
+      INSERT INTO inspection_item (id, case_id, defect_id, type, location, trade, note, result)
+      VALUES ($1, $2, $3, 'visual', $4, $5, $6, $7)
+      RETURNING *
+    `;
+    const queryResult = await pool.query(query, [itemId, caseId, defectId, loc, trade || null, note || null, result]);
+
+    res.status(201).json({
+      success: true,
+      item: queryResult.rows[0],
+      message: '육안점검 항목이 저장되었습니다'
+    });
+  } catch (error) {
+    console.error('육안점검 항목 생성 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다' });
+  }
+});
+
 // 열화상 사진 업로드
 router.post('/thermal/:itemId/photos', authenticateToken, requireInspectorAccess, async (req, res) => {
   try {

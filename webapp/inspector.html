@@ -154,10 +154,23 @@
 
         <!-- 측정 타입 선택 탭 -->
         <div class="equipment-tabs">
+          <button class="equipment-tab" onclick="showDefectInspectionTab('visual')">육안</button>
           <button class="equipment-tab active" onclick="showDefectInspectionTab('air')">공기질</button>
           <button class="equipment-tab" onclick="showDefectInspectionTab('radon')">라돈</button>
           <button class="equipment-tab" onclick="showDefectInspectionTab('level')">레벨기</button>
           <button class="equipment-tab" onclick="showDefectInspectionTab('thermal')">열화상</button>
+        </div>
+
+        <!-- 육안점검 탭 -->
+        <div id="defect-visual-tab" class="equipment-tab-content hidden">
+          <div class="form-group">
+            <label class="form-label">하자 정보 (참고)</label>
+            <div id="defect-visual-defect-summary" style="padding: 12px; background: #f9f9f9; border-radius: 8px; font-size: 14px; color: #333;"></div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">육안 점검 의견</label>
+            <textarea id="defect-visual-note" class="input" placeholder="육안 점검 시 확인한 내용, 특이사항 등을 입력하세요" rows="5"></textarea>
+          </div>
         </div>
 
         <!-- 공기질 탭 -->

@@ -228,7 +228,7 @@ async function showMyStats() {
     
     alert(stats);
   } catch (error) {
-    showError(error);
+    handleAPIError(error, '');
   }
 }
 
@@ -300,7 +300,7 @@ async function loadCases() {
     AppState.cases = cases;
     renderCaseList();
   } catch (error) {
-    showError(error);
+    handleAPIError(error, '');
   }
 }
 
@@ -361,7 +361,7 @@ async function createNewCase() {
     toast('새 케이스가 생성되었습니다', 'success');
     
   } catch (error) {
-    showError(error);
+    handleAPIError(error, '');
   } finally {
     setLoading(false);
   }
@@ -493,7 +493,7 @@ async function viewCaseDefects(caseId) {
     route('case-detail');
     
   } catch (error) {
-    showError(error);
+    handleAPIError(error, '');
   } finally {
     setLoading(false);
   }
@@ -553,7 +553,7 @@ async function editDefect(defectId) {
     route('edit-defect');
     
   } catch (error) {
-    showError(error);
+    handleAPIError(error, '');
   } finally {
     setLoading(false);
   }
@@ -607,7 +607,7 @@ async function saveDefectEdit() {
     await viewCaseDefects(AppState.currentCaseId);
     
   } catch (error) {
-    showError(error);
+    handleAPIError(error, '');
   } finally {
     setLoading(false);
   }
@@ -719,7 +719,7 @@ async function onSaveDefect(){
     await loadCases();
     
   } catch (error) {
-    showError(error);
+    handleAPIError(error, '');
   } finally {
     setLoading(false);
   }
