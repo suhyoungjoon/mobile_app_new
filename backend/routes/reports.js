@@ -192,6 +192,18 @@ router.post('/generate', authenticateToken, async (req, res) => {
       : template === 'summary-report' ? '수기보고서가 생성되었습니다'
       : template === 'inspection-form' ? '점검결과 양식이 생성되었습니다'
       : 'PDF generated successfully';
+
+    // attachment=1 이면 JSON 대신 PDF 바이너리 반환 (동일 요청에서 파일 수신, 원격 다운로드 500 회피)
+    if (req.query.attachment === '1') {
+      const reportPath = pdfGenerator.getReportPath(pdfResult.filename);
+      if (fs.existsSync(reportPath)) {
+        const buf = fs.readFileSync(reportPath);
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('X-Report-Filename', pdfResult.filename);
+        return res.send(buf);
+      }
+    }
+
     res.json({
       success: true,
       message: successMessage,
@@ -389,12 +401,11 @@ router.get('/download/:filename', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Report not found' });
     }
 
-    // Set headers for file download
+    // Set headers for file download (한글 파일명: 버퍼 전송으로 sendFile 인코딩 이슈 방지)
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    
-    // Send file
-    res.sendFile(path.resolve(reportPath));
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
+    const buf = fs.readFileSync(reportPath);
+    res.send(buf);
 
   } catch (error) {
     console.error('PDF download error:', error);
