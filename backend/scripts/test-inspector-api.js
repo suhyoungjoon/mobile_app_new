@@ -272,6 +272,41 @@ async function createLevelMeasurement(defectId, caseId) {
   }
 }
 
+// 육안점검 등록
+async function createVisualInspection(defectId, caseId) {
+  console.log(`\n👁️ 육안점검 등록 중...`);
+  try {
+    const payload = {
+      caseId,
+      defectId,
+      location: '거실',
+      trade: '마감',
+      note: 'API 테스트 육안 점검의견',
+      result: 'normal'
+    };
+    const response = await axios.post(`${config.backendUrl}/api/inspections/visual`, payload, {
+      headers: {
+        'Authorization': `Bearer ${authToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    if (response.data.success && response.data.item) {
+      console.log('✅ 육안점검 등록 성공');
+      console.log(`   - Item ID: ${response.data.item.id}`);
+      console.log(`   - note: ${response.data.item.note || 'N/A'}`);
+      return response.data;
+    }
+    console.error('❌ 육안점검 등록 실패: 응답 형식 오류');
+    return null;
+  } catch (error) {
+    console.error('❌ 육안점검 등록 실패:', error.response?.data || error.message);
+    if (error.response) {
+      console.error('   상태 코드:', error.response.status);
+    }
+    return null;
+  }
+}
+
 // 전체 테스트 실행
 async function runTests() {
   console.log('🧪 점검원용 API 기능 테스트 시작');
@@ -300,16 +335,19 @@ async function runTests() {
   console.log('\n--- 측정값 입력 전 ---');
   await getDefectInspections(testDefectId);
   
-  // 4. 공기질 측정 등록
+  // 4. 육안점검 등록
+  await createVisualInspection(testDefectId, testCaseId);
+  
+  // 5. 공기질 측정 등록
   await createAirMeasurement(testDefectId, testCaseId);
   
-  // 5. 라돈 측정 등록
+  // 6. 라돈 측정 등록
   await createRadonMeasurement(testDefectId, testCaseId);
   
-  // 6. 레벨기 측정 등록
+  // 7. 레벨기 측정 등록
   await createLevelMeasurement(testDefectId, testCaseId);
   
-  // 7. 측정값 조회 (입력 후) - 재조회 테스트
+  // 8. 측정값 조회 (입력 후) - visual 포함 확인
   console.log('\n--- 측정값 입력 후 (재조회 테스트) ---');
   await getDefectInspections(testDefectId);
   
@@ -329,6 +367,7 @@ module.exports = {
   inspectorLogin,
   getAllDefects,
   getDefectInspections,
+  createVisualInspection,
   createAirMeasurement,
   createRadonMeasurement,
   createLevelMeasurement

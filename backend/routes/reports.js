@@ -146,7 +146,7 @@ router.post('/generate', authenticateToken, async (req, res) => {
       (d.inspections.thermal || []).forEach((x) => thermalInspections.push(x));
     });
 
-    const reportData = {
+    let reportData = {
       complex: data.complex || '',
       dong: data.dong || '',
       ho: data.ho || '',
@@ -168,9 +168,21 @@ router.post('/generate', authenticateToken, async (req, res) => {
       thermal_inspections: thermalInspections
     };
 
+    if (template === 'final-report') {
+      const householdInsp = await loadHouseholdInspectionsForReport(householdId);
+      reportData = {
+        ...reportData,
+        visual_inspections: householdInsp.visual,
+        thermal_inspections: householdInsp.thermal,
+        air_measurements: householdInsp.air,
+        radon_measurements: householdInsp.radon,
+        level_measurements: householdInsp.level
+      };
+    }
+
     let pdfResult;
     if (template === 'final-report') {
-      pdfResult = await finalReportGenerator.generateFinalReport(reportData, pdfGenerator);
+      pdfResult = await finalReportGenerator.generateFinalReport(reportData, {});
     } else if (template === 'summary-report') {
       const dong = reportData.dong || '';
       const ho = reportData.ho || '';
@@ -425,6 +437,94 @@ function getResultText(result) {
     'na': '해당없음'
   };
   return resultMap[result] || result;
+}
+
+// 세대(household) 기준 점검결과만 조회 — 최종보고서용 (하자 무관, 타입별 N건)
+async function loadHouseholdInspectionsForReport(householdId) {
+  const query = `
+    SELECT
+      ii.id, ii.type, ii.location, ii.trade, ii.serial_no, ii.note, ii.result, ii.created_at,
+      am.process_type, am.tvoc, am.hcho, am.co2, am.unit_tvoc, am.unit_hcho,
+      rm.radon, rm.unit_radon,
+      lm.left_mm, lm.right_mm,
+      lm.point1_left_mm, lm.point1_right_mm, lm.point2_left_mm, lm.point2_right_mm,
+      lm.point3_left_mm, lm.point3_right_mm, lm.point4_left_mm, lm.point4_right_mm,
+      lm.reference_mm,
+      (SELECT json_agg(json_build_object('file_url', tp.file_url, 'caption', tp.caption, 'shot_at', tp.shot_at))
+       FROM thermal_photo tp WHERE tp.item_id = ii.id) as thermal_photos
+    FROM inspection_item ii
+    LEFT JOIN air_measure am ON ii.id = am.item_id
+    LEFT JOIN radon_measure rm ON ii.id = rm.item_id
+    LEFT JOIN level_measure lm ON ii.id = lm.item_id
+    WHERE ii.case_id IN (SELECT id FROM case_header WHERE household_id = $1)
+    ORDER BY ii.created_at ASC
+  `;
+  const result = await pool.query(query, [householdId]);
+  const visual = [], thermal = [], air = [], radon = [], level = [];
+  (result.rows || []).forEach((row) => {
+    const base = {
+      location: row.location,
+      trade: row.trade,
+      serial_no: row.serial_no,
+      note: row.note,
+      result: row.result,
+      result_text: getResultText(row.result),
+      created_at: row.created_at
+    };
+    switch (row.type) {
+      case 'visual':
+        visual.push({ ...base });
+        break;
+      case 'thermal': {
+        const item = { ...base, photos: row.thermal_photos && Array.isArray(row.thermal_photos) ? row.thermal_photos : (row.thermal_photos ? [row.thermal_photos] : []) };
+        thermal.push(item);
+        break;
+      }
+      case 'air': {
+        const processTypeLabel = row.process_type === 'flush_out' ? 'Flush-out' : row.process_type === 'bake_out' ? 'Bake-out' : '-';
+        air.push({
+          ...base,
+          process_type: row.process_type,
+          process_type_label: processTypeLabel,
+          tvoc: row.tvoc,
+          hcho: row.hcho,
+          co2: row.co2,
+          unit_tvoc: row.unit_tvoc,
+          unit_hcho: row.unit_hcho
+        });
+        break;
+      }
+      case 'radon':
+        radon.push({ ...base, radon: row.radon, unit: row.unit_radon });
+        break;
+      case 'level': {
+        const refMm = row.reference_mm != null ? row.reference_mm : 150;
+        const has4 = row.point1_left_mm != null || row.point1_right_mm != null || row.point2_left_mm != null || row.point2_right_mm != null || row.point3_left_mm != null || row.point3_right_mm != null || row.point4_left_mm != null || row.point4_right_mm != null;
+        level.push({
+          ...base,
+          left_mm: row.left_mm,
+          right_mm: row.right_mm,
+          point1_left_mm: row.point1_left_mm,
+          point1_right_mm: row.point1_right_mm,
+          point2_left_mm: row.point2_left_mm,
+          point2_right_mm: row.point2_right_mm,
+          point3_left_mm: row.point3_left_mm,
+          point3_right_mm: row.point3_right_mm,
+          point4_left_mm: row.point4_left_mm,
+          point4_right_mm: row.point4_right_mm,
+          reference_mm: row.reference_mm,
+          level_reference_mm: refMm,
+          level_summary_text: has4
+            ? `1번 좌${row.point1_left_mm ?? '-'}/우${row.point1_right_mm ?? '-'} 2번 좌${row.point2_left_mm ?? '-'}/우${row.point2_right_mm ?? '-'} 3번 좌${row.point3_left_mm ?? '-'}/우${row.point3_right_mm ?? '-'} 4번 좌${row.point4_left_mm ?? '-'}/우${row.point4_right_mm ?? '-'} (기준 ${refMm}mm)`
+            : `좌 ${row.left_mm ?? '-'}mm / 우 ${row.right_mm ?? '-'}mm`
+        });
+        break;
+      }
+      default:
+        break;
+    }
+  });
+  return { visual, thermal, air, radon, level };
 }
 
 // 사용자(세대) 기준 보고서 데이터: 해당 세대의 모든 하자 + 하자별 점검내용(inspection_item by defect_id)
