@@ -612,6 +612,16 @@ class APIClient {
     return await this.request(`/inspections/defects/${defectId}`);
   }
 
+  // 세대(household)별 점검결과 조회 — 타입별 N건
+  async getInspectionsByHousehold(householdId) {
+    return await this.request(`/inspections/by-household/${householdId}`);
+  }
+
+  // 세대(household)용 케이스 ID 조회 또는 생성
+  async getCaseForHousehold(householdId) {
+    return await this.request(`/inspections/case-for-household/${householdId}`);
+  }
+
   async createLevelMeasurement(caseId, location, trade, leftMm, rightMm, note, result = 'normal') {
     return await this.request('/inspections/level', {
       method: 'POST',

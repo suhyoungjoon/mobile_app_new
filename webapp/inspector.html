@@ -113,7 +113,7 @@
       
       <div style="margin-bottom: 16px; display: flex; flex-direction: column; gap: 10px;">
         <button class="button success" onclick="onPreviewReport()" style="width: 100%;">📄 보고서 미리보기</button>
-        <button class="button" onclick="openDefectSelectModal()" style="width: 100%;">📊 점검결과 입력</button>
+        <button class="button success" onclick="openInspectionForHousehold(InspectorState.selectedHouseholdId)" style="width: 100%;">📊 점검결과 입력</button>
       </div>
       
       <div id="defect-list-container">
@@ -146,10 +146,17 @@
         <div></div>
       </div>
       <div class="card">
-        <!-- 하자 정보 표시 -->
+        <!-- 세대 정보 (점검결과는 세대별 입력) -->
         <div id="defect-inspection-info" class="defect-info" style="padding: 16px; background: #f5f5f5; border-radius: 8px; margin-bottom: 16px;">
-          <div class="label">하자 정보</div>
+          <div class="label">세대 정보</div>
           <div id="defect-inspection-details"></div>
+        </div>
+        <!-- 세대주 등록 하자 (참고용) -->
+        <div id="defect-inspection-defects-ref" style="margin-bottom: 16px; display: none;">
+          <details style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px;">
+            <summary style="cursor: pointer; font-weight: 600;">세대주 등록 하자 (참고용)</summary>
+            <div id="defect-inspection-defects-list" style="margin-top: 12px;"></div>
+          </details>
         </div>
 
         <!-- 측정 타입 선택 탭 -->

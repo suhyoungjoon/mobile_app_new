@@ -12,7 +12,9 @@ const InspectorState = {
   selectedHouseholdId: null,
   selectedHouseholdDisplay: null, // { complex_name, dong, ho, resident_name }
   userListCache: [], // loadUserList 결과 캐시 (selectUser에서 표시 정보 사용)
-  measurementPhotos: {} // 측정 타입별 사진 정보 {air: {file: File, url: string}, radon: {...}, level: {...}}
+  measurementPhotos: {}, // 측정 타입별 사진 정보 {air: {file: File, url: string}, radon: {...}, level: {...}}
+  inspectionByHousehold: false, // true면 세대별 점검(하자 무관), defectId 미사용
+  householdInspections: null // getInspectionsByHousehold 결과 { visual: [], thermal: [], air: [], radon: [], level: [] }
 };
 
 // API Client는 api.js에서 전역 변수로 선언됨
@@ -222,8 +224,9 @@ async function loadUserList() {
         <div class="defect-card-meta">${escapeHTML(u.resident_name || '')} · 하자 ${u.defect_count}건</div>
         <div class="button-group" style="display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap;">
           <button class="button" style="flex: 1; min-width: 90px;" onclick="event.stopPropagation(); selectUser(${u.household_id})">하자목록 보기</button>
+          <button class="button success" style="flex: 1; min-width: 90px;" onclick="event.stopPropagation(); openInspectionForHousehold(${u.household_id})">점검결과 입력</button>
           <button class="button" style="flex: 1; min-width: 90px;" onclick="event.stopPropagation(); previewReportForUser(${u.household_id})">보고서 미리보기</button>
-          <button class="button success" style="flex: 1; min-width: 90px;" onclick="event.stopPropagation(); downloadReportForUser(${u.household_id})">보고서 다운로드</button>
+          <button class="button" style="flex: 1; min-width: 90px;" onclick="event.stopPropagation(); downloadReportForUser(${u.household_id})">보고서 다운로드</button>
         </div>
       </div>
     `).join('');
@@ -589,13 +592,91 @@ function closeDefectSelectModal() {
   }
 }
 
-// 점검결과 입력 화면 열기
+// 세대(household)별 점검결과 입력 화면 열기 (하자 선택 없이, 타입별 N건 입력)
+async function openInspectionForHousehold(householdId) {
+  if (!InspectorState.session) {
+    toast('로그인이 필요합니다', 'error');
+    return;
+  }
+  setLoading(true);
+  try {
+    InspectorState.inspectionByHousehold = true;
+    InspectorState.selectedHouseholdId = householdId;
+    InspectorState.currentDefectId = null;
+    InspectorState.currentDefect = null;
+
+    const u = InspectorState.userListCache.find((x) => x.household_id === householdId);
+    InspectorState.selectedHouseholdDisplay = u ? {
+      complex_name: u.complex_name,
+      dong: u.dong,
+      ho: u.ho,
+      resident_name: u.resident_name
+    } : null;
+
+    const caseRes = await api.getCaseForHousehold(householdId);
+    if (!caseRes || !caseRes.caseId) {
+      toast('케이스 정보를 가져올 수 없습니다', 'error');
+      return;
+    }
+    InspectorState.currentCaseId = caseRes.caseId;
+
+    const defRes = await api.getDefectsByHousehold(householdId);
+    InspectorState.allDefects = defRes.defects || [];
+
+    const inspRes = await api.getInspectionsByHousehold(householdId);
+    InspectorState.householdInspections = inspRes.inspections || { visual: [], thermal: [], air: [], radon: [], level: [] };
+
+    const detailsEl = $('#defect-inspection-details');
+    const d = InspectorState.selectedHouseholdDisplay;
+    if (detailsEl) {
+      detailsEl.innerHTML = d
+        ? `<div><strong>${escapeHTML(d.complex_name || '')} ${d.dong || ''}동 ${d.ho || ''}호</strong></div><div>${escapeHTML(d.resident_name || '')}</div>`
+        : `<div>세대 ID: ${householdId}</div>`;
+    }
+
+    const refBlock = $('#defect-inspection-defects-ref');
+    const refList = $('#defect-inspection-defects-list');
+    if (refBlock && refList) {
+      if (InspectorState.allDefects.length > 0) {
+        refBlock.style.display = 'block';
+        refList.innerHTML = InspectorState.allDefects.map((d) => `
+          <div class="defect-card" style="margin-bottom:8px;">
+            <div style="font-weight:700;">${escapeHTML(d.location || '')} - ${escapeHTML(d.trade || '')}</div>
+            <div class="small" style="color:#666;">${escapeHTML((d.content || '').slice(0, 80))}${(d.content || '').length > 80 ? '…' : ''}</div>
+          </div>
+        `).join('');
+      } else {
+        refBlock.style.display = 'none';
+      }
+    }
+
+    const visualSummaryEl = $('#defect-visual-defect-summary');
+    if (visualSummaryEl) {
+      visualSummaryEl.innerHTML = InspectorState.allDefects.length > 0
+        ? '세대주가 등록한 하자는 위 "세대주 등록 하자 (참고용)"에서 확인할 수 있습니다.'
+        : '등록된 하자가 없습니다. 점검결과만 입력합니다.';
+    }
+    const visualNoteEl = $('#defect-visual-note');
+    if (visualNoteEl) visualNoteEl.value = '';
+
+    clearInspectionFormFieldsOnly();
+    showDefectInspectionTab('visual');
+    route('defect-inspection');
+  } catch (error) {
+    console.error('점검결과 입력 화면 열기 오류:', error);
+    toast(error.message || '화면을 열 수 없습니다', 'error');
+  } finally {
+    setLoading(false);
+  }
+}
+
+// 점검결과 입력 화면 열기 (기존: 하자 선택 후)
 async function openDefectInspection(defectId, caseId) {
   if (!InspectorState.session) {
     toast('로그인이 필요합니다', 'error');
     return;
   }
-  
+  InspectorState.inspectionByHousehold = false;
   setLoading(true);
   try {
     InspectorState.currentDefectId = defectId;
@@ -802,6 +883,21 @@ async function handleMeasurementPhotoUpload(type, inputElement) {
   }
 }
 
+// 점검결과 입력 폼만 초기화 (확인 없이, 저장 후 추가 입력용)
+function clearInspectionFormFieldsOnly() {
+  document.querySelectorAll('#defect-inspection input, #defect-inspection textarea, #defect-inspection select').forEach((input) => {
+    if (input.type === 'checkbox') input.checked = false;
+    else input.value = input.id && input.id.includes('reference') ? '150' : '';
+  });
+  ['air', 'radon', 'level', 'thermal'].forEach((type) => {
+    const preview = $(`#defect-${type}-photo-preview`);
+    const input = $(`#defect-${type}-photo`);
+    if (preview) { preview.style.backgroundImage = ''; preview.style.display = 'none'; }
+    if (input) input.value = '';
+  });
+  InspectorState.measurementPhotos = {};
+}
+
 // 점검결과 입력 폼 초기화
 function resetDefectInspectionForm() {
   if (confirm('입력한 내용을 모두 초기화하시겠습니까?')) {
@@ -845,11 +941,16 @@ async function saveDefectInspection() {
     toast('로그인이 필요합니다', 'error');
     return;
   }
-  
-  const defectId = InspectorState.currentDefectId;
+
+  const byHousehold = InspectorState.inspectionByHousehold;
+  const defectId = byHousehold ? null : InspectorState.currentDefectId;
   const caseId = InspectorState.currentCaseId;
-  
-  if (!defectId || !caseId) {
+
+  if (!caseId) {
+    toast('케이스 정보가 없습니다', 'error');
+    return;
+  }
+  if (!byHousehold && !defectId) {
     toast('하자 정보가 없습니다', 'error');
     return;
   }
@@ -881,13 +982,26 @@ async function saveDefectInspection() {
         return;
       }
       
-      response = await api.createAirMeasurementForDefect(
-        caseId, defectId, location, trade,
-        tvoc ? parseFloat(tvoc) : null,
-        hcho ? parseFloat(hcho) : null,
-        co2 ? parseFloat(co2) : null,
-        note, result, processType
-      );
+      if (byHousehold) {
+        response = await api.request('/inspections/air', {
+          method: 'POST',
+          body: JSON.stringify({
+            caseId, location, trade, process_type: processType || null,
+            tvoc: tvoc ? parseFloat(tvoc) : null,
+            hcho: hcho ? parseFloat(hcho) : null,
+            co2: co2 ? parseFloat(co2) : null,
+            note, result
+          })
+        });
+      } else {
+        response = await api.createAirMeasurementForDefect(
+          caseId, defectId, location, trade,
+          tvoc ? parseFloat(tvoc) : null,
+          hcho ? parseFloat(hcho) : null,
+          co2 ? parseFloat(co2) : null,
+          note, result, processType
+        );
+      }
       
     } else if (tabType === '라돈') {
       const location = $('#defect-radon-location').value.trim();
@@ -901,11 +1015,15 @@ async function saveDefectInspection() {
         toast('위치와 라돈 농도를 입력해주세요', 'error');
         return;
       }
-      
-      response = await api.createRadonMeasurementForDefect(
-        caseId, defectId, location, trade,
-        parseFloat(radon), unit, note, result
-      );
+
+      if (byHousehold) {
+        response = await api.createRadonMeasurement(caseId, location, trade, parseFloat(radon), unit, note, result);
+      } else {
+        response = await api.createRadonMeasurementForDefect(
+          caseId, defectId, location, trade,
+          parseFloat(radon), unit, note, result
+        );
+      }
       
     } else if (tabType === '레벨기') {
       const location = $('#defect-level-location').value.trim();
@@ -943,10 +1061,22 @@ async function saveDefectInspection() {
         toast('4개 측정점 중 최소 1개 이상 좌/우 값을 입력해주세요', 'error');
         return;
       }
-      
-      response = await api.createLevelMeasurementForDefect(
-        caseId, defectId, location, trade, levelPoints, note, result
-      );
+
+      if (byHousehold) {
+        const body = {
+          caseId, location, trade, note, result,
+          reference_mm: levelPoints.reference_mm,
+          point1_left_mm: levelPoints.p1_left, point1_right_mm: levelPoints.p1_right,
+          point2_left_mm: levelPoints.p2_left, point2_right_mm: levelPoints.p2_right,
+          point3_left_mm: levelPoints.p3_left, point3_right_mm: levelPoints.p3_right,
+          point4_left_mm: levelPoints.p4_left, point4_right_mm: levelPoints.p4_right
+        };
+        response = await api.request('/inspections/level', { method: 'POST', body: JSON.stringify(body) });
+      } else {
+        response = await api.createLevelMeasurementForDefect(
+          caseId, defectId, location, trade, levelPoints, note, result
+        );
+      }
       
     } else if (tabType === '열화상') {
       const location = $('#defect-thermal-location').value.trim();
@@ -961,17 +1091,25 @@ async function saveDefectInspection() {
         toast('점검내용을 입력해주세요', 'error');
         return;
       }
-      
-      response = await api.createThermalInspectionForDefect(
-        caseId, defectId, location, '', note, 'normal'
-      );
+
+      if (byHousehold) {
+        response = await api.createThermalInspection(caseId, null, location, '', note, 'normal');
+      } else {
+        response = await api.createThermalInspectionForDefect(
+          caseId, defectId, location, '', note, 'normal'
+        );
+      }
       
     } else if (tabType === '육안') {
       const note = $('#defect-visual-note').value.trim();
       const defect = InspectorState.currentDefect || {};
       const location = (defect.location && defect.location.trim()) || '육안';
       const trade = (defect.trade && defect.trade.trim()) || null;
-      response = await api.createVisualInspectionForDefect(caseId, defectId, note, location, trade);
+      if (byHousehold) {
+        response = await api.createVisualInspectionForDefect(caseId, null, note, '육안', null);
+      } else {
+        response = await api.createVisualInspectionForDefect(caseId, defectId, note, location, trade);
+      }
       
     } else {
       toast('잘못된 측정 타입입니다', 'error');
@@ -1003,12 +1141,17 @@ async function saveDefectInspection() {
       }
       
       toast('점검결과가 저장되었습니다', 'success');
-      
-      // 하자 목록 갱신 후 같은 화면 유지 (점검완료 뱃지 반영)
-      if (InspectorState.selectedHouseholdId) {
+
+      if (InspectorState.inspectionByHousehold && InspectorState.selectedHouseholdId) {
+        const inspRes = await api.getInspectionsByHousehold(InspectorState.selectedHouseholdId);
+        InspectorState.householdInspections = inspRes.inspections || { visual: [], thermal: [], air: [], radon: [], level: [] };
+        clearInspectionFormFieldsOnly();
+      } else if (InspectorState.selectedHouseholdId) {
         await loadDefectsForHousehold(InspectorState.selectedHouseholdId);
+        route('defect-list');
+      } else {
+        route('defect-list');
       }
-      route('defect-list');
       
     } else {
       toast('저장에 실패했습니다', 'error');

@@ -72,13 +72,13 @@ router.post('/thermal', authenticateToken, requireInspectorAccess, async (req, r
   }
 });
 
-// 육안점검 항목 생성 (점검원 점검의견)
+// 육안점검 항목 생성 (점검원 점검의견) — defectId 선택(세대별 점검 시 생략)
 router.post('/visual', authenticateToken, requireInspectorAccess, async (req, res) => {
   try {
     const { caseId, defectId, location, trade, note, result = 'normal' } = req.body;
 
-    if (!caseId || !defectId) {
-      return res.status(400).json({ error: '케이스 ID와 하자 ID는 필수입니다' });
+    if (!caseId) {
+      return res.status(400).json({ error: '케이스 ID는 필수입니다' });
     }
 
     const itemId = uuidv4();
@@ -89,7 +89,7 @@ router.post('/visual', authenticateToken, requireInspectorAccess, async (req, re
       VALUES ($1, $2, $3, 'visual', $4, $5, $6, $7)
       RETURNING *
     `;
-    const queryResult = await pool.query(query, [itemId, caseId, defectId, loc, trade || null, note || null, result]);
+    const queryResult = await pool.query(query, [itemId, caseId, defectId || null, loc, trade || null, note || null, result]);
 
     res.status(201).json({
       success: true,
@@ -390,6 +390,90 @@ router.post('/level', authenticateToken, requireInspectorAccess, async (req, res
     
   } catch (error) {
     console.error('레벨기 측정 등록 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다' });
+  }
+});
+
+// 세대(household)용 케이스 ID 조회 또는 생성 (점검결과 입력 시 케이스 없을 수 있음)
+router.get('/case-for-household/:householdId', authenticateToken, requireInspectorAccess, async (req, res) => {
+  try {
+    const { householdId } = req.params;
+    const hid = parseInt(householdId, 10);
+    if (isNaN(hid)) {
+      return res.status(400).json({ error: '유효한 세대 ID가 필요합니다' });
+    }
+    let row = (await pool.query(
+      'SELECT id FROM case_header WHERE household_id = $1 ORDER BY created_at DESC LIMIT 1',
+      [hid]
+    )).rows[0];
+    if (!row) {
+      const caseId = `CASE-${Date.now().toString().slice(-9)}`;
+      await pool.query(
+        'INSERT INTO case_header (id, household_id, type, created_at) VALUES ($1, $2, $3, NOW())',
+        [caseId, hid, '종합점검']
+      );
+      row = { id: caseId };
+    }
+    res.json({ success: true, caseId: row.id });
+  } catch (error) {
+    console.error('케이스 조회/생성 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다' });
+  }
+});
+
+// 세대(household)별 점검 항목 조회 — 타입별 N건 (하자 무관)
+router.get('/by-household/:householdId', authenticateToken, async (req, res) => {
+  try {
+    const { householdId } = req.params;
+    const hid = parseInt(householdId, 10);
+    if (isNaN(hid)) {
+      return res.status(400).json({ error: '유효한 세대 ID가 필요합니다' });
+    }
+
+    const query = `
+      SELECT 
+        ii.*,
+        am.process_type, am.tvoc, am.hcho, am.co2, am.unit_tvoc, am.unit_hcho,
+        rm.radon, rm.unit_radon,
+        lm.left_mm, lm.right_mm,
+        lm.point1_left_mm, lm.point1_right_mm, lm.point2_left_mm, lm.point2_right_mm,
+        lm.point3_left_mm, lm.point3_right_mm, lm.point4_left_mm, lm.point4_right_mm,
+        lm.reference_mm,
+        (SELECT json_agg(json_build_object('file_url', tp.file_url, 'caption', tp.caption, 'shot_at', tp.shot_at))
+         FROM thermal_photo tp WHERE tp.item_id = ii.id) as thermal_photos
+      FROM inspection_item ii
+      LEFT JOIN air_measure am ON ii.id = am.item_id
+      LEFT JOIN radon_measure rm ON ii.id = rm.item_id
+      LEFT JOIN level_measure lm ON ii.id = lm.item_id
+      WHERE ii.case_id IN (SELECT id FROM case_header WHERE household_id = $1)
+      ORDER BY ii.created_at ASC
+    `;
+    const result = await pool.query(query, [hid]);
+
+    const grouped = { visual: [], thermal: [], air: [], radon: [], level: [] };
+    (result.rows || []).forEach((row) => {
+      const type = row.type || 'thermal';
+      if (!grouped[type]) grouped[type] = [];
+      const item = { ...row };
+      if (row.thermal_photos && Array.isArray(row.thermal_photos)) {
+        item.photos = row.thermal_photos;
+      } else if (row.thermal_photos) {
+        item.photos = [row.thermal_photos];
+      } else {
+        item.photos = [];
+      }
+      delete item.thermal_photos;
+      grouped[type].push(item);
+    });
+
+    res.json({
+      success: true,
+      householdId: hid,
+      inspections: grouped,
+      total: result.rows.length
+    });
+  } catch (error) {
+    console.error('세대별 점검 항목 조회 오류:', error);
     res.status(500).json({ error: '서버 오류가 발생했습니다' });
   }
 });
