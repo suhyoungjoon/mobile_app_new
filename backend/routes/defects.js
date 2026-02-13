@@ -47,9 +47,10 @@ router.get('/', authenticateToken, async (req, res) => {
 
 // 점검원용: 하자가 등록된 사용자(세대) 목록 (household_id 기준)
 // 점검결과( inspection_item )가 하나라도 있는 사용자는 상단 정렬 + has_inspected 표시
+// resident_name_encrypted 컬럼 없어도 동작 (기본 스키마만 있어도 OK)
 router.get('/users', authenticateToken, requireInspectorAccess, async (req, res) => {
   try {
-    const query = `
+    const queryWithEncrypted = `
       WITH household_defects AS (
         SELECT 
           h.id AS household_id,
@@ -72,14 +73,45 @@ router.get('/users', authenticateToken, requireInspectorAccess, async (req, res)
       ORDER BY (inspected_count > 0) DESC, defect_count DESC, dong, ho
       LIMIT 500
     `;
-    const result = await pool.query(query);
+    const queryBasic = `
+      WITH household_defects AS (
+        SELECT 
+          h.id AS household_id,
+          c.name AS complex_name,
+          h.dong,
+          h.ho,
+          h.resident_name,
+          COUNT(d.id) AS defect_count,
+          COUNT(ii.id) AS inspected_count
+        FROM household h
+        JOIN complex c ON h.complex_id = c.id
+        JOIN case_header ch ON ch.household_id = h.id
+        JOIN defect d ON d.case_id = ch.id
+        LEFT JOIN inspection_item ii ON ii.defect_id = d.id
+        WHERE LOWER(TRIM(c.name)) <> 'admin'
+        GROUP BY h.id, c.name, h.dong, h.ho, h.resident_name
+      )
+      SELECT * FROM household_defects
+      ORDER BY (inspected_count > 0) DESC, defect_count DESC, dong, ho
+      LIMIT 500
+    `;
+    let result;
+    try {
+      result = await pool.query(queryWithEncrypted);
+    } catch (colErr) {
+      if (colErr.message && /resident_name_encrypted|column.*does not exist/i.test(colErr.message)) {
+        result = await pool.query(queryBasic);
+      } else {
+        throw colErr;
+      }
+    }
     const users = result.rows.map((row) => {
       let name = row.resident_name || '';
       if (row.resident_name_encrypted) {
         try {
           name = decrypt(row.resident_name_encrypted);
         } catch (e) {
-          name = row.resident_name || '';
+          name = row.resident_name || name;
         }
       }
       const inspectedCount = parseInt(row.inspected_count, 10) || 0;
