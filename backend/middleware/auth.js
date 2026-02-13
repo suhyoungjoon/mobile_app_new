@@ -78,7 +78,9 @@ const requireInspectorAccess = async (req, res, next) => {
     );
     
     if (result.rows.length === 0) {
-      return res.status(403).json({ error: '세대 정보를 찾을 수 없습니다' });
+      return res.status(403).json({
+        error: '세대 정보를 찾을 수 없습니다. 다시 로그인해주세요.'
+      });
     }
     
     const complexName = result.rows[0].complex_name?.toLowerCase();

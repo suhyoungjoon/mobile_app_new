@@ -196,6 +196,9 @@ console.log(`📊 NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
 console.log(`📊 DATABASE_URL: ${process.env.DATABASE_URL ? 'Set' : 'Not set'}`);
 
 // Start server with error handling
+const pool = require('./database');
+const { ensureInspectorHousehold } = require('./utils/ensureInspectorHousehold');
+
 let server;
 try {
   server = app.listen(PORT, '0.0.0.0', () => {
@@ -204,6 +207,7 @@ try {
     console.log(`🏥 Health Check: http://localhost:${PORT}/health`);
     console.log(`✅ Server is ready to accept connections`);
     console.log(`🌐 Server listening on 0.0.0.0:${PORT}`);
+    ensureInspectorHousehold(pool).catch(() => {});
   });
 } catch (error) {
   console.error('❌ Failed to start server:', error);
