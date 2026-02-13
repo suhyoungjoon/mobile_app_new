@@ -233,12 +233,14 @@ async function loadUserList() {
   } catch (error) {
     console.error('사용자 목록 조회 오류:', error);
     const msg = (error && error.message) ? error.message : '사용자 목록을 불러오는데 실패했습니다';
-    // 403 세대 정보 없음 = 저장된 로그인이 더 이상 유효하지 않음 → 세션 제거
-    if (error.status === 403 || (msg && msg.includes('세대 정보를 찾을 수 없습니다'))) {
+    const isSessionInvalid = error.status === 403 || (msg && msg.includes('세대 정보를 찾을 수 없습니다'));
+    if (isSessionInvalid) {
       InspectorState.session = null;
       try {
         localStorage.removeItem('inspector_session');
       } catch (e) {}
+      toast(msg, 'error');
+      throw error;
     }
     toast(msg, 'error');
     container.innerHTML = `
