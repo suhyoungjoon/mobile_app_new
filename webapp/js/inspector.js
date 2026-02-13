@@ -232,11 +232,13 @@ async function loadUserList() {
     `).join('');
   } catch (error) {
     console.error('사용자 목록 조회 오류:', error);
-    toast('사용자 목록을 불러오는데 실패했습니다', 'error');
+    const msg = (error && error.message) ? error.message : '사용자 목록을 불러오는데 실패했습니다';
+    toast(msg, 'error');
     container.innerHTML = `
       <div class="card" style="text-align: center; padding: 40px;">
         <div style="color: #e74c3c;">목록을 불러오는데 실패했습니다.</div>
-        <div style="color: #999; font-size: 12px; margin-top: 8px;">페이지를 새로고침해주세요.</div>
+        <div style="color: #999; font-size: 12px; margin-top: 8px;">${escapeHTML(msg)}</div>
+        <div style="color: #999; font-size: 12px; margin-top: 4px;">페이지를 새로고침해주세요.</div>
       </div>
     `;
   }

@@ -52,35 +52,32 @@ class APIClient {
         clearTimeout(id);
         if (!resp.ok) {
           const text = await resp.text().catch(() => '');
-          
-          // 401 또는 403 에러 시 토큰 만료로 간주
+          let errorData;
+          try {
+            errorData = JSON.parse(text);
+          } catch {
+            errorData = { message: text || `HTTP ${resp.status}` };
+          }
+          const serverMessage = errorData.message || errorData.error || '';
+
+          // 401/403: 서버가 준 메시지를 그대로 사용 (토큰 만료 vs 점검원 권한 등 구분)
           if (resp.status === 401 || resp.status === 403) {
-            console.warn('⚠️ 토큰이 만료되었습니다. 다시 로그인해주세요.');
+            const msg = serverMessage || (resp.status === 401 ? '토큰이 만료되었습니다. 다시 로그인해주세요.' : '권한이 없습니다.');
+            console.warn('⚠️', msg);
             this.clearToken();
-            
-            // 로그인 화면으로 리다이렉트
             if (window.route) {
               window.route('login');
             }
-            
-            const err = new Error('세션이 만료되었습니다. 다시 로그인해주세요.');
+            const err = new Error(msg);
             err.status = resp.status;
             throw err;
           }
-          
-        // JSON 응답 시도
-        let errorData;
-        try {
-          errorData = JSON.parse(text);
-        } catch {
-          errorData = { message: text || `HTTP ${resp.status}` };
-        }
-        
-        const err = new Error(errorData.message || errorData.error || `HTTP ${resp.status}`);
-        err.status = resp.status;
-        err.details = errorData.details;
-        err.error = errorData.error;
-        throw err;
+
+          const err = new Error(serverMessage || `HTTP ${resp.status}`);
+          err.status = resp.status;
+          err.details = errorData.details;
+          err.error = errorData.error;
+          throw err;
         }
         return await resp.json();
       } catch (err) {

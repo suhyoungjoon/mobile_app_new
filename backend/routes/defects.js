@@ -98,37 +98,44 @@ router.get('/users', authenticateToken, requireInspectorAccess, async (req, res)
     let result;
     try {
       result = await pool.query(queryWithEncrypted);
-    } catch (colErr) {
-      if (colErr.message && /resident_name_encrypted|column.*does not exist/i.test(colErr.message)) {
+    } catch (firstErr) {
+      console.warn('Get users with defects (encrypted query) failed, trying basic:', firstErr.message);
+      try {
         result = await pool.query(queryBasic);
-      } else {
-        throw colErr;
+      } catch (secondErr) {
+        console.error('Get users with defects (basic query) failed:', secondErr);
+        throw secondErr;
       }
     }
-    const users = result.rows.map((row) => {
+    const users = (result.rows || []).map((row) => {
       let name = row.resident_name || '';
       if (row.resident_name_encrypted) {
         try {
-          name = decrypt(row.resident_name_encrypted);
+          const decoded = decrypt(row.resident_name_encrypted);
+          if (decoded && typeof decoded === 'string') name = decoded;
         } catch (e) {
-          name = row.resident_name || name;
+          // 복호화 실패 시 평문 유지
         }
       }
       const inspectedCount = parseInt(row.inspected_count, 10) || 0;
+      const defectCount = parseInt(row.defect_count, 10) || 0;
       return {
         household_id: row.household_id,
         complex_name: row.complex_name || '',
         dong: row.dong || '',
         ho: row.ho || '',
         resident_name: name,
-        defect_count: parseInt(row.defect_count, 10),
+        defect_count: defectCount,
         has_inspected: inspectedCount > 0
       };
     });
     res.json({ success: true, users });
   } catch (error) {
     console.error('Get users with defects error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({
+      error: 'Internal server error',
+      message: error.message || '사용자 목록 조회에 실패했습니다.'
+    });
   }
 });
 
