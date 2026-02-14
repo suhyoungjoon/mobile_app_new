@@ -1,7 +1,7 @@
 /**
- * 최종보고서: 템플릿 1~7, 9, 11, 14~15p 유지하고,
- * 8·10·12·13p는 빨간 박스 기준 표 양식으로 새 페이지를 만들어 삽입.
- * (값이 없어도 템플릿의 예전 형태가 남지 않음)
+ * 최종보고서: 템플릿 전체 페이지 유지.
+ * 8·10·12·13p에서는 값/사진 영역만 흰색으로 덮고 그 위에 표를 그림.
+ * (템플릿의 로고·도형 등 이미지는 유지, 사진 넣는 칸만 표로 대체)
  */
 const fs = require('fs');
 const path = require('path');
@@ -45,6 +45,19 @@ async function embedCustomFont(pdfDoc) {
     //
   }
   return await pdfDoc.embedFont(StandardFonts.Helvetica);
+}
+
+/** 템플릿 페이지에서 값/사진 영역만 흰색으로 덮어 기존 박스 숨김 (로고 등 이미지는 유지) */
+function coverDataAndPhotoArea(page) {
+  const margin = 40;
+  const topMargin = 80;
+  page.drawRectangle({
+    x: margin,
+    y: margin,
+    width: LAYOUT.PAGE_WIDTH - margin * 2,
+    height: LAYOUT.PAGE_HEIGHT - margin * 2 - topMargin,
+    color: rgb(1, 1, 1)
+  });
 }
 
 /** 표 한 페이지 그리기: 제목, 동/호, 헤더 행, 데이터 행(빨간 박스 단위). getCellValue(item, field) => string */
@@ -203,25 +216,25 @@ function drawLevelTablePage(page, font, reportData) {
   });
 }
 
-/** 템플릿에서 8·10·12·13p 제거 후, 해당 자리에 표 페이지 4장 삽입 (순서 유지) */
+/** 템플릿 8·10·12·13p는 그대로 두고, 값/사진 영역만 흰색으로 덮은 뒤 표만 그림 (로고 등 이미지 유지) */
 async function assembleFinalWithTemplatePages(templateDoc, reportData, font, pdfDoc) {
-  // 제거: 13p(12), 12p(11), 10p(9), 8p(7) — 뒤에서부터 제거
-  if (templateDoc.getPageCount() > 12) templateDoc.removePage(12);
-  if (templateDoc.getPageCount() > 11) templateDoc.removePage(11);
-  if (templateDoc.getPageCount() > 9) templateDoc.removePage(9);
-  if (templateDoc.getPageCount() > 7) templateDoc.removePage(7);
-
-  // 7, 9, 11, 12 자리에 삽입 → 순서: 0-6, [새8p], template9p, [새10p], template11p, [새12p], [새13p], template14-15p
-  templateDoc.insertPage(7, [LAYOUT.PAGE_WIDTH, LAYOUT.PAGE_HEIGHT]);
-  templateDoc.insertPage(9, [LAYOUT.PAGE_WIDTH, LAYOUT.PAGE_HEIGHT]);
-  templateDoc.insertPage(11, [LAYOUT.PAGE_WIDTH, LAYOUT.PAGE_HEIGHT]);
-  templateDoc.insertPage(12, [LAYOUT.PAGE_WIDTH, LAYOUT.PAGE_HEIGHT]);
-
   const pages = templateDoc.getPages();
-  if (pages[7]) drawVisualTablePage(pages[7], font, reportData);
-  if (pages[9]) drawThermalTablePage(pages[9], font, reportData);
-  if (pages[11]) drawAirTablePage(pages[11], font, reportData);
-  if (pages[12]) drawLevelTablePage(pages[12], font, reportData);
+  if (pages[7]) {
+    coverDataAndPhotoArea(pages[7]);
+    drawVisualTablePage(pages[7], font, reportData);
+  }
+  if (pages[9]) {
+    coverDataAndPhotoArea(pages[9]);
+    drawThermalTablePage(pages[9], font, reportData);
+  }
+  if (pages[11]) {
+    coverDataAndPhotoArea(pages[11]);
+    drawAirTablePage(pages[11], font, reportData);
+  }
+  if (pages[12]) {
+    coverDataAndPhotoArea(pages[12]);
+    drawLevelTablePage(pages[12], font, reportData);
+  }
 }
 
 /** 템플릿 없이 점검 표 페이지만 4장 생성 */

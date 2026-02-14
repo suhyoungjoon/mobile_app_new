@@ -138,19 +138,13 @@ function route(screen){
   // 사용자 메뉴 닫기
   closeUserMenu();
   
-  // 하자 등록 화면 진입 시 고객 정보 표시 및 케이스 자동 생성
+  // 하자 등록 화면 진입 시 고객 정보 표시 (케이스는 goToNewDefect에서 확보)
   if (screen === 'newdefect') {
     if (AppState.session) {
-      const { complex, dong, ho, name } = AppState.session;
-      $('#customer-details').textContent = `${dong}동 ${ho}호 ${name}`;
+      const { dong, ho, name } = AppState.session;
+      const detailsEl = $('#customer-details');
+      if (detailsEl) detailsEl.textContent = `${dong}동 ${ho}호 ${name}`;
     }
-    
-    // currentCaseId가 없으면 자동으로 케이스 생성
-    if (!AppState.currentCaseId) {
-      ensureCaseExists();
-    }
-    
-    // 하자 카테고리가 로드되지 않았다면 다시 로드
     if ($('#defect-category').children.length <= 1) {
       loadDefectCategories();
     }
@@ -279,10 +273,7 @@ async function onLogin(){
     $('#badge-user').textContent = `${dong}-${ho} ${name}`;
     toast('✅ 로그인 성공', 'success');
     
-    // Load cases and ensure at least one exists
     await loadCases();
-    await ensureCase();
-    
     route('list');
     
   } catch (error) {
@@ -310,39 +301,50 @@ async function onShowList() {
   route('list');
 }
 
-function renderCaseList(){
+// 세대주용: 케이스 없이 "하자 목록"만 표시 (케이스는 백엔드에서 유지)
+function renderDefectList() {
   const wrap = $('#case-list');
+  if (!wrap) return;
   wrap.innerHTML = '';
-  
-  if (!AppState.cases || AppState.cases.length === 0) {
+
+  const defects = (AppState.cases || []).flatMap(c => (c.defects || []).map(d => ({ ...d, case_id: c.id })));
+
+  if (defects.length === 0) {
     wrap.innerHTML = `
       <div class="card" style="text-align: center; padding: 40px;">
-        <div style="color: #666; margin-bottom: 20px;">등록된 케이스가 없습니다.</div>
-        <button class="button" onclick="createNewCase()">새 케이스 생성</button>
+        <div style="color: #666; margin-bottom: 12px;">등록된 하자가 없습니다.</div>
+        <div style="font-size: 13px; color: var(--muted);">하자등록 탭에서 첫 하자를 등록해 보세요.</div>
       </div>
     `;
     return;
   }
-  
-  AppState.cases.forEach(cs=>{
+
+  defects.forEach(defect => {
     const div = document.createElement('div');
     div.className = 'card';
-    const cnt = cs.defects ? cs.defects.length : 0;
+    const contentSnippet = (defect.content || '').slice(0, 80) + ((defect.content || '').length > 80 ? '…' : '');
     div.innerHTML = `
-      <div style="display:flex;align-items:center;gap:8px;">
-        <div style="font-weight:700;">${cs.type}</div>
-        <div class="badge-chip">${cs.id}</div>
-        <div class="badge" style="margin-left:auto;">${formatDate(cs.created_at)}</div>
+      <div class="defect-header">
+        <strong>${escapeHTML(defect.location)} - ${escapeHTML(defect.trade)}</strong>
+        <span class="badge">${formatDate(defect.created_at)}</span>
       </div>
-      <div class="small">등록된 하자: ${cnt}건</div>
+      <div class="defect-content">
+        <div class="label">내용:</div>
+        <p>${escapeHTML(contentSnippet)}</p>
+      </div>
       <div class="hr"></div>
       <div class="button-group">
-        <button class="button ghost" onclick="viewCaseDefects('${cs.id}')">상세보기</button>
-        <button class="button" onclick="addDefectToCase('${cs.id}')">하자 추가</button>
+        <button class="button small" onclick="editDefect('${String(defect.id).replace(/'/g, "\\'")}')">✏️ 수정</button>
+        <button class="button small danger" onclick="deleteDefect('${String(defect.id).replace(/'/g, "\\'")}')">🗑️ 삭제</button>
       </div>
     `;
     wrap.appendChild(div);
   });
+}
+
+// 목록 화면에서 사용 (하자 목록 렌더)
+function renderCaseList() {
+  renderDefectList();
 }
 
 async function createNewCase() {
@@ -499,7 +501,14 @@ async function viewCaseDefects(caseId) {
   }
 }
 
-// 케이스에 하자 추가 (currentCaseId 설정 후 하자 등록 화면으로)
+// 세대주: 하자등록 탭 클릭 시 케이스 확보(없으면 생성) 후 바로 하자 등록 화면으로
+async function goToNewDefect() {
+  if (!checkAuth()) return;
+  await ensureCaseExists();
+  route('newdefect');
+}
+
+// 케이스에 하자 추가 (currentCaseId 설정 후 하자 등록 화면으로) — 목록에서 제거됨, 점검원 등 내부용 유지
 function addDefectToCase(caseId) {
   AppState.currentCaseId = caseId;
   route('newdefect');
@@ -603,8 +612,9 @@ async function saveDefectEdit() {
     AppState.photoNearKey = null;
     AppState.photoFarKey = null;
     
-    // 케이스 상세 화면으로 돌아가기
-    await viewCaseDefects(AppState.currentCaseId);
+    // 하자 목록으로 돌아가기
+    await loadCases();
+    route('list');
     
   } catch (error) {
     handleAPIError(error, '');
@@ -615,11 +625,7 @@ async function saveDefectEdit() {
 
 // 하자 수정 취소
 function cancelEdit() {
-  if (AppState.currentCaseId) {
-    viewCaseDefects(AppState.currentCaseId);
-  } else {
-    route('list');
-  }
+  route('list');
 }
 
 // 하자 삭제 (Phase 1-4에서 구현 예정)
@@ -715,8 +721,9 @@ async function onSaveDefect(){
     
     toast('하자가 저장되었습니다', 'success');
     
-    // Reload cases
+    // Reload cases and show list
     await loadCases();
+    route('list');
     
   } catch (error) {
     handleAPIError(error, '');
