@@ -157,19 +157,16 @@
         <div></div>
       </div>
       <div id="report-preview"></div>
-      <div class="report-download-actions">
+      <div class="report-download-actions button-group" style="display: flex; flex-direction: column;">
+        <p style="color: #6b7280; font-size: 13px; margin-bottom: 12px;">다운로드·미리보기는 최종보고서와 수기보고서만 제공됩니다.</p>
         <div class="report-primary-buttons">
           <button class="button success" onclick="downloadFinalReportAsPdf()">최종보고서 다운로드</button>
-          <button class="button" onclick="previewReportAsPdf()">PDF 미리보기</button>
+          <button class="button" onclick="previewFinalReportAsPdf()">최종보고서 미리보기</button>
         </div>
-        <details class="report-other-downloads">
-          <summary>기타 보고서</summary>
-          <div class="report-secondary-buttons">
-            <button class="button ghost" onclick="downloadReportAsPdf()">PDF 다운로드</button>
-            <button class="button ghost" onclick="downloadSummaryReportAsPdf()">수기보고서</button>
-            <button class="button ghost" onclick="downloadInspectionFormAsPdf()">점검결과 양식</button>
-          </div>
-        </details>
+        <div class="report-primary-buttons">
+          <button class="button ghost" onclick="downloadSummaryReportAsPdf()">수기보고서 다운로드</button>
+          <button class="button ghost" onclick="previewSummaryReportAsPdf()">수기보고서 미리보기</button>
+        </div>
       </div>
     </div>
 

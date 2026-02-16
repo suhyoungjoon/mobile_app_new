@@ -358,14 +358,14 @@ async function downloadReportForUser(householdId) {
       const defRes = await api.getDefectsByHousehold(householdId);
       if (defRes.defects && defRes.defects.length > 0) caseId = defRes.defects[0].case_id;
     }
-    toast('PDF 생성 중...', 'info');
-    const generateResult = await api.generateReport(caseId || null, householdId);
+    toast('최종보고서 생성 중...', 'info');
+    const generateResult = await api.generateReport(caseId || null, householdId, { template: 'final-report' });
     if (!generateResult || !generateResult.success || !generateResult.filename) {
-      throw new Error(generateResult?.message || generateResult?.error || 'PDF 생성에 실패했습니다');
+      throw new Error(generateResult?.message || generateResult?.error || '최종보고서 생성에 실패했습니다');
     }
     toast('다운로드 중...', 'info');
     await api.downloadReport(generateResult.filename);
-    toast('보고서 다운로드가 완료되었습니다', 'success');
+    toast('최종보고서 다운로드가 완료되었습니다', 'success');
   } catch (error) {
     console.error('보고서 다운로드 오류:', error);
     toast(error.message || '보고서 다운로드에 실패했습니다', 'error');
@@ -1274,80 +1274,63 @@ async function onPreviewReport() {
   }
 }
 
-// PDF 미리보기
-async function previewReportAsPdf() {
+// 최종보고서 미리보기
+async function previewFinalReportAsPdf() {
   if (!InspectorState.session) {
     toast('로그인이 필요합니다', 'error');
     return;
   }
-  
-  const caseId = InspectorState.currentCaseId;
-  if (!caseId) {
-    toast('케이스를 먼저 선택해주세요', 'error');
-    return;
-  }
-
-  const householdId = InspectorState.selectedHouseholdId;
-  setLoading(true);
-  try {
-    toast('PDF 생성 중...', 'info');
-    const generateResult = await api.generateReport(caseId, householdId);
-    
-    console.log('PDF 생성 결과:', generateResult);
-    
-    if (!generateResult || !generateResult.success) {
-      const errorMsg = generateResult?.message || generateResult?.error || 'PDF 생성에 실패했습니다';
-      throw new Error(errorMsg);
-    }
-
-    if (!generateResult.filename) {
-      throw new Error('PDF 파일명을 받지 못했습니다. 서버 응답을 확인해주세요.');
-    }
-
-    toast('PDF 미리보기를 여는 중...', 'info');
-    await api.previewReport(generateResult.filename);
-    
-    toast('PDF 미리보기 창이 열렸습니다', 'success');
-    
-  } catch (error) {
-    console.error('PDF 미리보기 오류:', error);
-    toast(error.message || 'PDF 미리보기에 실패했습니다', 'error');
-  } finally {
-    setLoading(false);
-  }
-}
-
-// PDF 다운로드
-async function downloadReportAsPdf() {
-  if (!InspectorState.session) {
-    toast('로그인이 필요합니다', 'error');
-    return;
-  }
-  
-  const caseId = InspectorState.currentCaseId;
   const householdId = InspectorState.selectedHouseholdId;
   if (!householdId) {
     toast('대상 세대를 먼저 선택해주세요', 'error');
     return;
   }
-
   setLoading(true);
   try {
-    toast('PDF 생성 중...', 'info');
-    const generateResult = await api.generateReport(caseId, householdId);
-    
+    toast('최종보고서 생성 중...', 'info');
+    const generateResult = await api.generateReport(InspectorState.currentCaseId, householdId, { template: 'final-report' });
     if (!generateResult || !generateResult.success) {
-      const errorMsg = generateResult?.message || generateResult?.error || 'PDF 생성에 실패했습니다';
+      const errorMsg = generateResult?.message || generateResult?.error || '최종보고서 생성에 실패했습니다';
       throw new Error(errorMsg);
     }
     if (!generateResult.filename) throw new Error('PDF 파일명을 받지 못했습니다.');
-
-    toast('PDF 다운로드 중...', 'info');
-    await api.downloadReport(generateResult.filename);
-    toast('PDF 다운로드가 완료되었습니다', 'success');
+    toast('미리보기를 여는 중...', 'info');
+    await api.previewReport(generateResult.filename);
+    toast('최종보고서 미리보기 창이 열렸습니다', 'success');
   } catch (error) {
-    console.error('PDF 다운로드 오류:', error);
-    toast(error.message || 'PDF 다운로드에 실패했습니다', 'error');
+    console.error('최종보고서 미리보기 오류:', error);
+    toast(error.message || '최종보고서 미리보기에 실패했습니다', 'error');
+  } finally {
+    setLoading(false);
+  }
+}
+
+// 수기보고서 미리보기
+async function previewSummaryReportAsPdf() {
+  if (!InspectorState.session) {
+    toast('로그인이 필요합니다', 'error');
+    return;
+  }
+  const householdId = InspectorState.selectedHouseholdId;
+  if (!householdId) {
+    toast('대상 세대를 먼저 선택해주세요', 'error');
+    return;
+  }
+  setLoading(true);
+  try {
+    toast('수기보고서 생성 중...', 'info');
+    const generateResult = await api.generateReport(InspectorState.currentCaseId, householdId, { template: 'summary-report' });
+    if (!generateResult || !generateResult.success) {
+      const errorMsg = generateResult?.message || generateResult?.error || '수기보고서 생성에 실패했습니다';
+      throw new Error(errorMsg);
+    }
+    if (!generateResult.filename) throw new Error('PDF 파일명을 받지 못했습니다.');
+    toast('미리보기를 여는 중...', 'info');
+    await api.previewReport(generateResult.filename);
+    toast('수기보고서 미리보기 창이 열렸습니다', 'success');
+  } catch (error) {
+    console.error('수기보고서 미리보기 오류:', error);
+    toast(error.message || '수기보고서 미리보기에 실패했습니다', 'error');
   } finally {
     setLoading(false);
   }
