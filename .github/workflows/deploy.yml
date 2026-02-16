@@ -1,0 +1,32 @@
+# main 브랜치 푸시 시 Render(백엔드)·Vercel(프론트) 자동 배포
+# - Render: 저장소 연결 시 push마다 자동 빌드·배포 (render.yaml 기준)
+# - Vercel: 저장소 연결 시 push마다 자동 배포
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  # 푸시 시 배포 트리거 확인 (Render/Vercel이 각자 배포 수행)
+  deploy-trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 배포 트리거
+        run: |
+          echo "✅ main에 push되었습니다."
+          echo "📦 Render(백엔드)와 Vercel(프론트)이 연결되어 있으면 자동으로 배포가 시작됩니다."
+          echo "   - 백엔드: https://dashboard.render.com"
+          echo "   - 프론트: https://vercel.com/dashboard"
+
+  # 백엔드 헬스 체크 (배포 완료 후 서버 응답 확인, 선택)
+  verify-backend:
+    runs-on: ubuntu-latest
+    needs: deploy-trigger
+    steps:
+      - name: 대기 후 백엔드 헬스 체크
+        run: |
+          echo "⏳ Render 빌드 대기 중 (약 4분)..."
+          sleep 240
+          curl -sf --max-time 30 https://mobile-app-new.onrender.com/health || echo "⚠️ 헬스 체크 실패 (서버 대기 중이거나 URL 확인 필요)"
+        continue-on-error: true
