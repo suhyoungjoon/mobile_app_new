@@ -645,6 +645,14 @@ class APIClient {
       method: 'DELETE'
     });
   }
+
+  // 점검 항목 수정 (타입별 body: location, trade, note, result + air: process_type, tvoc, hcho, co2 / radon: radon, unit_radon / level: point1_left_mm, ...)
+  async updateInspectionItem(itemId, body) {
+    return await this.request(`/inspections/${itemId}`, {
+      method: 'PUT',
+      body: JSON.stringify(body)
+    });
+  }
 }
 
 // Global API client instance

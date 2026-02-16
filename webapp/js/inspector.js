@@ -462,12 +462,13 @@ async function loadAllDefectsDirectly() {
             ${hasInspections ? `
               <div class="label">점검결과</div>
               <div class="value" style="color: #10b981; font-size: 14px;">${inspectionSummary}</div>
+              <button type="button" class="button ghost" style="margin-top:8px;font-size:13px;" onclick="showInspectionDetailModal(${defect.id})">점검결과 보기</button>
             ` : ''}
           </div>
         </div>
       `;
     }).join('');
-    
+
     console.log('✅ 하자목록 표시 완료:', defectsWithInspections.length, '개');
   } catch (error) {
     console.error('❌ 직접 하자목록 조회 실패:', error);
@@ -541,7 +542,11 @@ async function loadDefectsForHousehold(householdId) {
             <div class="label">내용</div>
             <div class="value">${escapeHTML(defect.content || '')}</div>
             ${defect.memo ? `<div class="label">메모</div><div class="value">${escapeHTML(defect.memo)}</div>` : ''}
-            ${hasInspections ? `<div class="label">점검결과</div><div class="value" style="color: #10b981; font-size: 14px;">${inspectionSummary}</div>` : ''}
+            ${hasInspections ? `
+              <div class="label">점검결과</div>
+              <div class="value" style="color: #10b981; font-size: 14px;">${inspectionSummary}</div>
+              <button type="button" class="button ghost" style="margin-top:8px;font-size:13px;" onclick="showInspectionDetailModal(${defect.id})">점검결과 보기</button>
+            ` : ''}
             ${defect.photos && defect.photos.length > 0 ? `
               <div class="label">사진</div>
               <div class="gallery" style="display:flex;gap:8px;margin-top:4px;">
@@ -603,6 +608,239 @@ function closeDefectSelectModal() {
   }
 }
 
+// 점검결과 수정 모달
+let _editingInspectionId = null;
+let _editingInspectionType = null;
+let _detailModalDefectId = null; // 상세 모달이 하자 기준으로 열렸을 때만 설정
+
+function closeInspectionDetailModal() {
+  _detailModalDefectId = null;
+  const modal = $('#inspection-detail-modal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
+}
+
+function closeInspectionEditModal() {
+  _editingInspectionId = null;
+  _editingInspectionType = null;
+  const modal = $('#inspection-edit-modal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
+}
+
+function buildInspectionEditForm(type, item) {
+  const v = (x) => (x != null && x !== '' ? String(x) : '');
+  const typeNames = { visual: '육안', air: '공기질', radon: '라돈', level: '레벨기', thermal: '열화상' };
+  let html = `<input type="hidden" id="ins-edit-type" value="${escapeHTML(type)}" />`;
+  html += `<div class="form-group"><label class="form-label">위치</label><input type="text" id="ins-edit-location" class="input" value="${escapeHTML(v(item.location))}" /></div>`;
+  html += `<div class="form-group"><label class="form-label">공종</label><input type="text" id="ins-edit-trade" class="input" value="${escapeHTML(v(item.trade))}" /></div>`;
+  html += `<div class="form-group"><label class="form-label">메모</label><textarea id="ins-edit-note" class="input" rows="2">${escapeHTML(v(item.note))}</textarea></div>`;
+  html += `<div class="form-group"><label class="form-label">결과</label><select id="ins-edit-result" class="input"><option value="normal" ${(item.result === 'normal' || item.result_text === '정상') ? 'selected' : ''}>정상</option><option value="check" ${(item.result === 'check' || item.result_text === '확인요망') ? 'selected' : ''}>확인요망</option><option value="na" ${(item.result === 'na' || item.result_text === '해당없음') ? 'selected' : ''}>해당없음</option></select></div>`;
+  if (type === 'air') {
+    html += `<div class="form-group"><label class="form-label">유형</label><select id="ins-edit-process_type" class="input"><option value="">-</option><option value="flush_out" ${item.process_type === 'flush_out' ? 'selected' : ''}>Flush-out</option><option value="bake_out" ${item.process_type === 'bake_out' ? 'selected' : ''}>Bake-out</option></select></div>`;
+    html += `<div class="form-group"><label class="form-label">TVOC</label><input type="text" id="ins-edit-tvoc" class="input" value="${v(item.tvoc)}" placeholder="숫자" /></div>`;
+    html += `<div class="form-group"><label class="form-label">HCHO</label><input type="text" id="ins-edit-hcho" class="input" value="${v(item.hcho)}" placeholder="숫자" /></div>`;
+  }
+  if (type === 'radon') {
+    html += `<div class="form-group"><label class="form-label">라돈 값</label><input type="text" id="ins-edit-radon" class="input" value="${v(item.radon)}" /></div>`;
+    html += `<div class="form-group"><label class="form-label">단위</label><select id="ins-edit-unit_radon" class="input"><option value="Bq/m³" ${(item.unit_radon || item.unit) === 'Bq/m³' ? 'selected' : ''}>Bq/m³</option><option value="pCi/L" ${(item.unit_radon || item.unit) === 'pCi/L' ? 'selected' : ''}>pCi/L</option></select></div>`;
+  }
+  if (type === 'level') {
+    html += `<div class="form-group"><label class="form-label">기준(mm)</label><input type="text" id="ins-edit-reference_mm" class="input" value="${v(item.reference_mm) || '150'}" /></div>`;
+    html += `<div class="form-group"><label class="form-label">1번 좌/우</label><input type="text" id="ins-edit-p1_left" class="input" style="width:60px;display:inline-block;" value="${v(item.point1_left_mm)}" /> / <input type="text" id="ins-edit-p1_right" class="input" style="width:60px;display:inline-block;" value="${v(item.point1_right_mm)}" /></div>`;
+    html += `<div class="form-group"><label class="form-label">2번 좌/우</label><input type="text" id="ins-edit-p2_left" class="input" style="width:60px;" value="${v(item.point2_left_mm)}" /> / <input type="text" id="ins-edit-p2_right" class="input" style="width:60px;" value="${v(item.point2_right_mm)}" /></div>`;
+    html += `<div class="form-group"><label class="form-label">3번 좌/우</label><input type="text" id="ins-edit-p3_left" class="input" style="width:60px;" value="${v(item.point3_left_mm)}" /> / <input type="text" id="ins-edit-p3_right" class="input" style="width:60px;" value="${v(item.point3_right_mm)}" /></div>`;
+    html += `<div class="form-group"><label class="form-label">4번 좌/우</label><input type="text" id="ins-edit-p4_left" class="input" style="width:60px;" value="${v(item.point4_left_mm)}" /> / <input type="text" id="ins-edit-p4_right" class="input" style="width:60px;" value="${v(item.point4_right_mm)}" /></div>`;
+  }
+  if (type === 'thermal') {
+    html += `<p class="small" style="color:#6b7280;">열화상은 위치·메모·결과만 수정 가능합니다. 사진은 추가만 가능합니다.</p>`;
+  }
+  return html;
+}
+
+function openInspectionEditModal(itemId) {
+  const data = InspectorState._editItemsById && InspectorState._editItemsById[itemId];
+  if (!data) {
+    toast('항목 정보를 찾을 수 없습니다', 'error');
+    return;
+  }
+  const { item, type } = data;
+  _editingInspectionId = itemId;
+  _editingInspectionType = type;
+  const bodyEl = $('#inspection-edit-modal-body');
+  if (!bodyEl) return;
+  bodyEl.innerHTML = buildInspectionEditForm(type, item);
+  const modal = $('#inspection-edit-modal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.style.display = 'flex';
+  }
+}
+
+async function saveInspectionEdit() {
+  if (!_editingInspectionId) return;
+  const type = _editingInspectionType || $('#ins-edit-type')?.value;
+  const body = {
+    type,
+    location: $('#ins-edit-location')?.value?.trim() || '',
+    trade: $('#ins-edit-trade')?.value?.trim() || null,
+    note: $('#ins-edit-note')?.value?.trim() || null,
+    result: $('#ins-edit-result')?.value || 'normal'
+  };
+  if (type === 'air') {
+    body.process_type = $('#ins-edit-process_type')?.value || null;
+    const tvoc = $('#ins-edit-tvoc')?.value?.trim();
+    const hcho = $('#ins-edit-hcho')?.value?.trim();
+    body.tvoc = tvoc !== '' ? tvoc : null;
+    body.hcho = hcho !== '' ? hcho : null;
+  }
+  if (type === 'radon') {
+    const r = $('#ins-edit-radon')?.value?.trim();
+    body.radon = r !== '' ? r : null;
+    body.unit_radon = $('#ins-edit-unit_radon')?.value || 'Bq/m³';
+  }
+  if (type === 'level') {
+    const p = (id) => $('#ins-edit-' + id)?.value?.trim();
+    body.reference_mm = p('reference_mm') || 150;
+    body.point1_left_mm = p('p1_left'); body.point1_right_mm = p('p1_right');
+    body.point2_left_mm = p('p2_left'); body.point2_right_mm = p('p2_right');
+    body.point3_left_mm = p('p3_left'); body.point3_right_mm = p('p3_right');
+    body.point4_left_mm = p('p4_left'); body.point4_right_mm = p('p4_right');
+  }
+  setLoading(true);
+  try {
+    await api.updateInspectionItem(_editingInspectionId, body);
+    toast('수정되었습니다', 'success');
+    closeInspectionEditModal();
+    if (InspectorState.selectedHouseholdId) {
+      const inspRes = await api.getInspectionsByHousehold(InspectorState.selectedHouseholdId);
+      InspectorState.householdInspections = inspRes.inspections || { visual: [], thermal: [], air: [], radon: [], level: [] };
+      renderHouseholdInspectionsList();
+    }
+    if (_detailModalDefectId) {
+      const res = await api.getDefectInspections(_detailModalDefectId);
+      const inspections = res.inspections || {};
+      InspectorState._editItemsById = InspectorState._editItemsById || {};
+      const typeOrder = ['visual', 'air', 'radon', 'level', 'thermal'];
+      let html = '';
+      for (const t of typeOrder) {
+        const items = inspections[t] || [];
+        items.forEach((it) => {
+          if (it.id) InspectorState._editItemsById[it.id] = { item: it, type: t };
+          html += formatInspectionItemByType(t, it, { showEdit: true });
+        });
+      }
+      const detailBody = $('#inspection-detail-modal-body');
+      if (detailBody) detailBody.innerHTML = html || '<p style="color:#6b7280;">등록된 점검결과가 없습니다.</p>';
+    }
+  } catch (e) {
+    console.error('점검결과 수정 오류:', e);
+    toast(e.message || '수정에 실패했습니다', 'error');
+  } finally {
+    setLoading(false);
+  }
+}
+
+function formatInspectionItemByType(type, item, opts = {}) {
+  const v = (x) => (x != null && x !== '' ? String(x) : '-');
+  const typeNames = { visual: '육안', air: '공기질', radon: '라돈', level: '레벨기', thermal: '열화상' };
+  const rows = [];
+  rows.push(`<tr><td class="ins-detail-label">위치</td><td>${escapeHTML(v(item.location))}</td></tr>`);
+  if (item.trade) rows.push(`<tr><td class="ins-detail-label">공종</td><td>${escapeHTML(v(item.trade))}</td></tr>`);
+  if (item.note) rows.push(`<tr><td class="ins-detail-label">메모</td><td>${escapeHTML(v(item.note))}</td></tr>`);
+  if (item.result_text || item.result) rows.push(`<tr><td class="ins-detail-label">결과</td><td>${escapeHTML(v(item.result_text || item.result))}</td></tr>`);
+  if (type === 'air') {
+    if (item.process_type) rows.push(`<tr><td class="ins-detail-label">유형</td><td>${escapeHTML(v(item.process_type))}</td></tr>`);
+    if (item.tvoc != null) rows.push(`<tr><td class="ins-detail-label">TVOC</td><td>${v(item.tvoc)}</td></tr>`);
+    if (item.hcho != null) rows.push(`<tr><td class="ins-detail-label">HCHO</td><td>${v(item.hcho)}</td></tr>`);
+  }
+  if (type === 'radon' && (item.radon != null || item.unit)) rows.push(`<tr><td class="ins-detail-label">라돈</td><td>${v(item.radon)} ${v(item.unit)}</td></tr>`);
+  if (type === 'level') {
+    if (item.reference_mm != null) rows.push(`<tr><td class="ins-detail-label">기준(mm)</td><td>${v(item.reference_mm)}</td></tr>`);
+    if (item.left_mm != null || item.right_mm != null) rows.push(`<tr><td class="ins-detail-label">좌/우</td><td>${v(item.left_mm)} / ${v(item.right_mm)} mm</td></tr>`);
+    if (item.point1_left_mm != null || item.point1_right_mm != null) {
+      const p1 = `1번 ${v(item.point1_left_mm)}/${v(item.point1_right_mm)}`;
+      const p2 = `2번 ${v(item.point2_left_mm)}/${v(item.point2_right_mm)}`;
+      const p3 = `3번 ${v(item.point3_left_mm)}/${v(item.point3_right_mm)}`;
+      const p4 = `4번 ${v(item.point4_left_mm)}/${v(item.point4_right_mm)}`;
+      rows.push(`<tr><td class="ins-detail-label">4점</td><td>${p1}, ${p2}, ${p3}, ${p4} mm</td></tr>`);
+    }
+  }
+  if (type === 'thermal' && item.photos && item.photos.length > 0) rows.push(`<tr><td class="ins-detail-label">사진</td><td>${item.photos.length}장</td></tr>`);
+  const editBtn = (opts.showEdit && item.id) ? `<button type="button" class="button ghost" style="margin-top:6px;font-size:12px;" onclick="openInspectionEditModal('${item.id}')">수정</button>` : '';
+  return `<div class="ins-detail-block" data-edit-id="${item.id || ''}" data-edit-type="${type}"><div class="ins-detail-type">${typeNames[type] || type}</div><table class="ins-detail-table">${rows.join('')}</table>${editBtn}</div>`;
+}
+
+async function showInspectionDetailModal(defectId) {
+  _detailModalDefectId = defectId;
+  const modal = $('#inspection-detail-modal');
+  const subtitleEl = $('#inspection-detail-modal-subtitle');
+  const bodyEl = $('#inspection-detail-modal-body');
+  if (!modal || !bodyEl) return;
+  setLoading(true);
+  try {
+    let defectTitle = '';
+    try {
+      const defect = await api.getDefect(defectId);
+      defectTitle = `${defect.location || ''} - ${defect.trade || ''}`.trim() || `하자 #${defectId}`;
+    } catch (_) { defectTitle = `하자 #${defectId}`; }
+    if (subtitleEl) subtitleEl.textContent = defectTitle;
+    const res = await api.getDefectInspections(defectId);
+    const inspections = res.inspections || {};
+    InspectorState._editItemsById = InspectorState._editItemsById || {};
+    const typeOrder = ['visual', 'air', 'radon', 'level', 'thermal'];
+    let html = '';
+    for (const type of typeOrder) {
+      const items = inspections[type];
+      if (!items || items.length === 0) continue;
+      items.forEach((item) => {
+        if (item.id) InspectorState._editItemsById[item.id] = { item, type };
+        html += formatInspectionItemByType(type, item, { showEdit: true });
+      });
+    }
+    if (!html) html = '<p style="color:#6b7280;">등록된 점검결과가 없습니다.</p>';
+    bodyEl.innerHTML = html;
+    modal.classList.remove('hidden');
+    modal.style.display = 'flex';
+  } catch (e) {
+    console.error('점검결과 상세 조회 오류:', e);
+    toast('점검결과를 불러오는데 실패했습니다', 'error');
+  } finally {
+    setLoading(false);
+  }
+}
+
+// 점검결과 입력 화면: 입력된 점검결과 목록 렌더 (세대별) — 수정 버튼용으로 itemById 저장
+function renderHouseholdInspectionsList() {
+  const ref = $('#defect-inspection-saved-ref');
+  const body = $('#defect-inspection-saved-body');
+  if (!ref || !body) return;
+  const insp = InspectorState.householdInspections || { visual: [], thermal: [], air: [], radon: [], level: [] };
+  InspectorState._editItemsById = InspectorState._editItemsById || {};
+  const typeOrder = ['visual', 'air', 'radon', 'level', 'thermal'];
+  let total = 0;
+  let html = '';
+  for (const type of typeOrder) {
+    const items = insp[type] || [];
+    total += items.length;
+    items.forEach((item) => {
+      if (item.id) InspectorState._editItemsById[item.id] = { item, type };
+      html += formatInspectionItemByType(type, item, { showEdit: true });
+    });
+  }
+  if (total > 0) {
+    ref.style.display = 'block';
+    body.innerHTML = html;
+  } else {
+    ref.style.display = 'none';
+    body.innerHTML = '';
+  }
+}
+
 // 세대(household)별 점검결과 입력 화면 열기 (하자 선택 없이, 타입별 N건 입력)
 async function openInspectionForHousehold(householdId) {
   if (!InspectorState.session) {
@@ -661,6 +899,8 @@ async function openInspectionForHousehold(householdId) {
       }
     }
 
+    renderHouseholdInspectionsList();
+
     const visualSummaryEl = $('#defect-visual-defect-summary');
     if (visualSummaryEl) {
       visualSummaryEl.innerHTML = InspectorState.allDefects.length > 0
@@ -688,6 +928,8 @@ async function openDefectInspection(defectId, caseId) {
     return;
   }
   InspectorState.inspectionByHousehold = false;
+  const savedRef = $('#defect-inspection-saved-ref');
+  if (savedRef) savedRef.style.display = 'none';
   setLoading(true);
   try {
     InspectorState.currentDefectId = defectId;
@@ -1156,6 +1398,7 @@ async function saveDefectInspection() {
       if (InspectorState.inspectionByHousehold && InspectorState.selectedHouseholdId) {
         const inspRes = await api.getInspectionsByHousehold(InspectorState.selectedHouseholdId);
         InspectorState.householdInspections = inspRes.inspections || { visual: [], thermal: [], air: [], radon: [], level: [] };
+        renderHouseholdInspectionsList();
         clearInspectionFormFieldsOnly();
       } else if (InspectorState.selectedHouseholdId) {
         await loadDefectsForHousehold(InspectorState.selectedHouseholdId);

@@ -574,6 +574,104 @@ router.get('/defects/:defectId', authenticateToken, async (req, res) => {
   }
 });
 
+// 점검 항목 수정 (공통: location, trade, note, result + 타입별 측정값)
+router.put('/:itemId', authenticateToken, requireInspectorAccess, async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    const body = req.body || {};
+    const { type, location, trade, note, result } = body;
+
+    const exist = (await pool.query('SELECT id, type FROM inspection_item WHERE id = $1', [itemId])).rows[0];
+    if (!exist) {
+      return res.status(404).json({ error: '점검 항목을 찾을 수 없습니다' });
+    }
+    const itemType = type || exist.type;
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const updates = [];
+      const vals = [];
+      let p = 1;
+      if (location !== undefined) { updates.push(`location = $${p++}`); vals.push(location); }
+      if (trade !== undefined) { updates.push(`trade = $${p++}`); vals.push(trade); }
+      if (note !== undefined) { updates.push(`note = $${p++}`); vals.push(note); }
+      if (result !== undefined) { updates.push(`result = $${p++}`); vals.push(result); }
+      if (updates.length) {
+        vals.push(itemId);
+        await client.query(`UPDATE inspection_item SET ${updates.join(', ')} WHERE id = $${p}`, vals);
+      }
+
+      if (itemType === 'air') {
+        const { process_type, tvoc, hcho, co2 } = body;
+        const upd = [];
+        const vals = [];
+        let p = 1;
+        if (process_type !== undefined) { upd.push(`process_type = $${p++}`); vals.push(['flush_out', 'bake_out'].includes(process_type) ? process_type : null); }
+        if (tvoc !== undefined) { upd.push(`tvoc = $${p++}`); vals.push(tvoc !== '' && tvoc != null ? parseFloat(tvoc) : null); }
+        if (hcho !== undefined) { upd.push(`hcho = $${p++}`); vals.push(hcho !== '' && hcho != null ? parseFloat(hcho) : null); }
+        if (co2 !== undefined) { upd.push(`co2 = $${p++}`); vals.push(co2 !== '' && co2 != null ? parseFloat(co2) : null); }
+        if (upd.length) {
+          vals.push(itemId);
+          await client.query(`UPDATE air_measure SET ${upd.join(', ')} WHERE item_id = $${p}`, vals);
+        }
+      } else if (itemType === 'radon') {
+        const { radon, unit_radon } = body;
+        const upd = [];
+        const vals = [];
+        let p = 1;
+        if (radon !== undefined) { upd.push(`radon = $${p++}`); vals.push(radon !== '' && radon != null ? parseFloat(radon) : null); }
+        if (unit_radon !== undefined) { upd.push(`unit_radon = $${p++}`); vals.push(unit_radon); }
+        if (upd.length) {
+          vals.push(itemId);
+          await client.query(`UPDATE radon_measure SET ${upd.join(', ')} WHERE item_id = $${p}`, vals);
+        }
+      } else if (itemType === 'level') {
+        const {
+          left_mm, right_mm,
+          point1_left_mm, point1_right_mm, point2_left_mm, point2_right_mm,
+          point3_left_mm, point3_right_mm, point4_left_mm, point4_right_mm,
+          reference_mm
+        } = body;
+        const parseOpt = (v) => (v != null && v !== '' ? parseFloat(v) : null);
+        const p1l = parseOpt(point1_left_mm); const p1r = parseOpt(point1_right_mm);
+        const p2l = parseOpt(point2_left_mm); const p2r = parseOpt(point2_right_mm);
+        const p3l = parseOpt(point3_left_mm); const p3r = parseOpt(point3_right_mm);
+        const p4l = parseOpt(point4_left_mm); const p4r = parseOpt(point4_right_mm);
+        const refMm = reference_mm != null && reference_mm !== '' ? parseFloat(reference_mm) : 150;
+        const leftVal = left_mm != null && left_mm !== '' ? parseFloat(left_mm) : (p1l ?? null);
+        const rightVal = right_mm != null && right_mm !== '' ? parseFloat(right_mm) : (p1r ?? null);
+        await client.query(
+          `UPDATE level_measure SET
+            left_mm = COALESCE($2, left_mm), right_mm = COALESCE($3, right_mm),
+            point1_left_mm = COALESCE($4, point1_left_mm), point1_right_mm = COALESCE($5, point1_right_mm),
+            point2_left_mm = COALESCE($6, point2_left_mm), point2_right_mm = COALESCE($7, point2_right_mm),
+            point3_left_mm = COALESCE($8, point3_left_mm), point3_right_mm = COALESCE($9, point3_right_mm),
+            point4_left_mm = COALESCE($10, point4_left_mm), point4_right_mm = COALESCE($11, point4_right_mm),
+            reference_mm = COALESCE($12, reference_mm)
+           WHERE item_id = $1`,
+          [itemId, leftVal, rightVal, p1l, p1r, p2l, p2r, p3l, p3r, p4l, p4r, refMm]
+        );
+      }
+
+      await client.query('COMMIT');
+      const updated = (await pool.query(
+        'SELECT ii.*, am.process_type, am.tvoc, am.hcho, rm.radon, rm.unit_radon, lm.left_mm, lm.right_mm, lm.point1_left_mm, lm.point1_right_mm, lm.point2_left_mm, lm.point2_right_mm, lm.point3_left_mm, lm.point3_right_mm, lm.point4_left_mm, lm.point4_right_mm, lm.reference_mm FROM inspection_item ii LEFT JOIN air_measure am ON ii.id = am.item_id LEFT JOIN radon_measure rm ON ii.id = rm.item_id LEFT JOIN level_measure lm ON ii.id = lm.item_id WHERE ii.id = $1',
+        [itemId]
+      )).rows[0];
+      res.json({ success: true, item: updated, message: '점검 항목이 수정되었습니다' });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('점검 항목 수정 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다' });
+  }
+});
+
 // 점검 항목 삭제
 router.delete('/:itemId', authenticateToken, async (req, res) => {
   try {

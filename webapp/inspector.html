@@ -106,6 +106,11 @@
       padding-top: 8px;
     }
     .report-secondary-buttons .button { min-width: 120px; }
+    .ins-detail-block { margin-bottom: 16px; padding: 10px; background: #f9fafb; border-radius: 8px; }
+    .ins-detail-type { font-weight: 600; color: #1e88e8; margin-bottom: 6px; font-size: 13px; }
+    .ins-detail-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .ins-detail-table td { padding: 4px 8px 4px 0; vertical-align: top; }
+    .ins-detail-label { color: #6b7280; width: 80px; }
   </style>
 </head>
 <body>
@@ -129,7 +134,7 @@
       </div>
     </div>
 
-    <!-- DEFECT LIST (선택한 사용자의 하자목록) -->
+    <!-- DEFECT LIST (선택한 사용자의 하자목록 · 조회 전용) -->
     <div id="defect-list" class="screen hidden">
       <div class="screen-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
         <div style="display: flex; align-items: center; gap: 8px;">
@@ -138,9 +143,10 @@
         </div>
         <button class="button ghost" onclick="onLogout()" style="width: auto; padding: 8px 12px;">로그아웃</button>
       </div>
+      <p style="color: #6b7280; font-size: 13px; margin-bottom: 12px;">세대주가 등록한 하자입니다. 조회만 가능하며, 점검결과는 아래 버튼으로 <strong>세대별</strong>로 입력합니다.</p>
       
       <div class="inspector-action-buttons">
-        <button class="button success" onclick="openInspectionForHousehold(InspectorState.selectedHouseholdId)">📊 점검결과 입력</button>
+        <button class="button success" onclick="openInspectionForHousehold(InspectorState.selectedHouseholdId)">📊 점검결과 입력 (세대별)</button>
         <button class="button ghost" onclick="onPreviewReport()">📄 보고서 미리보기</button>
       </div>
       
@@ -178,16 +184,25 @@
         <div></div>
       </div>
       <div class="card">
-        <!-- 세대 정보 (점검결과는 세대별 입력) -->
+        <!-- 세대 정보 (점검결과는 세대별로 저장됨) -->
         <div id="defect-inspection-info" class="defect-info" style="padding: 16px; background: #f5f5f5; border-radius: 8px; margin-bottom: 16px;">
           <div class="label">세대 정보</div>
           <div id="defect-inspection-details"></div>
+          <div style="font-size: 12px; color: #6b7280; margin-top: 8px;">점검결과는 이 세대 단위로 저장됩니다. 하자와 1:1로 묶이지 않습니다.</div>
         </div>
-        <!-- 세대주 등록 하자 (참고용) -->
+        <!-- 세대주 등록 하자 (참고용, 조회만) -->
         <div id="defect-inspection-defects-ref" style="margin-bottom: 16px; display: none;">
           <details style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px;">
-            <summary style="cursor: pointer; font-weight: 600;">세대주 등록 하자 (참고용)</summary>
+            <summary style="cursor: pointer; font-weight: 600;">세대주가 등록한 하자 (참고용, 조회만)</summary>
             <div id="defect-inspection-defects-list" style="margin-top: 12px;"></div>
+          </details>
+        </div>
+
+        <!-- 입력된 점검결과 보기 (세대별 저장된 점검 항목) -->
+        <div id="defect-inspection-saved-ref" style="margin-bottom: 16px; display: none;">
+          <details style="border: 1px solid #10b981; border-radius: 8px; padding: 12px; background: #f0fdf4;">
+            <summary style="cursor: pointer; font-weight: 600; color: #059669;">입력된 점검결과 보기</summary>
+            <div id="defect-inspection-saved-body" style="margin-top: 12px;"></div>
           </details>
         </div>
 
@@ -447,6 +462,33 @@
       <button type="button" class="button ghost" onclick="closeDefectSelectModal()" style="padding:4px 8px;">✕</button>
     </div>
     <div id="defect-select-modal-list"></div>
+  </div>
+</div>
+
+<!-- 점검결과 상세 보기 모달 -->
+<div id="inspection-detail-modal" class="modal-overlay hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1001;display:none;align-items:center;justify-content:center;padding:16px;" onclick="if(event.target===this) closeInspectionDetailModal()">
+  <div class="card" style="max-width:520px;width:100%;max-height:85vh;overflow:auto;" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <h3 style="margin:0;">점검결과 상세</h3>
+      <button type="button" class="button ghost" onclick="closeInspectionDetailModal()" style="padding:4px 8px;">✕</button>
+    </div>
+    <div id="inspection-detail-modal-subtitle" style="color:#6b7280;font-size:13px;margin-bottom:12px;"></div>
+    <div id="inspection-detail-modal-body" style="font-size:14px;"></div>
+  </div>
+</div>
+
+<!-- 점검결과 수정 모달 -->
+<div id="inspection-edit-modal" class="modal-overlay hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1002;display:none;align-items:center;justify-content:center;padding:16px;" onclick="if(event.target===this) closeInspectionEditModal()">
+  <div class="card" style="max-width:480px;width:100%;max-height:90vh;overflow:auto;" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <h3 style="margin:0;">점검결과 수정</h3>
+      <button type="button" class="button ghost" onclick="closeInspectionEditModal()" style="padding:4px 8px;">✕</button>
+    </div>
+    <div id="inspection-edit-modal-body"></div>
+    <div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end;">
+      <button type="button" class="button ghost" onclick="closeInspectionEditModal()">취소</button>
+      <button type="button" class="button success" id="inspection-edit-save-btn" onclick="saveInspectionEdit()">저장</button>
+    </div>
   </div>
 </div>
 
