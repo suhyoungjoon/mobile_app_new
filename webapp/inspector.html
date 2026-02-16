@@ -78,6 +78,34 @@
       border-color: #10b981;
       background: linear-gradient(to bottom, #ecfdf5 0%, white 12px);
     }
+    .inspector-action-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .inspector-action-buttons .button.success { order: -1; }
+    .report-download-actions { margin-top: 12px; }
+    .report-primary-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .report-primary-buttons .button { flex: 1; min-width: 140px; }
+    .report-other-downloads summary {
+      cursor: pointer;
+      font-size: 14px;
+      color: #6b7280;
+      padding: 8px 0;
+    }
+    .report-secondary-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding-top: 8px;
+    }
+    .report-secondary-buttons .button { min-width: 120px; }
   </style>
 </head>
 <body>
@@ -111,9 +139,9 @@
         <button class="button ghost" onclick="onLogout()" style="width: auto; padding: 8px 12px;">로그아웃</button>
       </div>
       
-      <div style="margin-bottom: 16px; display: flex; flex-direction: column; gap: 10px;">
-        <button class="button success" onclick="onPreviewReport()" style="width: 100%;">📄 보고서 미리보기</button>
-        <button class="button success" onclick="openInspectionForHousehold(InspectorState.selectedHouseholdId)" style="width: 100%;">📊 점검결과 입력</button>
+      <div class="inspector-action-buttons">
+        <button class="button success" onclick="openInspectionForHousehold(InspectorState.selectedHouseholdId)">📊 점검결과 입력</button>
+        <button class="button ghost" onclick="onPreviewReport()">📄 보고서 미리보기</button>
       </div>
       
       <div id="defect-list-container">
@@ -129,12 +157,19 @@
         <div></div>
       </div>
       <div id="report-preview"></div>
-      <div class="button-group" style="margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap;">
-        <button class="button" onclick="previewReportAsPdf()">PDF 미리보기</button>
-        <button class="button" onclick="downloadReportAsPdf()">PDF 다운로드</button>
-        <button class="button success" onclick="downloadFinalReportAsPdf()">최종보고서 다운로드</button>
-        <button class="button" onclick="downloadSummaryReportAsPdf()">수기보고서 다운로드</button>
-        <button class="button" onclick="downloadInspectionFormAsPdf()">점검결과 양식 다운로드</button>
+      <div class="report-download-actions">
+        <div class="report-primary-buttons">
+          <button class="button success" onclick="downloadFinalReportAsPdf()">최종보고서 다운로드</button>
+          <button class="button" onclick="previewReportAsPdf()">PDF 미리보기</button>
+        </div>
+        <details class="report-other-downloads">
+          <summary>기타 보고서</summary>
+          <div class="report-secondary-buttons">
+            <button class="button ghost" onclick="downloadReportAsPdf()">PDF 다운로드</button>
+            <button class="button ghost" onclick="downloadSummaryReportAsPdf()">수기보고서</button>
+            <button class="button ghost" onclick="downloadInspectionFormAsPdf()">점검결과 양식</button>
+          </div>
+        </details>
       </div>
     </div>
 

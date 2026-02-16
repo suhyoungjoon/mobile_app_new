@@ -17,6 +17,7 @@
     "migrate:pdf-form": "node scripts/run-pdf-form-migration.js",
     "trim-households": "node scripts/trim-households-to-five.js",
     "create-inspector": "node scripts/create-inspector-household.js",
+    "seed-inspections-final-report": "node scripts/seed-inspections-and-final-report.js",
     "docker:build": "docker build -t insighti-backend .",
     "docker:run": "docker run -p 3000:3000 insighti-backend"
   },

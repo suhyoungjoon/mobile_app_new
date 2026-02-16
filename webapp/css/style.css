@@ -236,7 +236,7 @@ html, body {
 
 .button-group {
   display: flex;
-  gap: 12px;
+  gap: 10px;
 }
 
 .button-group .button {
@@ -1283,4 +1283,67 @@ html, body {
   .info-box {
     padding: 12px;
   }
+}
+
+/* 목록 상단 요약 (하자 총 N건) */
+.list-summary {
+  padding: 10px 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.list-summary.hidden {
+  display: none;
+}
+
+/* 내 정보 모달 */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.modal-overlay.hidden {
+  display: none;
+}
+.modal-card {
+  max-width: 400px;
+  width: 100%;
+  max-height: 85vh;
+  overflow: auto;
+}
+.modal-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.modal-card-header h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+/* 설정 고급 영역 (details/summary) */
+.settings-section-summary {
+  cursor: pointer;
+  padding: 12px 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  list-style: none;
+}
+.settings-section-summary::-webkit-details-marker {
+  display: none;
+}
+.settings-section-summary::before {
+  content: '▶ ';
+  font-size: 10px;
+  color: var(--muted);
+}
+details[open] .settings-section-summary::before {
+  content: '▼ ';
 }

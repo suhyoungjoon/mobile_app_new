@@ -13,7 +13,28 @@
 const PAGE_WIDTH = 595;
 const PAGE_HEIGHT = 842;
 
-// 육안점검: 빨간 박스 1개 = 위치·공종·점검의견·결과 한 행
+// 육안점검: 블록형 (위치 행 + 근거리/원거리 빈 사진 + 공종/하자내용 + 특이사항)
+const VISUAL_BLOCK = {
+  title: '육안점검',
+  origin: { x: 50, y: 700 },
+  contentWidth: 495,
+  rowHeight: 22,
+  photoHeight: 90,
+  labelWidth: 70,
+  // 위치 행: 라벨 70, 값 나머지
+  // 사진 행: 좌(근거리) 247.5, 우(원거리) 247.5
+  // 공종/하자 행: 4칸 각 123.75 (라벨|값|라벨|값)
+  cellDetailWidth: 123.75,
+  blockGap: 14,
+  borderWidth: 0.8,
+  colors: {
+    labelBorder: { r: 0.2, g: 0.4, b: 0.9 },   // 파란
+    valueBorder: { r: 0.2, g: 0.6, b: 0.4 },   // 초록
+    photoBorder: { r: 0.95, g: 0.6, b: 0.2 }  // 주황
+  }
+};
+
+// (기존 리스트형은 열화상 등에서만 사용, 육안은 VISUAL_BLOCK 사용)
 const VISUAL_TABLE = {
   title: '육안점검',
   headerLabels: ['위치', '공종', '점검의견(하자·특이사항)', '결과'],
@@ -29,7 +50,24 @@ const VISUAL_TABLE = {
   maxRowsPerPage: 22
 };
 
-// 열화상점검
+// 열화상점검: 블록형 (위치 + 일반/열화상 빈 사진 + 공종/점검내용)
+const THERMAL_BLOCK = {
+  title: '열화상점검',
+  origin: { x: 50, y: 700 },
+  contentWidth: 495,
+  rowHeight: 22,
+  photoHeight: 90,
+  labelWidth: 70,
+  cellDetailWidth: 123.75,
+  blockGap: 14,
+  borderWidth: 0.8,
+  colors: {
+    labelBorder: { r: 0.2, g: 0.4, b: 0.9 },
+    valueBorder: { r: 0.2, g: 0.6, b: 0.4 },
+    photoBorder: { r: 0.95, g: 0.6, b: 0.2 }
+  }
+};
+
 const THERMAL_TABLE = {
   title: '열화상점검',
   headerLabels: ['위치', '공종', '점검의견(하자·특이사항)', '결과'],
@@ -45,7 +83,28 @@ const THERMAL_TABLE = {
   maxRowsPerPage: 22
 };
 
-// 공기질점검
+// 공기질점검: 블록형 (좌: 위치/결과/유형/메모, 중: 항목설명, 우: 측정값 테이블, 맨우: 라돈 사진 빈칸)
+const AIR_BLOCK = {
+  title: '공기질점검',
+  origin: { x: 50, y: 680 },
+  blockWidth: 495,
+  blockHeight: 120,
+  metaLabelWidth: 50,
+  metaValueWidth: 100,
+  metaRowHeight: 20,
+  paramsWidth: 180,
+  valuesWidth: 100,
+  photoWidth: 120,
+  photoHeight: 100,
+  blockGap: 12,
+  borderWidth: 0.8,
+  colors: {
+    labelBorder: { r: 0.2, g: 0.4, b: 0.9 },
+    valueBorder: { r: 0.2, g: 0.6, b: 0.4 },
+    photoBorder: { r: 0.95, g: 0.6, b: 0.2 }
+  }
+};
+
 const AIR_TABLE = {
   title: '공기질점검',
   headerLabels: ['위치', '결과', '유형', '메모', 'TVOC', 'HCHO', '라돈'],
@@ -64,7 +123,28 @@ const AIR_TABLE = {
   maxRowsPerPage: 22
 };
 
-// 레벨기점검
+// 레벨기점검: 블록형 (상단 문구 + 4점 측정 + 중앙 다이어그램 + 우측 메타 + 하단 점검사진)
+const LEVEL_BLOCK = {
+  title: '레벨기점검',
+  origin: { x: 50, y: 660 },
+  topNote: '4개의 point에서 ±10mm 오차는 정상 시공입니다.',
+  rowHeight: 20,
+  labelWidth: 70,
+  pointLabelWidth: 60,
+  pointValueWidth: 50,
+  diagramWidth: 200,
+  diagramHeight: 140,
+  metaWidth: 140,
+  photoHeight: 80,
+  blockGap: 14,
+  borderWidth: 0.8,
+  colors: {
+    labelBorder: { r: 0.2, g: 0.4, b: 0.9 },
+    valueBorder: { r: 0.2, g: 0.6, b: 0.4 },
+    photoBorder: { r: 0.95, g: 0.6, b: 0.2 }
+  }
+};
+
 const LEVEL_TABLE = {
   title: '레벨기점검',
   headerLabels: ['위치', '결과', '기준(mm)', '메모', '4점 좌우값'],
@@ -83,9 +163,13 @@ const LEVEL_TABLE = {
 
 module.exports = {
   VISUAL_TABLE,
+  VISUAL_BLOCK,
   THERMAL_TABLE,
+  THERMAL_BLOCK,
   AIR_TABLE,
+  AIR_BLOCK,
   LEVEL_TABLE,
+  LEVEL_BLOCK,
   PAGE_WIDTH,
   PAGE_HEIGHT
 };

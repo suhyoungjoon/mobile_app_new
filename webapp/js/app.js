@@ -185,42 +185,39 @@ function onLogout() {
   }
 }
 
-// 내 정보 보기
+// 내 정보 보기 (모달)
 function showMyInfo() {
   closeUserMenu();
-  
   if (!AppState.session) {
     toast('로그인이 필요합니다', 'error');
     return;
   }
-  
-  const info = `
-단지: ${AppState.session.complex}
-동: ${AppState.session.dong}
-호: ${AppState.session.ho}
-이름: ${AppState.session.name}
-전화번호: ${AppState.session.phone}
-  `.trim();
-  
-  alert(info);
+  const s = AppState.session;
+  const content = $('#my-info-content');
+  const modal = $('#my-info-modal');
+  if (content && modal) {
+    content.innerHTML = `
+      <div class="info-row"><span class="info-label">단지</span><span class="info-value">${escapeHTML(s.complex)}</span></div>
+      <div class="info-row"><span class="info-label">동·호</span><span class="info-value">${s.dong}동 ${s.ho}호</span></div>
+      <div class="info-row"><span class="info-label">성명</span><span class="info-value">${escapeHTML(s.name)}</span></div>
+      <div class="info-row"><span class="info-label">전화번호</span><span class="info-value">${escapeHTML(s.phone)}</span></div>
+    `;
+    modal.classList.remove('hidden');
+  }
 }
 
-// 내 하자 현황
+function closeMyInfoModal() {
+  const modal = $('#my-info-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
+// 내 하자 현황 → 목록으로 이동 (목록 상단에 요약 표시)
 async function showMyStats() {
   closeUserMenu();
-  
   if (!checkAuth()) return;
-  
   try {
-    const cases = await api.getCases();
-    const totalDefects = cases.reduce((sum, c) => sum + (c.defect_count || 0), 0);
-    
-    const stats = `
-총 케이스: ${cases.length}건
-총 하자: ${totalDefects}건
-    `.trim();
-    
-    alert(stats);
+    await loadCases();
+    route('list');
   } catch (error) {
     handleAPIError(error, '');
   }
@@ -304,10 +301,21 @@ async function onShowList() {
 // 세대주용: 케이스 없이 "하자 목록"만 표시 (케이스는 백엔드에서 유지)
 function renderDefectList() {
   const wrap = $('#case-list');
+  const summaryEl = $('#list-summary');
   if (!wrap) return;
   wrap.innerHTML = '';
 
   const defects = (AppState.cases || []).flatMap(c => (c.defects || []).map(d => ({ ...d, case_id: c.id })));
+
+  if (summaryEl) {
+    if (defects.length > 0) {
+      summaryEl.textContent = '하자 총 ' + defects.length + '건';
+      summaryEl.classList.remove('hidden');
+    } else {
+      summaryEl.textContent = '';
+      summaryEl.classList.add('hidden');
+    }
+  }
 
   if (defects.length === 0) {
     wrap.innerHTML = `
@@ -334,7 +342,7 @@ function renderDefectList() {
       </div>
       <div class="hr"></div>
       <div class="button-group">
-        <button class="button small" onclick="editDefect('${String(defect.id).replace(/'/g, "\\'")}')">✏️ 수정</button>
+        <button class="button small success" onclick="editDefect('${String(defect.id).replace(/'/g, "\\'")}')">✏️ 수정</button>
         <button class="button small danger" onclick="deleteDefect('${String(defect.id).replace(/'/g, "\\'")}')">🗑️ 삭제</button>
       </div>
     `;
@@ -421,7 +429,7 @@ async function viewCaseDefects(caseId) {
     const container = $('#defect-list-container');
     const titleEl = $('#case-detail-title');
     
-    if (titleEl) titleEl.textContent = `케이스 ${caseId} 상세`;
+    if (titleEl) titleEl.textContent = defects && defects.length > 0 ? `하자 목록 (${defects.length}건)` : '하자 목록';
     
     if (!defects || defects.length === 0) {
       container.innerHTML = `

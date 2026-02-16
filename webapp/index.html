@@ -64,12 +64,13 @@
           </div>
         </div>
         <div class="hr"></div>
-        <button class="button" onclick="onLogin()">로그인(3일 사용권)</button>
+        <button class="button" onclick="onLogin()">로그인</button>
       </div>
     </div>
 
     <!-- LIST -->
     <div id="list" class="screen hidden">
+      <div id="list-summary" class="list-summary hidden"></div>
       <div id="case-list"></div>
     </div>
 
@@ -114,11 +115,9 @@
         </div>
       </div>
       
-      <div class="card" style="margin-top: 16px;" id="ai-model-settings">
+      <details class="card" style="margin-top: 16px;" id="ai-model-settings">
+        <summary class="settings-section-summary">🎯 AI 모델 설정 (고급)</summary>
         <div class="settings-section">
-          <div class="settings-header">
-            <h3>🎯 AI 모델 설정</h3>
-          </div>
           
           <div class="label">로컬 AI 모델</div>
           <select id="local-model-select" class="input" onchange="switchLocalModel(this.value)">
@@ -159,12 +158,13 @@
             높을수록 클라우드 호출 증가 (정확도 ↑, 비용 ↑)
           </div>
         </div>
-      </div>
+      </details>
       
-      <div class="card" style="margin-top: 16px;" id="ai-stats-card">
+      <details class="card" style="margin-top: 16px;" id="ai-stats-card">
+        <summary class="settings-section-summary">📊 AI 사용 통계 (고급)</summary>
         <div class="settings-section">
           <div class="settings-header" style="display: flex; justify-content: space-between; align-items: center;">
-            <h3>📊 AI 사용 통계</h3>
+            <h3 style="margin: 0;">통계</h3>
             <button class="button small" onclick="refreshAIStats()" style="padding: 6px 12px; font-size: 12px;">새로고침</button>
           </div>
           
@@ -193,7 +193,7 @@
           
           <button class="button ghost" onclick="resetAIStats()" style="margin-top: 12px; font-size: 13px;">통계 초기화</button>
         </div>
-      </div>
+      </details>
       
       <div class="card" style="margin-top: 16px;">
         <div class="settings-section">
@@ -217,7 +217,6 @@
           <div id="notification-status" class="settings-status">
             <span class="status-indicator offline"></span>
             <span class="status-text">비활성화됨</span>
-            <button class="btn btn-small" onclick="sendTestNotification()">테스트</button>
           </div>
           
           <div class="settings-note">
@@ -335,24 +334,24 @@
 
         <div class="hr"></div>
         <div class="button-group">
-          <button class="button" onclick="retakePhotos()">재촬영</button>
+          <button class="button ghost" onclick="retakePhotos()">재촬영</button>
           <button class="button success" onclick="onSaveDefect()">저장</button>
         </div>
       </div>
     </div>
 
 
-    <!-- CASE DETAIL (하자 목록) -->
+    <!-- CASE DETAIL (하자 목록 - 수정 등에서 진입 시) -->
     <div id="case-detail" class="screen hidden">
       <div class="screen-header">
         <button class="back-btn" onclick="goBack()">← 뒤로</button>
-        <h2 id="case-detail-title">케이스 상세</h2>
+        <h2 id="case-detail-title">하자 목록</h2>
         <div></div>
       </div>
       <div id="defect-list-container">
         <!-- 하자 목록이 여기에 표시됩니다 -->
       </div>
-      <button class="button" onclick="route('newdefect')" style="margin-top: 10px;">+ 하자 추가</button>
+      <button class="button success" onclick="goToNewDefect()" style="margin-top: 10px;">+ 하자 추가</button>
     </div>
 
     <!-- DEFECT EDIT -->
@@ -394,7 +393,7 @@
 
         <div class="hr"></div>
         <div class="button-group">
-          <button class="button" onclick="cancelEdit()">취소</button>
+          <button class="button ghost" onclick="cancelEdit()">취소</button>
           <button class="button success" onclick="saveDefectEdit()">저장</button>
         </div>
       </div>
@@ -583,7 +582,7 @@
 
         <!-- 저장 버튼 -->
         <div class="button-group">
-          <button class="button" onclick="resetEquipmentForm()">재설정</button>
+          <button class="button ghost" onclick="resetEquipmentForm()">재설정</button>
           <button class="button success" onclick="saveEquipmentInspection()">저장</button>
         </div>
       </div>
@@ -734,7 +733,7 @@
 
         <!-- 저장 버튼 -->
         <div class="button-group" style="margin-top: 20px;">
-          <button class="button" onclick="resetDefectInspectionForm()">재설정</button>
+          <button class="button ghost" onclick="resetDefectInspectionForm()">재설정</button>
           <button class="button success" onclick="saveDefectInspection()">저장</button>
         </div>
       </div>
@@ -808,7 +807,7 @@
           </div>
           
           <div class="button-group">
-            <button type="button" class="button" onclick="resetInspectorForm()">재설정</button>
+            <button type="button" class="button ghost" onclick="resetInspectorForm()">재설정</button>
             <button type="submit" class="button success">등록 신청</button>
           </div>
         </form>
@@ -841,6 +840,17 @@
   </div>
 
   <div class="toast"></div>
+
+  <!-- 내 정보 모달 -->
+  <div id="my-info-modal" class="modal-overlay hidden" onclick="if(event.target===this) closeMyInfoModal()">
+    <div class="card modal-card" onclick="event.stopPropagation()">
+      <div class="modal-card-header">
+        <h3>내 정보</h3>
+        <button type="button" class="button ghost small" onclick="closeMyInfoModal()" aria-label="닫기">✕</button>
+      </div>
+      <div id="my-info-content" class="settings-info"></div>
+    </div>
+  </div>
 </div>
 
 <!-- TensorFlow.js & Teachable Machine CDN -->
