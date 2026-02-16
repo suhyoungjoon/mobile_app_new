@@ -12,7 +12,7 @@ const InspectorState = {
   selectedHouseholdId: null,
   selectedHouseholdDisplay: null, // { complex_name, dong, ho, resident_name }
   userListCache: [], // loadUserList 결과 캐시 (selectUser에서 표시 정보 사용)
-  measurementPhotos: {}, // 측정 타입별 사진 정보 {air: {file: File, url: string}, radon: {...}, level: {...}}
+  measurementPhotos: {}, // 측정 타입별 사진 최대 2장 {air: [{url, file, key}, ...], visual: [...], ...}
   inspectionByHousehold: false, // true면 세대별 점검(하자 무관), defectId 미사용
   householdInspections: null // getInspectionsByHousehold 결과 { visual: [], thermal: [], air: [], radon: [], level: [] }
 };
@@ -770,7 +770,7 @@ function formatInspectionItemByType(type, item, opts = {}) {
       rows.push(`<tr><td class="ins-detail-label">4점</td><td>${p1}, ${p2}, ${p3}, ${p4} mm</td></tr>`);
     }
   }
-  if (type === 'thermal' && item.photos && item.photos.length > 0) rows.push(`<tr><td class="ins-detail-label">사진</td><td>${item.photos.length}장</td></tr>`);
+  if (item.photos && item.photos.length > 0) rows.push(`<tr><td class="ins-detail-label">사진</td><td>${item.photos.length}장</td></tr>`);
   const editBtn = (opts.showEdit && item.id) ? `<button type="button" class="button ghost" style="margin-top:6px;font-size:12px;" onclick="openInspectionEditModal('${item.id}')">수정</button>` : '';
   return `<div class="ins-detail-block" data-edit-id="${item.id || ''}" data-edit-type="${type}"><div class="ins-detail-type">${typeNames[type] || type}</div><table class="ins-detail-table">${rows.join('')}</table>${editBtn}</div>`;
 }
@@ -1073,51 +1073,40 @@ async function compressImage(file, maxWidth = 1920, maxHeight = 1080, quality = 
   });
 }
 
-// 측정값 사진 업로드 처리
-async function handleMeasurementPhotoUpload(type, inputElement) {
+// 측정값 사진 업로드 처리 (slotIndex: 0 또는 1, 최대 2장)
+async function handleMeasurementPhotoUpload(type, inputElement, slotIndex) {
   const file = inputElement.files[0];
-  if (!file) {
-    return;
-  }
-  
-  // 이미지 파일 검증
+  if (!file) return;
+  if (slotIndex !== 0 && slotIndex !== 1) slotIndex = 0;
+
   if (!file.type.startsWith('image/')) {
     toast('이미지 파일만 업로드 가능합니다', 'error');
     return;
   }
-  
-  // 파일 크기 검증 (10MB)
   if (file.size > 10 * 1024 * 1024) {
     toast('파일 크기는 10MB 이하여야 합니다', 'error');
     return;
   }
-  
+
   try {
     toast('사진 처리 중...', 'info');
-    
-    // 파일 미리보기
     const reader = new FileReader();
     reader.onload = async (e) => {
-      const previewElement = $(`#defect-${type}-photo-preview`);
+      const previewId = `defect-${type}-photo-preview-${slotIndex + 1}`;
+      const previewElement = $(`#${previewId}`);
       if (previewElement) {
         previewElement.style.backgroundImage = `url(${e.target.result})`;
         previewElement.style.display = 'block';
       }
-      
       try {
-        // 이미지 압축
         const compressedFile = await compressImage(file, 1920, 1080, 0.85);
-        
-        // 서버에 압축된 사진 업로드
         const uploadResult = await api.uploadImage(compressedFile);
-        
-        // InspectorState에 사진 정보 저장
-        InspectorState.measurementPhotos[type] = {
-          file: compressedFile,
-          url: uploadResult.url || `/uploads/${uploadResult.key || uploadResult.filename}`,
-          key: uploadResult.key || uploadResult.filename
-        };
-        
+        const url = uploadResult.url || `/uploads/${uploadResult.key || uploadResult.filename}`;
+        const key = uploadResult.key || uploadResult.filename;
+        if (!Array.isArray(InspectorState.measurementPhotos[type])) {
+          InspectorState.measurementPhotos[type] = [];
+        }
+        InspectorState.measurementPhotos[type][slotIndex] = { file: compressedFile, url, key };
         toast('사진 업로드 완료!', 'success');
       } catch (error) {
         console.error('사진 업로드 실패:', error);
@@ -1128,7 +1117,6 @@ async function handleMeasurementPhotoUpload(type, inputElement) {
         }
       }
     };
-    
     reader.readAsDataURL(file);
   } catch (error) {
     console.error('사진 처리 실패:', error);
@@ -1142,11 +1130,14 @@ function clearInspectionFormFieldsOnly() {
     if (input.type === 'checkbox') input.checked = false;
     else input.value = input.id && input.id.includes('reference') ? '150' : '';
   });
-  ['air', 'radon', 'level', 'thermal'].forEach((type) => {
-    const preview = $(`#defect-${type}-photo-preview`);
-    const input = $(`#defect-${type}-photo`);
-    if (preview) { preview.style.backgroundImage = ''; preview.style.display = 'none'; }
-    if (input) input.value = '';
+  const photoTypes = ['visual', 'air', 'radon', 'level', 'thermal'];
+  photoTypes.forEach((type) => {
+    [1, 2].forEach((i) => {
+      const preview = $(`#defect-${type}-photo-preview-${i}`);
+      const input = $(`#defect-${type}-photo-${i}`);
+      if (preview) { preview.style.backgroundImage = ''; preview.style.display = 'none'; }
+      if (input) input.value = '';
+    });
   });
   InspectorState.measurementPhotos = {};
 }
@@ -1162,20 +1153,18 @@ function resetDefectInspectionForm() {
       }
     });
     
-    // 사진 미리보기 초기화
-    ['air', 'radon', 'level', 'thermal'].forEach(type => {
-      const previewElement = $(`#defect-${type}-photo-preview`);
-      const inputElement = $(`#defect-${type}-photo`);
-      if (previewElement) {
-        previewElement.style.backgroundImage = '';
-        previewElement.style.display = 'none';
-      }
-      if (inputElement) {
-        inputElement.value = '';
-      }
+    const photoTypes = ['visual', 'air', 'radon', 'level', 'thermal'];
+    photoTypes.forEach(type => {
+      [1, 2].forEach((i) => {
+        const previewElement = $(`#defect-${type}-photo-preview-${i}`);
+        const inputElement = $(`#defect-${type}-photo-${i}`);
+        if (previewElement) {
+          previewElement.style.backgroundImage = '';
+          previewElement.style.display = 'none';
+        }
+        if (inputElement) inputElement.value = '';
+      });
     });
-    
-    // InspectorState 사진 정보 초기화
     InspectorState.measurementPhotos = {};
     
     const refInput = $('#defect-level-reference');
@@ -1370,27 +1359,27 @@ async function saveDefectInspection() {
     }
     
     if (response && response.success) {
-      // 측정값 저장 성공 후 사진 업로드 (사진이 있는 경우, 육안은 사진 없음)
-      const measurementType = tabType === '공기질' ? 'air' : 
-                             tabType === '라돈' ? 'radon' : 
-                             tabType === '레벨기' ? 'level' : 
+      const measurementType = tabType === '육안' ? 'visual' :
+                             tabType === '공기질' ? 'air' :
+                             tabType === '라돈' ? 'radon' :
+                             tabType === '레벨기' ? 'level' :
                              tabType === '열화상' ? 'thermal' : null;
-      const photoData = measurementType ? InspectorState.measurementPhotos[measurementType] : null;
-      
-      if (photoData && response.item && response.item.id) {
-        try {
-          // 사진 업로드 API 호출 (thermal_photo 테이블 사용)
-          await api.uploadThermalPhoto(response.item.id, photoData.url, `측정값 사진`);
-          console.log('✅ 측정값 사진 업로드 완료');
-        } catch (photoError) {
-          console.error('⚠️ 측정값 사진 업로드 실패:', photoError);
-          // 사진 업로드 실패는 무시하고 계속 진행
+      const photos = measurementType && Array.isArray(InspectorState.measurementPhotos[measurementType])
+        ? InspectorState.measurementPhotos[measurementType].filter(Boolean)
+        : [];
+      if (photos.length > 0 && response.item && response.item.id) {
+        const itemId = response.item.id;
+        for (let i = 0; i < photos.length && i < 2; i++) {
+          try {
+            await api.addInspectionPhoto(itemId, photos[i].url, `사진 ${i + 1}`, i);
+            console.log(`✅ 점검 사진 ${i + 1} 저장 완료`);
+          } catch (photoError) {
+            console.error('⚠️ 점검 사진 저장 실패:', photoError);
+          }
         }
       }
-      
-      // 사진 정보 초기화
       if (measurementType) {
-        InspectorState.measurementPhotos[measurementType] = null;
+        InspectorState.measurementPhotos[measurementType] = [];
       }
       
       toast('점검결과가 저장되었습니다', 'success');
@@ -1606,6 +1595,69 @@ async function downloadFinalReportAsPdf() {
   } catch (error) {
     console.error('최종보고서 다운로드 오류:', error);
     toast(error.message || '최종보고서 다운로드에 실패했습니다', 'error');
+  } finally {
+    setLoading(false);
+  }
+}
+
+// 최종보고서-수치중심 다운로드 (공기질/레벨기 리스트형 + 사진 하단)
+async function downloadFinalReportValuesAsPdf() {
+  if (!InspectorState.session) {
+    toast('로그인이 필요합니다', 'error');
+    return;
+  }
+  const householdId = InspectorState.selectedHouseholdId;
+  if (!householdId) {
+    toast('대상 세대를 먼저 선택해주세요', 'error');
+    return;
+  }
+
+  setLoading(true);
+  try {
+    toast('최종보고서(수치중심) 생성 중...', 'info');
+    const generateResult = await api.generateReport(InspectorState.currentCaseId, householdId, { template: 'final-report-values' });
+    if (!generateResult || !generateResult.success) {
+      throw new Error(generateResult?.message || generateResult?.error || '최종보고서(수치중심) 생성에 실패했습니다');
+    }
+    if (!generateResult.filename) throw new Error('파일명을 받지 못했습니다.');
+
+    toast('다운로드 중...', 'info');
+    await api.downloadReport(generateResult.filename);
+    toast('최종보고서(수치중심) 다운로드가 완료되었습니다', 'success');
+  } catch (error) {
+    console.error('최종보고서(수치중심) 다운로드 오류:', error);
+    toast(error.message || '최종보고서(수치중심) 다운로드에 실패했습니다', 'error');
+  } finally {
+    setLoading(false);
+  }
+}
+
+// 최종보고서-수치중심 미리보기
+async function previewFinalReportValuesAsPdf() {
+  if (!InspectorState.session) {
+    toast('로그인이 필요합니다', 'error');
+    return;
+  }
+  const householdId = InspectorState.selectedHouseholdId;
+  if (!householdId) {
+    toast('대상 세대를 먼저 선택해주세요', 'error');
+    return;
+  }
+
+  setLoading(true);
+  try {
+    toast('최종보고서(수치중심) 생성 중...', 'info');
+    const generateResult = await api.generateReport(InspectorState.currentCaseId, householdId, { template: 'final-report-values' });
+    if (!generateResult || !generateResult.success) {
+      throw new Error(generateResult?.message || generateResult?.error || '최종보고서(수치중심) 생성에 실패했습니다');
+    }
+    if (!generateResult.filename) throw new Error('PDF 파일명을 받지 못했습니다.');
+    toast('미리보기를 여는 중...', 'info');
+    await api.previewReport(generateResult.filename);
+    toast('최종보고서(수치중심) 미리보기 창이 열렸습니다', 'success');
+  } catch (error) {
+    console.error('최종보고서(수치중심) 미리보기 오류:', error);
+    toast(error.message || '최종보고서(수치중심) 미리보기에 실패했습니다', 'error');
   } finally {
     setLoading(false);
   }

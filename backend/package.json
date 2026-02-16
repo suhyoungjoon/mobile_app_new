@@ -14,6 +14,7 @@
     "test-full": "node ../scripts/test-full-system.js",
     "test-docker": "node ../scripts/test-docker.js",
     "migrate": "node scripts/migrate.js",
+    "migrate:inspection-photos": "node scripts/migrate-inspection-photos.js",
     "migrate:pdf-form": "node scripts/run-pdf-form-migration.js",
     "trim-households": "node scripts/trim-households-to-five.js",
     "create-inspector": "node scripts/create-inspector-household.js",

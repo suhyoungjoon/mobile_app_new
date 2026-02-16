@@ -168,7 +168,7 @@ router.post('/generate', authenticateToken, async (req, res) => {
       thermal_inspections: thermalInspections
     };
 
-    if (template === 'final-report') {
+    if (template === 'final-report' || template === 'final-report-values') {
       const householdInsp = await loadHouseholdInspectionsForReport(householdId);
       reportData = {
         ...reportData,
@@ -183,6 +183,8 @@ router.post('/generate', authenticateToken, async (req, res) => {
     let pdfResult;
     if (template === 'final-report') {
       pdfResult = await finalReportGenerator.generateFinalReport(reportData, {});
+    } else if (template === 'final-report-values') {
+      pdfResult = await finalReportGenerator.generateFinalReportValues(reportData, {});
     } else if (template === 'summary-report') {
       const dong = reportData.dong || '';
       const ho = reportData.ho || '';
@@ -201,6 +203,7 @@ router.post('/generate', authenticateToken, async (req, res) => {
     }
 
     const successMessage = template === 'final-report' ? '최종보고서가 생성되었습니다'
+      : template === 'final-report-values' ? '최종보고서(수치중심)가 생성되었습니다'
       : template === 'summary-report' ? '수기보고서가 생성되었습니다'
       : template === 'inspection-form' ? '점검결과 양식이 생성되었습니다'
       : 'PDF generated successfully';
@@ -451,7 +454,9 @@ async function loadHouseholdInspectionsForReport(householdId) {
       lm.point3_left_mm, lm.point3_right_mm, lm.point4_left_mm, lm.point4_right_mm,
       lm.reference_mm,
       (SELECT json_agg(json_build_object('file_url', tp.file_url, 'caption', tp.caption, 'shot_at', tp.shot_at))
-       FROM thermal_photo tp WHERE tp.item_id = ii.id) as thermal_photos
+       FROM thermal_photo tp WHERE tp.item_id = ii.id) as thermal_photos,
+      (SELECT json_agg(json_build_object('file_url', ip.file_url, 'caption', ip.caption, 'sort_order', ip.sort_order) ORDER BY ip.sort_order)
+       FROM inspection_photo ip WHERE ip.item_id = ii.id) as inspection_photos
     FROM inspection_item ii
     LEFT JOIN air_measure am ON ii.id = am.item_id
     LEFT JOIN radon_measure rm ON ii.id = rm.item_id
@@ -472,15 +477,27 @@ async function loadHouseholdInspectionsForReport(householdId) {
       created_at: row.created_at
     };
     switch (row.type) {
-      case 'visual':
-        visual.push({ ...base });
+      case 'visual': {
+        const vPhotos = (row.inspection_photos && Array.isArray(row.inspection_photos))
+          ? row.inspection_photos
+          : (row.inspection_photos ? [row.inspection_photos] : []);
+        visual.push({ ...base, photos: vPhotos });
         break;
+      }
       case 'thermal': {
-        const item = { ...base, photos: row.thermal_photos && Array.isArray(row.thermal_photos) ? row.thermal_photos : (row.thermal_photos ? [row.thermal_photos] : []) };
-        thermal.push(item);
+        const tThermal = (row.thermal_photos && Array.isArray(row.thermal_photos))
+          ? row.thermal_photos
+          : (row.thermal_photos ? [row.thermal_photos] : []);
+        const tInspection = (row.inspection_photos && Array.isArray(row.inspection_photos))
+          ? row.inspection_photos
+          : (row.inspection_photos ? [row.inspection_photos] : []);
+        thermal.push({ ...base, photos: [...tInspection, ...tThermal] });
         break;
       }
       case 'air': {
+        const aPhotos = (row.inspection_photos && Array.isArray(row.inspection_photos))
+          ? row.inspection_photos
+          : (row.inspection_photos ? [row.inspection_photos] : []);
         const processTypeLabel = row.process_type === 'flush_out' ? 'Flush-out' : row.process_type === 'bake_out' ? 'Bake-out' : '-';
         air.push({
           ...base,
@@ -490,16 +507,24 @@ async function loadHouseholdInspectionsForReport(householdId) {
           hcho: row.hcho,
           co2: row.co2,
           unit_tvoc: row.unit_tvoc,
-          unit_hcho: row.unit_hcho
+          unit_hcho: row.unit_hcho,
+          photos: aPhotos
         });
         break;
       }
-      case 'radon':
-        radon.push({ ...base, radon: row.radon, unit: row.unit_radon });
+      case 'radon': {
+        const rPhotos = (row.inspection_photos && Array.isArray(row.inspection_photos))
+          ? row.inspection_photos
+          : (row.inspection_photos ? [row.inspection_photos] : []);
+        radon.push({ ...base, radon: row.radon, unit: row.unit_radon, photos: rPhotos });
         break;
+      }
       case 'level': {
         const refMm = row.reference_mm != null ? row.reference_mm : 150;
         const has4 = row.point1_left_mm != null || row.point1_right_mm != null || row.point2_left_mm != null || row.point2_right_mm != null || row.point3_left_mm != null || row.point3_right_mm != null || row.point4_left_mm != null || row.point4_right_mm != null;
+        const lPhotos = (row.inspection_photos && Array.isArray(row.inspection_photos))
+          ? row.inspection_photos
+          : (row.inspection_photos ? [row.inspection_photos] : []);
         level.push({
           ...base,
           left_mm: row.left_mm,
@@ -516,7 +541,8 @@ async function loadHouseholdInspectionsForReport(householdId) {
           level_reference_mm: refMm,
           level_summary_text: has4
             ? `1번 좌${row.point1_left_mm ?? '-'}/우${row.point1_right_mm ?? '-'} 2번 좌${row.point2_left_mm ?? '-'}/우${row.point2_right_mm ?? '-'} 3번 좌${row.point3_left_mm ?? '-'}/우${row.point3_right_mm ?? '-'} 4번 좌${row.point4_left_mm ?? '-'}/우${row.point4_right_mm ?? '-'} (기준 ${refMm}mm)`
-            : `좌 ${row.left_mm ?? '-'}mm / 우 ${row.right_mm ?? '-'}mm`
+            : `좌 ${row.left_mm ?? '-'}mm / 우 ${row.right_mm ?? '-'}mm`,
+          photos: lPhotos
         });
         break;
       }
@@ -563,7 +589,9 @@ async function loadHouseholdReportData(householdId) {
            lm.point3_left_mm, lm.point3_right_mm, lm.point4_left_mm, lm.point4_right_mm,
            lm.reference_mm,
            (SELECT json_agg(json_build_object('file_url', tp.file_url, 'caption', tp.caption, 'shot_at', tp.shot_at))
-            FROM thermal_photo tp WHERE tp.item_id = ii.id) as photos
+            FROM thermal_photo tp WHERE tp.item_id = ii.id) as thermal_photos,
+           (SELECT json_agg(json_build_object('file_url', ip.file_url, 'caption', ip.caption, 'sort_order', ip.sort_order) ORDER BY ip.sort_order)
+            FROM inspection_photo ip WHERE ip.item_id = ii.id) as inspection_photos
     FROM inspection_item ii
     LEFT JOIN air_measure am ON ii.id = am.item_id
     LEFT JOIN radon_measure rm ON ii.id = rm.item_id
@@ -583,6 +611,15 @@ async function loadHouseholdReportData(householdId) {
 
     const itemResult = await pool.query(inspectionItemQuery, [defect.id]);
     const air = [], radon = [], level = [], thermal = [], visual = [];
+    const itemPhotos = (item) => {
+      const ip = (item.inspection_photos && Array.isArray(item.inspection_photos))
+        ? item.inspection_photos
+        : (item.inspection_photos ? [item.inspection_photos] : []);
+      const tp = (item.thermal_photos && Array.isArray(item.thermal_photos))
+        ? item.thermal_photos
+        : (item.thermal_photos ? [item.thermal_photos] : []);
+      return [...ip, ...tp];
+    };
     (itemResult.rows || []).forEach((item) => {
       const base = {
         location: item.location,
@@ -604,13 +641,14 @@ async function loadHouseholdReportData(householdId) {
             hcho: item.hcho,
             co2: item.co2,
             unit_tvoc: item.unit_tvoc,
-            unit_hcho: item.unit_hcho
+            unit_hcho: item.unit_hcho,
+            photos: itemPhotos(item)
           });
           totalAir++;
           break;
         }
         case 'radon':
-          radon.push({ ...base, radon: item.radon, unit: item.unit_radon });
+          radon.push({ ...base, radon: item.radon, unit: item.unit_radon, photos: itemPhotos(item) });
           totalRadon++;
           break;
         case 'level': {
@@ -641,17 +679,18 @@ async function loadHouseholdReportData(householdId) {
             level_p2_text: p2,
             level_p3_text: p3,
             level_p4_text: p4,
-            level_summary_text: levelSummary
+            level_summary_text: levelSummary,
+            photos: itemPhotos(item)
           });
           totalLevel++;
           break;
         }
         case 'thermal':
-          thermal.push({ ...base, photos: item.photos || [] });
+          thermal.push({ ...base, photos: itemPhotos(item) });
           totalThermal++;
           break;
         case 'visual':
-          visual.push({ ...base });
+          visual.push({ ...base, photos: itemPhotos(item) });
           break;
       }
     });

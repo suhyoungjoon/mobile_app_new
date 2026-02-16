@@ -102,34 +102,76 @@ router.post('/visual', authenticateToken, requireInspectorAccess, async (req, re
   }
 });
 
-// 열화상 사진 업로드
+// 열화상 사진 업로드 (기존 thermal_photo 테이블)
 router.post('/thermal/:itemId/photos', authenticateToken, requireInspectorAccess, async (req, res) => {
   try {
     const { itemId } = req.params;
     const { file_url, caption } = req.body;
-    
+
     if (!file_url) {
       return res.status(400).json({ error: '파일 URL은 필수입니다' });
     }
-    
+
     const photoId = uuidv4();
-    
+
     const query = `
       INSERT INTO thermal_photo (id, item_id, file_url, caption)
       VALUES ($1, $2, $3, $4)
       RETURNING *
     `;
-    
+
     const result = await pool.query(query, [photoId, itemId, file_url, caption]);
-    
+
     res.status(201).json({
       success: true,
       photo: result.rows[0],
       message: '열화상 사진이 업로드되었습니다'
     });
-    
   } catch (error) {
     console.error('열화상 사진 업로드 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다' });
+  }
+});
+
+// 모든 점검(육안/열화상/공기질/라돈/레벨기) 항목에 이미지 추가 (최대 2개, sort_order 0 또는 1)
+router.post('/items/:itemId/photos', authenticateToken, requireInspectorAccess, async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    const { file_url, caption, sort_order = 0 } = req.body;
+
+    if (!file_url) {
+      return res.status(400).json({ error: '파일 URL은 필수입니다' });
+    }
+
+    const countResult = await pool.query(
+      'SELECT COUNT(*) AS cnt FROM inspection_photo WHERE item_id = $1',
+      [itemId]
+    );
+    const count = parseInt(countResult.rows[0]?.cnt || '0', 10);
+    if (count >= 2) {
+      return res.status(400).json({ error: '점검당 이미지는 최대 2개까지 저장할 수 있습니다' });
+    }
+
+    const photoId = uuidv4();
+    const order = [0, 1].includes(parseInt(sort_order, 10)) ? parseInt(sort_order, 10) : count;
+
+    await pool.query(
+      `INSERT INTO inspection_photo (id, item_id, file_url, caption, sort_order)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [photoId, itemId, file_url, caption || null, order]
+    );
+
+    const row = (await pool.query('SELECT * FROM inspection_photo WHERE id = $1', [photoId])).rows[0];
+    res.status(201).json({
+      success: true,
+      photo: row,
+      message: '점검 사진이 저장되었습니다'
+    });
+  } catch (error) {
+    if (error.code === '42P01') {
+      return res.status(503).json({ error: 'inspection_photo 테이블이 없습니다. migrate-inspection-photos.sql 실행 후 다시 시도하세요.' });
+    }
+    console.error('점검 사진 추가 오류:', error);
     res.status(500).json({ error: '서버 오류가 발생했습니다' });
   }
 });
@@ -440,7 +482,9 @@ router.get('/by-household/:householdId', authenticateToken, async (req, res) => 
         lm.point3_left_mm, lm.point3_right_mm, lm.point4_left_mm, lm.point4_right_mm,
         lm.reference_mm,
         (SELECT json_agg(json_build_object('file_url', tp.file_url, 'caption', tp.caption, 'shot_at', tp.shot_at))
-         FROM thermal_photo tp WHERE tp.item_id = ii.id) as thermal_photos
+         FROM thermal_photo tp WHERE tp.item_id = ii.id) as thermal_photos,
+        (SELECT json_agg(json_build_object('file_url', ip.file_url, 'caption', ip.caption, 'sort_order', ip.sort_order) ORDER BY ip.sort_order)
+         FROM inspection_photo ip WHERE ip.item_id = ii.id) as inspection_photos
       FROM inspection_item ii
       LEFT JOIN air_measure am ON ii.id = am.item_id
       LEFT JOIN radon_measure rm ON ii.id = rm.item_id
@@ -455,14 +499,15 @@ router.get('/by-household/:householdId', authenticateToken, async (req, res) => 
       const type = row.type || 'thermal';
       if (!grouped[type]) grouped[type] = [];
       const item = { ...row };
-      if (row.thermal_photos && Array.isArray(row.thermal_photos)) {
-        item.photos = row.thermal_photos;
-      } else if (row.thermal_photos) {
-        item.photos = [row.thermal_photos];
-      } else {
-        item.photos = [];
-      }
+      const inspectionPhotos = (row.inspection_photos && Array.isArray(row.inspection_photos))
+        ? row.inspection_photos
+        : (row.inspection_photos ? [row.inspection_photos] : []);
+      const thermalPhotos = (row.thermal_photos && Array.isArray(row.thermal_photos))
+        ? row.thermal_photos
+        : (row.thermal_photos ? [row.thermal_photos] : []);
+      item.photos = [...inspectionPhotos, ...thermalPhotos];
       delete item.thermal_photos;
+      delete item.inspection_photos;
       grouped[type].push(item);
     });
 
@@ -492,20 +537,35 @@ router.get('/:caseId', authenticateToken, async (req, res) => {
         lm.point1_left_mm, lm.point1_right_mm, lm.point2_left_mm, lm.point2_right_mm,
         lm.point3_left_mm, lm.point3_right_mm, lm.point4_left_mm, lm.point4_right_mm,
         lm.reference_mm,
-        tp.file_url as thermal_photo_url, tp.caption as thermal_caption
+        (SELECT json_agg(json_build_object('file_url', tp.file_url, 'caption', tp.caption, 'shot_at', tp.shot_at))
+         FROM thermal_photo tp WHERE tp.item_id = ii.id) as thermal_photos,
+        (SELECT json_agg(json_build_object('file_url', ip.file_url, 'caption', ip.caption, 'sort_order', ip.sort_order) ORDER BY ip.sort_order)
+         FROM inspection_photo ip WHERE ip.item_id = ii.id) as inspection_photos
       FROM inspection_item ii
       LEFT JOIN air_measure am ON ii.id = am.item_id
       LEFT JOIN radon_measure rm ON ii.id = rm.item_id
       LEFT JOIN level_measure lm ON ii.id = lm.item_id
-      LEFT JOIN thermal_photo tp ON ii.id = tp.item_id
       WHERE ii.case_id = $1
       ORDER BY ii.created_at DESC
     `;
     
     const result = await pool.query(query, [caseId]);
     
-    // 결과를 타입별로 그룹화
-    const grouped = result.rows.reduce((acc, row) => {
+    const withPhotos = (result.rows || []).map((row) => {
+      const item = { ...row };
+      const inspectionPhotos = (row.inspection_photos && Array.isArray(row.inspection_photos))
+        ? row.inspection_photos
+        : (row.inspection_photos ? [row.inspection_photos] : []);
+      const thermalPhotos = (row.thermal_photos && Array.isArray(row.thermal_photos))
+        ? row.thermal_photos
+        : (row.thermal_photos ? [row.thermal_photos] : []);
+      item.photos = [...inspectionPhotos, ...thermalPhotos];
+      delete item.thermal_photos;
+      delete item.inspection_photos;
+      return item;
+    });
+    
+    const grouped = withPhotos.reduce((acc, row) => {
       if (!acc[row.type]) {
         acc[row.type] = [];
       }
@@ -540,20 +600,35 @@ router.get('/defects/:defectId', authenticateToken, async (req, res) => {
         lm.point1_left_mm, lm.point1_right_mm, lm.point2_left_mm, lm.point2_right_mm,
         lm.point3_left_mm, lm.point3_right_mm, lm.point4_left_mm, lm.point4_right_mm,
         lm.reference_mm,
-        tp.file_url as thermal_photo_url, tp.caption as thermal_caption
+        (SELECT json_agg(json_build_object('file_url', tp.file_url, 'caption', tp.caption, 'shot_at', tp.shot_at))
+         FROM thermal_photo tp WHERE tp.item_id = ii.id) as thermal_photos,
+        (SELECT json_agg(json_build_object('file_url', ip.file_url, 'caption', ip.caption, 'sort_order', ip.sort_order) ORDER BY ip.sort_order)
+         FROM inspection_photo ip WHERE ip.item_id = ii.id) as inspection_photos
       FROM inspection_item ii
       LEFT JOIN air_measure am ON ii.id = am.item_id
       LEFT JOIN radon_measure rm ON ii.id = rm.item_id
       LEFT JOIN level_measure lm ON ii.id = lm.item_id
-      LEFT JOIN thermal_photo tp ON ii.id = tp.item_id
       WHERE ii.defect_id = $1
       ORDER BY ii.created_at DESC
     `;
     
     const result = await pool.query(query, [defectId]);
     
-    // 결과를 타입별로 그룹화
-    const grouped = result.rows.reduce((acc, row) => {
+    const withPhotos = (result.rows || []).map((row) => {
+      const item = { ...row };
+      const inspectionPhotos = (row.inspection_photos && Array.isArray(row.inspection_photos))
+        ? row.inspection_photos
+        : (row.inspection_photos ? [row.inspection_photos] : []);
+      const thermalPhotos = (row.thermal_photos && Array.isArray(row.thermal_photos))
+        ? row.thermal_photos
+        : (row.thermal_photos ? [row.thermal_photos] : []);
+      item.photos = [...inspectionPhotos, ...thermalPhotos];
+      delete item.thermal_photos;
+      delete item.inspection_photos;
+      return item;
+    });
+    
+    const grouped = withPhotos.reduce((acc, row) => {
       if (!acc[row.type]) {
         acc[row.type] = [];
       }
@@ -688,6 +763,7 @@ router.delete('/:itemId', authenticateToken, async (req, res) => {
       await client.query('DELETE FROM radon_measure WHERE item_id = $1', [itemId]);
       await client.query('DELETE FROM level_measure WHERE item_id = $1', [itemId]);
       await client.query('DELETE FROM thermal_photo WHERE item_id = $1', [itemId]);
+      await client.query('DELETE FROM inspection_photo WHERE item_id = $1', [itemId]);
       
       // 점검 항목 삭제
       const result = await client.query('DELETE FROM inspection_item WHERE id = $1 RETURNING *', [itemId]);

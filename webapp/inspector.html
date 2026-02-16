@@ -170,6 +170,10 @@
           <button class="button" onclick="previewFinalReportAsPdf()">최종보고서 미리보기</button>
         </div>
         <div class="report-primary-buttons">
+          <button class="button ghost" onclick="downloadFinalReportValuesAsPdf()">최종보고서-수치중심 다운로드</button>
+          <button class="button ghost" onclick="previewFinalReportValuesAsPdf()">최종보고서-수치중심 미리보기</button>
+        </div>
+        <div class="report-primary-buttons">
           <button class="button ghost" onclick="downloadSummaryReportAsPdf()">수기보고서 다운로드</button>
           <button class="button ghost" onclick="previewSummaryReportAsPdf()">수기보고서 미리보기</button>
         </div>
@@ -225,6 +229,21 @@
             <label class="form-label">육안 점검 의견</label>
             <textarea id="defect-visual-note" class="input" placeholder="육안 점검 시 확인한 내용, 특이사항 등을 입력하세요" rows="5"></textarea>
           </div>
+          <div class="form-group">
+            <label class="form-label">사진 (최대 2장)</label>
+            <div style="display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
+              <div style="flex: 1; min-width: 140px;">
+                <input type="file" id="defect-visual-photo-1" accept="image/*" style="display: none;" onchange="handleMeasurementPhotoUpload('visual', this, 0)" />
+                <button type="button" class="button" onclick="document.getElementById('defect-visual-photo-1').click()" style="width: 100%;">📷 사진 1</button>
+                <div id="defect-visual-photo-preview-1" style="margin-top: 6px; min-height: 60px; border: 1px solid #ddd; border-radius: 4px; background-size: cover; background-position: center; background-repeat: no-repeat; display: none;"></div>
+              </div>
+              <div style="flex: 1; min-width: 140px;">
+                <input type="file" id="defect-visual-photo-2" accept="image/*" style="display: none;" onchange="handleMeasurementPhotoUpload('visual', this, 1)" />
+                <button type="button" class="button" onclick="document.getElementById('defect-visual-photo-2').click()" style="width: 100%;">📷 사진 2</button>
+                <div id="defect-visual-photo-preview-2" style="margin-top: 6px; min-height: 60px; border: 1px solid #ddd; border-radius: 4px; background-size: cover; background-position: center; background-repeat: no-repeat; display: none;"></div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- 공기질 탭 -->
@@ -279,11 +298,18 @@
           </div>
           
           <div class="form-group">
-            <label class="form-label">사진</label>
-            <div style="display: flex; gap: 8px; margin-top: 8px;">
-              <input type="file" id="defect-air-photo" accept="image/*" style="display: none;" onchange="handleMeasurementPhotoUpload('air', this)" />
-              <button type="button" class="button" onclick="document.getElementById('defect-air-photo').click()" style="flex: 1;">📷 사진 추가</button>
-              <div id="defect-air-photo-preview" style="flex: 1; min-height: 60px; border: 1px solid #ddd; border-radius: 4px; background-size: cover; background-position: center; background-repeat: no-repeat; display: none;"></div>
+            <label class="form-label">사진 (최대 2장)</label>
+            <div style="display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
+              <div style="flex: 1; min-width: 140px;">
+                <input type="file" id="defect-air-photo-1" accept="image/*" style="display: none;" onchange="handleMeasurementPhotoUpload('air', this, 0)" />
+                <button type="button" class="button" onclick="document.getElementById('defect-air-photo-1').click()" style="width: 100%;">📷 사진 1</button>
+                <div id="defect-air-photo-preview-1" style="margin-top: 6px; min-height: 60px; border: 1px solid #ddd; border-radius: 4px; background-size: cover; background-position: center; background-repeat: no-repeat; display: none;"></div>
+              </div>
+              <div style="flex: 1; min-width: 140px;">
+                <input type="file" id="defect-air-photo-2" accept="image/*" style="display: none;" onchange="handleMeasurementPhotoUpload('air', this, 1)" />
+                <button type="button" class="button" onclick="document.getElementById('defect-air-photo-2').click()" style="width: 100%;">📷 사진 2</button>
+                <div id="defect-air-photo-preview-2" style="margin-top: 6px; min-height: 60px; border: 1px solid #ddd; border-radius: 4px; background-size: cover; background-position: center; background-repeat: no-repeat; display: none;"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -329,11 +355,18 @@
           </div>
           
           <div class="form-group">
-            <label class="form-label">사진</label>
-            <div style="display: flex; gap: 8px; margin-top: 8px;">
-              <input type="file" id="defect-radon-photo" accept="image/*" style="display: none;" onchange="handleMeasurementPhotoUpload('radon', this)" />
-              <button type="button" class="button" onclick="document.getElementById('defect-radon-photo').click()" style="flex: 1;">📷 사진 추가</button>
-              <div id="defect-radon-photo-preview" style="flex: 1; min-height: 60px; border: 1px solid #ddd; border-radius: 4px; background-size: cover; background-position: center; background-repeat: no-repeat; display: none;"></div>
+            <label class="form-label">사진 (최대 2장)</label>
+            <div style="display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
+              <div style="flex: 1; min-width: 140px;">
+                <input type="file" id="defect-radon-photo-1" accept="image/*" style="display: none;" onchange="handleMeasurementPhotoUpload('radon', this, 0)" />
+                <button type="button" class="button" onclick="document.getElementById('defect-radon-photo-1').click()" style="width: 100%;">📷 사진 1</button>
+                <div id="defect-radon-photo-preview-1" style="margin-top: 6px; min-height: 60px; border: 1px solid #ddd; border-radius: 4px; background-size: cover; background-position: center; background-repeat: no-repeat; display: none;"></div>
+              </div>
+              <div style="flex: 1; min-width: 140px;">
+                <input type="file" id="defect-radon-photo-2" accept="image/*" style="display: none;" onchange="handleMeasurementPhotoUpload('radon', this, 1)" />
+                <button type="button" class="button" onclick="document.getElementById('defect-radon-photo-2').click()" style="width: 100%;">📷 사진 2</button>
+                <div id="defect-radon-photo-preview-2" style="margin-top: 6px; min-height: 60px; border: 1px solid #ddd; border-radius: 4px; background-size: cover; background-position: center; background-repeat: no-repeat; display: none;"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -411,11 +444,18 @@
           </div>
           
           <div class="form-group">
-            <label class="form-label">사진</label>
-            <div style="display: flex; gap: 8px; margin-top: 8px;">
-              <input type="file" id="defect-level-photo" accept="image/*" style="display: none;" onchange="handleMeasurementPhotoUpload('level', this)" />
-              <button type="button" class="button" onclick="document.getElementById('defect-level-photo').click()" style="flex: 1;">📷 사진 추가</button>
-              <div id="defect-level-photo-preview" style="flex: 1; min-height: 60px; border: 1px solid #ddd; border-radius: 4px; background-size: cover; background-position: center; background-repeat: no-repeat; display: none;"></div>
+            <label class="form-label">사진 (최대 2장)</label>
+            <div style="display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
+              <div style="flex: 1; min-width: 140px;">
+                <input type="file" id="defect-level-photo-1" accept="image/*" style="display: none;" onchange="handleMeasurementPhotoUpload('level', this, 0)" />
+                <button type="button" class="button" onclick="document.getElementById('defect-level-photo-1').click()" style="width: 100%;">📷 사진 1</button>
+                <div id="defect-level-photo-preview-1" style="margin-top: 6px; min-height: 60px; border: 1px solid #ddd; border-radius: 4px; background-size: cover; background-position: center; background-repeat: no-repeat; display: none;"></div>
+              </div>
+              <div style="flex: 1; min-width: 140px;">
+                <input type="file" id="defect-level-photo-2" accept="image/*" style="display: none;" onchange="handleMeasurementPhotoUpload('level', this, 1)" />
+                <button type="button" class="button" onclick="document.getElementById('defect-level-photo-2').click()" style="width: 100%;">📷 사진 2</button>
+                <div id="defect-level-photo-preview-2" style="margin-top: 6px; min-height: 60px; border: 1px solid #ddd; border-radius: 4px; background-size: cover; background-position: center; background-repeat: no-repeat; display: none;"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -428,11 +468,18 @@
           </div>
           
           <div class="form-group">
-            <label class="form-label">사진</label>
-            <div style="display: flex; gap: 8px; margin-top: 8px;">
-              <input type="file" id="defect-thermal-photo" accept="image/*" style="display: none;" onchange="handleMeasurementPhotoUpload('thermal', this)" />
-              <button type="button" class="button" onclick="document.getElementById('defect-thermal-photo').click()" style="flex: 1;">📷 사진 추가</button>
-              <div id="defect-thermal-photo-preview" style="flex: 1; min-height: 60px; border: 1px solid #ddd; border-radius: 4px; background-size: cover; background-position: center; background-repeat: no-repeat; display: none;"></div>
+            <label class="form-label">사진 (최대 2장)</label>
+            <div style="display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
+              <div style="flex: 1; min-width: 140px;">
+                <input type="file" id="defect-thermal-photo-1" accept="image/*" style="display: none;" onchange="handleMeasurementPhotoUpload('thermal', this, 0)" />
+                <button type="button" class="button" onclick="document.getElementById('defect-thermal-photo-1').click()" style="width: 100%;">📷 사진 1</button>
+                <div id="defect-thermal-photo-preview-1" style="margin-top: 6px; min-height: 60px; border: 1px solid #ddd; border-radius: 4px; background-size: cover; background-position: center; background-repeat: no-repeat; display: none;"></div>
+              </div>
+              <div style="flex: 1; min-width: 140px;">
+                <input type="file" id="defect-thermal-photo-2" accept="image/*" style="display: none;" onchange="handleMeasurementPhotoUpload('thermal', this, 1)" />
+                <button type="button" class="button" onclick="document.getElementById('defect-thermal-photo-2').click()" style="width: 100%;">📷 사진 2</button>
+                <div id="defect-thermal-photo-preview-2" style="margin-top: 6px; min-height: 60px; border: 1px solid #ddd; border-radius: 4px; background-size: cover; background-position: center; background-repeat: no-repeat; display: none;"></div>
+              </div>
             </div>
           </div>
           

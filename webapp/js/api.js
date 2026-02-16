@@ -527,13 +527,25 @@ class APIClient {
     });
   }
 
-  // 열화상 사진 업로드
+  // 열화상 사진 업로드 (thermal_photo 테이블, 기존 호환)
   async uploadThermalPhoto(itemId, fileUrl, caption) {
     return await this.request(`/inspections/thermal/${itemId}/photos`, {
       method: 'POST',
       body: JSON.stringify({
         file_url: fileUrl,
         caption
+      })
+    });
+  }
+
+  // 점검 항목 공통 사진 추가 (inspection_photo, 최대 2장, 모든 점검 타입)
+  async addInspectionPhoto(itemId, fileUrl, caption, sortOrder = 0) {
+    return await this.request(`/inspections/items/${itemId}/photos`, {
+      method: 'POST',
+      body: JSON.stringify({
+        file_url: fileUrl,
+        caption: caption || '',
+        sort_order: sortOrder
       })
     });
   }

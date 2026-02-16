@@ -12,6 +12,9 @@ const TEMPLATE_FILENAME = '종합점검보고서_최종1.pdf';
 const TEMPLATE_DIR = path.join(__dirname, '..', 'templates');
 const REPORTS_DIR = path.join(__dirname, '..', 'reports');
 const FONTS_DIR = path.join(__dirname, '..', 'fonts');
+const ASSETS_DIR = path.join(__dirname, '..', 'assets');
+const AIR_DIAGRAM_PATH = path.join(ASSETS_DIR, 'air_quality_diagram.png');
+const LEVEL_DIAGRAM_PATH = path.join(ASSETS_DIR, 'level_diagram.png');
 
 const FONT_SIZE = 9;
 const HEADER_FONT_SIZE = 10;
@@ -413,8 +416,8 @@ function drawThermalTablePages(pdfDoc, slotIndex, font, reportData) {
   return slotIndex - initialSlot + 1;
 }
 
-/** 공기질점검 1페이지분: chunk(combined 행 배열)만 그리기. */
-function drawAirBlocksOnPage(page, font, reportData, chunk) {
+/** 공기질점검 1페이지분: 이미지와 동일 — 블록 전체 갈색/주황 테두리·베이지 배경, 좌(위치/결과/유형/메모) 라벨 베이지·값 흰색·검정테두리, 고정 이미지, 측정값 테이블 베이지·검정테두리, 라돈 사진 주황 */
+function drawAirBlocksOnPage(page, font, reportData, chunk, airDiagramImage) {
   const dong = reportData.dong || '';
   const ho = reportData.ho || '';
   const block = LAYOUT.AIR_BLOCK;
@@ -422,21 +425,25 @@ function drawAirBlocksOnPage(page, font, reportData, chunk) {
   const mH = block.metaRowHeight;
   const mLw = block.metaLabelWidth;
   const mVw = block.metaValueWidth;
-  const pW = block.paramsWidth;
-  const vW = block.valuesWidth;
   const phW = block.photoWidth;
   const phH = block.photoHeight;
   const gap = block.blockGap;
-  const bw = block.borderWidth;
-  const rgbLabel = () => rgb(block.colors.labelBorder.r, block.colors.labelBorder.g, block.colors.labelBorder.b);
-  const rgbValue = () => rgb(block.colors.valueBorder.r, block.colors.valueBorder.g, block.colors.valueBorder.b);
   const rgbPhoto = () => rgb(block.colors.photoBorder.r, block.colors.photoBorder.g, block.colors.photoBorder.b);
+  const rgbBeige = () => rgb(0.96, 0.94, 0.88);
+  const rgbLabelBg = () => rgb(0.92, 0.91, 0.88);
+  const rgbBlack = () => rgb(0.2, 0.2, 0.2);
+  const rgbOuterBorder = () => rgb(0.85, 0.45, 0.35);
+  const rgbInnerBorder = () => rgb(0.55, 0.4, 0.32);
 
   page.drawText(block.title, { x: ox, y: LAYOUT.PAGE_HEIGHT - 50, size: TITLE_FONT_SIZE, font });
   page.drawText(`${dong}동 ${ho}호  최종점검결과`, { x: ox, y: LAYOUT.PAGE_HEIGHT - 70, size: 11, font });
 
   const totalBlockH = block.blockHeight + gap;
-  const startY = block.origin.y;
+  const airImgW = 220;
+  const airImgH = 72;
+  const metaEndX = ox + mLw + mVw;
+  const blockContentW = 495;
+  const blockContentH = 120;
 
   chunk.forEach((row, idx) => {
     const a = row.air;
@@ -449,40 +456,77 @@ function drawAirBlocksOnPage(page, font, reportData, chunk) {
     const memoVal = a ? safeText(a.note) : (r ? safeText(r.note) : '-');
     const tvocVal = a ? String(a.tvoc ?? '-') : '-';
     const hchoVal = a ? String(a.hcho ?? '-') : '-';
-    const radonVal = r ? `${r.radon ?? '-'} ${(r.unit || '').trim()}`.trim() : '-';
+    const radonVal = r ? `${r.radon ?? '-'}`.trim() : '-';
+
+    const blockLeft = ox;
+    const blockBottom = by - blockContentH - 25;
+    page.drawRectangle({
+      x: blockLeft - 2,
+      y: blockBottom - 2,
+      width: blockContentW + 4,
+      height: blockContentH + phH + 30,
+      borderColor: rgbOuterBorder(),
+      borderWidth: 1.2
+    });
+    page.drawRectangle({
+      x: blockLeft,
+      y: blockBottom,
+      width: blockContentW,
+      height: blockContentH + phH + 26,
+      color: rgbBeige(),
+      borderColor: rgbInnerBorder(),
+      borderWidth: 0.5
+    });
 
     [['위치', locVal], ['결과', resVal], ['유형', typeVal], ['메모', memoVal]].forEach(([label, val], i) => {
       const rowY = by - (i + 1) * mH;
-      page.drawRectangle({ x: metaX, y: rowY, width: mLw, height: mH, borderColor: rgbLabel(), borderWidth: bw });
+      page.drawRectangle({ x: metaX, y: rowY, width: mLw, height: mH, color: rgbLabelBg(), borderColor: rgbBlack(), borderWidth: 0.4 });
       page.drawText(truncateToFit(label, 4), { x: metaX + 2, y: rowY + 4, size: 8, font });
-      page.drawRectangle({ x: metaX + mLw, y: rowY, width: mVw, height: mH, borderColor: rgbValue(), borderWidth: bw });
+      page.drawRectangle({ x: metaX + mLw, y: rowY, width: mVw, height: mH, color: rgb(1, 1, 1), borderColor: rgbBlack(), borderWidth: 0.4 });
       page.drawText(truncateToFit(val, 12), { x: metaX + mLw + 2, y: rowY + 4, size: 8, font });
     });
 
-    const paramsX = ox + mLw + mVw + 8;
-    const paramsY = by - 10;
-    page.drawText('TVOC (mg/m³)', { x: paramsX, y: paramsY, size: 8, font });
-    page.drawText('휘발성유기화합물', { x: paramsX, y: paramsY - 12, size: 7, font });
-    page.drawText('HCHO (mg/m³)', { x: paramsX, y: paramsY - 28, size: 8, font });
-    page.drawText('포름알데히드', { x: paramsX, y: paramsY - 40, size: 7, font });
-    page.drawText('라돈 Radon (Bq/m³)', { x: paramsX, y: paramsY - 56, size: 8, font });
+    if (airDiagramImage) {
+      page.drawImage(airDiagramImage, {
+        x: metaEndX + 10,
+        y: by - airImgH - 10,
+        width: airImgW,
+        height: airImgH
+      });
+    }
 
-    const valuesX = paramsX + pW + 8;
-    const valH = 22;
-    [tvocVal, hchoVal, radonVal].forEach((v, i) => {
-      const vy = paramsY - i * valH;
-      page.drawRectangle({ x: valuesX, y: vy - 16, width: vW, height: 18, borderColor: rgbValue(), borderWidth: bw });
-      page.drawText(truncateToFit(v, 10), { x: valuesX + 2, y: vy - 12, size: 8, font });
+    const tableX = metaEndX + 10 + airImgW + 8;
+    const tableRowH = 22;
+    const tableW = 120;
+    const valColW = 52;
+    const tableH = tableRowH * 3;
+    const tableY = by - 60;
+    page.drawRectangle({
+      x: tableX,
+      y: tableY - tableH,
+      width: tableW,
+      height: tableH,
+      color: rgbBeige(),
+      borderColor: rgbBlack(),
+      borderWidth: 0.4
     });
+    [tvocVal, hchoVal, radonVal].forEach((v, i) => {
+      const rowY = tableY - (i + 1) * tableRowH;
+      page.drawLine({ start: { x: tableX, y: rowY }, end: { x: tableX + tableW, y: rowY }, thickness: 0.4, color: rgbBlack() });
+      page.drawText(truncateToFit(v, 8), { x: tableX + 4, y: rowY + 5, size: 8, font });
+      const paramLabels = ['TVOC (mg/m\u00B3)', 'HCHO (mg/m\u00B3)', 'Radon (Bq/m\u00B3)'];
+      page.drawText(truncateToFit(paramLabels[i], 14), { x: tableX + valColW + 4, y: rowY + 5, size: 7, font });
+    });
+    page.drawLine({ start: { x: tableX + valColW, y: tableY - tableH }, end: { x: tableX + valColW, y: tableY }, thickness: 0.4, color: rgbBlack() });
 
-    const photoX = valuesX + vW + 8;
-    page.drawRectangle({ x: photoX, y: by - phH - 20, width: phW, height: phH, borderColor: rgbPhoto(), borderWidth: bw });
+    const photoX = tableX + tableW + 10;
+    page.drawRectangle({ x: photoX, y: by - phH - 20, width: phW, height: phH, borderColor: rgbPhoto(), borderWidth: 0.8 });
     page.drawText('라돈 사진', { x: photoX + 8, y: by - 18, size: 8, font });
   });
 }
 
 /** 공기질점검: 갯수/페이지 제한 없이 모든 행 그리기. 사용한 페이지 수 반환. */
-function drawAirTablePages(pdfDoc, slotIndex, font, reportData) {
+function drawAirTablePages(pdfDoc, slotIndex, font, reportData, airDiagramImage) {
   const airList = reportData.air_measurements || [];
   const radonList = reportData.radon_measurements || [];
   const combined = [];
@@ -500,7 +544,7 @@ function drawAirTablePages(pdfDoc, slotIndex, font, reportData) {
   let page = pdfDoc.getPages()[slotIndex];
   while (true) {
     const chunk = combined.slice(offset, offset + maxBlocks);
-    drawAirBlocksOnPage(page, font, reportData, chunk);
+    drawAirBlocksOnPage(page, font, reportData, chunk, airDiagramImage);
     offset += chunk.length;
     if (offset >= combined.length) break;
     pdfDoc.insertPage(slotIndex + 1, [LAYOUT.PAGE_WIDTH, LAYOUT.PAGE_HEIGHT]);
@@ -510,8 +554,81 @@ function drawAirTablePages(pdfDoc, slotIndex, font, reportData) {
   return slotIndex - initialSlot + 1;
 }
 
-/** 레벨기 중앙 다이어그램: 창문 + 점선 + 점검방향 화살표 (코드로 그리기) */
-function drawLevelDiagram(page, font, diagramX, diagramY, diagramWidth, diagramHeight) {
+/** 공기질 수치중심: 리스트(표) + 하단 사진 영역. 표는 AIR_TABLE, 사진은 마지막 페이지 하단에만. */
+function getAirRowForTable(row) {
+  const a = row.air;
+  const r = row.radon;
+  return {
+    location: a ? safeText(a.location) : (r ? safeText(r.location) : '-'),
+    result: a ? (a.result_text ?? a.result ?? '-') : (r ? (r.result_text ?? r.result ?? '-') : '-'),
+    process_type: a ? (a.process_type_label ?? a.process_type ?? '-') : '-',
+    note: a ? safeText(a.note) : (r ? safeText(r.note) : '-'),
+    tvoc: a != null && a.tvoc != null ? String(a.tvoc) : '-',
+    hcho: a != null && a.hcho != null ? String(a.hcho) : '-',
+    radon: r != null && r.radon != null ? `${r.radon} ${(r.unit || '').trim()}`.trim() : (a ? '-' : '-')
+  };
+}
+
+function drawAirTablePagesValues(pdfDoc, slotIndex, font, reportData) {
+  const airList = reportData.air_measurements || [];
+  const radonList = reportData.radon_measurements || [];
+  const combined = [];
+  airList.forEach((a, i) => {
+    combined.push({ air: a, radon: radonList[i] || null });
+  });
+  if (combined.length === 0 && radonList.length > 0) {
+    radonList.forEach((r) => combined.push({ air: null, radon: r }));
+  }
+  const airRows = combined.map(getAirRowForTable);
+  const tableDef = LAYOUT.AIR_TABLE;
+  const initialSlot = slotIndex;
+  let offset = 0;
+  let page = pdfDoc.getPages()[slotIndex];
+  const photoAreaHeight = 110;
+  const maxRowsLastPage = Math.max(1, Math.floor((tableDef.origin.y - photoAreaHeight - tableDef.headerHeight - 40) / tableDef.rowHeight));
+
+  while (offset < airRows.length) {
+    const isLastChunk = offset + tableDef.maxRowsPerPage >= airRows.length;
+    const maxRows = isLastChunk ? Math.min(airRows.length - offset, maxRowsLastPage) : tableDef.maxRowsPerPage;
+    const chunk = airRows.slice(offset, offset + maxRows);
+    const getCellValue = (item, field) => item[field] ?? '-';
+    drawTablePage(page, font, tableDef, reportData, chunk, getCellValue);
+
+    if (isLastChunk) {
+      const photoY = 120;
+      const photoH = 90;
+      const photoW = 495;
+      page.drawRectangle({
+        x: tableDef.origin.x,
+        y: photoY,
+        width: photoW,
+        height: photoH,
+        borderColor: rgb(0.95, 0.6, 0.2),
+        borderWidth: 0.8
+      });
+      page.drawText('공기질/라돈 점검 사진', { x: tableDef.origin.x + 8, y: photoY + photoH - 14, size: 9, font });
+    }
+
+    offset += chunk.length;
+    if (offset >= airRows.length) break;
+    pdfDoc.insertPage(slotIndex + 1, [LAYOUT.PAGE_WIDTH, LAYOUT.PAGE_HEIGHT]);
+    slotIndex++;
+    page = pdfDoc.getPages()[slotIndex];
+  }
+  return slotIndex - initialSlot + 1;
+}
+
+/** 레벨기 중앙 다이어그램: 고정 이미지 사용 시 이미지 그리기, 없으면 코드로 창문+점선+점검방향 그리기 */
+function drawLevelDiagram(page, font, diagramX, diagramY, diagramWidth, diagramHeight, levelDiagramImage) {
+  if (levelDiagramImage) {
+    page.drawImage(levelDiagramImage, {
+      x: diagramX,
+      y: diagramY,
+      width: diagramWidth,
+      height: diagramHeight
+    });
+    return;
+  }
   const black = rgb(0.2, 0.2, 0.2);
   const centerX = diagramX + diagramWidth / 2;
   const top = diagramY + diagramHeight - 10;
@@ -579,8 +696,8 @@ function drawLevelDiagram(page, font, diagramX, diagramY, diagramWidth, diagramH
   });
 }
 
-/** 레벨기점검 블록형 1페이지분: chunk만 그리기. (갯수 제한 없음) */
-function drawLevelBlocksOnPage(page, font, reportData, chunk) {
+/** 레벨기점검 블록형 1페이지분: 참고 이미지 동일 구성 (상단 빨간 박스 문구, 4점=다이어그램 주변, 고정 다이어그램 이미지, 우측 위치/결과/기준/메모, 점검사진) */
+function drawLevelBlocksOnPage(page, font, reportData, chunk, levelDiagramImage) {
   const dong = reportData.dong || '';
   const ho = reportData.ho || '';
   const block = LAYOUT.LEVEL_BLOCK;
@@ -598,41 +715,64 @@ function drawLevelBlocksOnPage(page, font, reportData, chunk) {
   const rgbLabel = () => rgb(block.colors.labelBorder.r, block.colors.labelBorder.g, block.colors.labelBorder.b);
   const rgbValue = () => rgb(block.colors.valueBorder.r, block.colors.valueBorder.g, block.colors.valueBorder.b);
   const rgbPhoto = () => rgb(block.colors.photoBorder.r, block.colors.photoBorder.g, block.colors.photoBorder.b);
+  const rgbRed = () => rgb(0.9, 0.2, 0.2);
 
   page.drawText(block.title, { x: ox, y: LAYOUT.PAGE_HEIGHT - 50, size: TITLE_FONT_SIZE, font });
   page.drawText(`${dong}동 ${ho}호  최종점검결과`, { x: ox, y: LAYOUT.PAGE_HEIGHT - 70, size: 11, font });
 
   const pointLabels = ['1. 좌측', '2. 우측', '3. 우측', '4. 좌측'];
-  const blockHeight = 90 + dH + rowH * 4 + phH;
+  const blockHeight = 120 + dH + phH + 60;
   const totalBlockH = blockHeight + gap;
   const startY = block.origin.y;
+  const diagramX = ox + 100;
 
   chunk.forEach((item, idx) => {
     const by = startY - idx * totalBlockH;
-    page.drawText(block.topNote, { x: ox, y: by - 12, size: 8, font });
+    const diagramY = by - 26 - 20 - dH - 30;
+
+    // 상단 문구: 빨간 테두리 박스 (참고 이미지 동일)
+    const topNote = block.topNote;
+    const noteW = 320;
+    const noteH = 22;
+    const noteX = ox;
+    const noteY = by - noteH - 4;
+    page.drawRectangle({
+      x: noteX,
+      y: noteY,
+      width: noteW,
+      height: noteH,
+      borderColor: rgbRed(),
+      borderWidth: 0.8
+    });
+    page.drawText(topNote, { x: noteX + 6, y: noteY + 6, size: 8, font, color: rgbRed() });
 
     const pointsText = item.level_summary_text || item.points || '-';
     const points = String(pointsText).split(/[,/]\s*/).slice(0, 4);
     const refMm = String(item.level_reference_mm ?? item.reference_mm ?? 150);
 
-    let rowY = by - 28;
+    // 4개 포인트: 다이어그램 네 모서리 (좌상·우상·좌하·우하)
+    const pointMargin = 6;
+    const ph = 22;
+    const positions = [
+      { x: diagramX - pLw - pVw - 40 - pointMargin, y: diagramY + dH - 10 },
+      { x: diagramX + dW + pointMargin, y: diagramY + dH - 10 },
+      { x: diagramX - pLw - pVw - 40 - pointMargin, y: diagramY - ph - 8 },
+      { x: diagramX + dW + pointMargin, y: diagramY - ph - 8 }
+    ];
     pointLabels.forEach((label, i) => {
-      const px = ox + (i < 2 ? 0 : 260);
-      page.drawRectangle({ x: px, y: rowY, width: pLw, height: rowH, borderColor: rgbLabel(), borderWidth: bw });
-      page.drawText(truncateToFit(label, 8), { x: px + 2, y: rowY + 4, size: FONT_SIZE - 1, font });
-      page.drawRectangle({ x: px + pLw, y: rowY, width: pVw, height: rowH, borderColor: rgbValue(), borderWidth: bw });
-      page.drawText(truncateToFit(points[i] || '-', 6), { x: px + pLw + 2, y: rowY + 4, size: FONT_SIZE - 1, font });
-      page.drawRectangle({ x: px + pLw + pVw, y: rowY, width: 36, height: rowH, borderColor: rgbValue(), borderWidth: bw });
-      page.drawText('mm', { x: px + pLw + pVw + 6, y: rowY + 4, size: FONT_SIZE - 1, font });
-      if (i === 1) rowY -= rowH + 4;
-      else rowY -= rowH;
+      const px = positions[i].x;
+      const py = positions[i].y;
+      page.drawRectangle({ x: px, y: py, width: pLw, height: ph, borderColor: rgbLabel(), borderWidth: bw });
+      page.drawText(truncateToFit(label, 8), { x: px + 2, y: py + 4, size: FONT_SIZE - 1, font });
+      page.drawRectangle({ x: px + pLw, y: py, width: pVw, height: ph, borderColor: rgbValue(), borderWidth: bw });
+      page.drawText(truncateToFit(points[i] || '-', 6), { x: px + pLw + 2, y: py + 4, size: FONT_SIZE - 1, font });
+      page.drawRectangle({ x: px + pLw + pVw, y: py, width: 32, height: ph, borderColor: rgbValue(), borderWidth: bw });
+      page.drawText('mm', { x: px + pLw + pVw + 4, y: py + 4, size: FONT_SIZE - 1, font });
     });
 
-    const diagramX = ox + 160;
-    const diagramY = rowY - dH - 8;
-    drawLevelDiagram(page, font, diagramX, diagramY, dW, dH);
+    drawLevelDiagram(page, font, diagramX, diagramY, dW, dH, levelDiagramImage);
 
-    const metaX = ox + 160 + dW + 12;
+    const metaX = diagramX + dW + 12;
     let metaY = by - 32;
     [['위치', safeText(item.location)], ['결과', item.result_text ?? item.result ?? '-'], ['기준', refMm], ['메모', safeText(item.note)]].forEach(([label, val]) => {
       page.drawRectangle({ x: metaX, y: metaY, width: lw, height: rowH, borderColor: rgbLabel(), borderWidth: bw });
@@ -642,21 +782,20 @@ function drawLevelBlocksOnPage(page, font, reportData, chunk) {
       metaY -= rowH;
     });
 
-    const photoY = diagramY - phH - 8;
+    const photoY = diagramY - phH - 12;
     page.drawRectangle({ x: ox, y: photoY, width: 495, height: phH, borderColor: rgbPhoto(), borderWidth: bw });
     page.drawText('점검사진', { x: ox + 8, y: photoY + phH - 14, size: 8, font });
   });
 }
 
 /** 레벨기점검: 갯수/페이지 제한 없이 모든 항목 그리기. (기존 2개 제한 제거) 사용한 페이지 수 반환. */
-function drawLevelTablePages(pdfDoc, slotIndex, font, reportData) {
+function drawLevelTablePages(pdfDoc, slotIndex, font, reportData, levelDiagramImage) {
   const items = reportData.level_measurements || [];
   const block = LAYOUT.LEVEL_BLOCK;
-  const rowH = block.rowHeight;
   const dH = block.diagramHeight;
   const phH = block.photoHeight;
   const gap = block.blockGap;
-  const blockHeight = 90 + dH + rowH * 4 + phH;
+  const blockHeight = 120 + dH + phH + 60;
   const totalBlockH = blockHeight + gap;
   const maxBlocks = Math.max(1, Math.floor((block.origin.y - 80) / totalBlockH));
   const initialSlot = slotIndex;
@@ -664,7 +803,53 @@ function drawLevelTablePages(pdfDoc, slotIndex, font, reportData) {
   let page = pdfDoc.getPages()[slotIndex];
   while (true) {
     const chunk = items.slice(offset, offset + maxBlocks);
-    drawLevelBlocksOnPage(page, font, reportData, chunk);
+    drawLevelBlocksOnPage(page, font, reportData, chunk, levelDiagramImage);
+    offset += chunk.length;
+    if (offset >= items.length) break;
+    pdfDoc.insertPage(slotIndex + 1, [LAYOUT.PAGE_WIDTH, LAYOUT.PAGE_HEIGHT]);
+    slotIndex++;
+    page = pdfDoc.getPages()[slotIndex];
+  }
+  return slotIndex - initialSlot + 1;
+}
+
+/** 레벨기 수치중심: 리스트(표) + 하단 사진 영역. 표는 LEVEL_TABLE, 사진은 마지막 페이지 하단에만. */
+function drawLevelTablePagesValues(pdfDoc, slotIndex, font, reportData) {
+  const items = reportData.level_measurements || [];
+  const tableDef = LAYOUT.LEVEL_TABLE;
+  const getCellValue = (item, field) => {
+    if (field === 'result') return item.result_text ?? item.result ?? '-';
+    if (field === 'reference_mm') return String(item.level_reference_mm ?? item.reference_mm ?? '-');
+    if (field === 'points') return item.level_summary_text ?? item.points ?? '-';
+    return safeText(item[field]);
+  };
+  const initialSlot = slotIndex;
+  let offset = 0;
+  let page = pdfDoc.getPages()[slotIndex];
+  const photoAreaHeight = 110;
+  const maxRowsLastPage = Math.max(1, Math.floor((tableDef.origin.y - photoAreaHeight - tableDef.headerHeight - 40) / tableDef.rowHeight));
+
+  while (offset < items.length) {
+    const isLastChunk = offset + tableDef.maxRowsPerPage >= items.length;
+    const maxRows = isLastChunk ? Math.min(items.length - offset, maxRowsLastPage) : tableDef.maxRowsPerPage;
+    const chunk = items.slice(offset, offset + maxRows);
+    drawTablePage(page, font, tableDef, reportData, chunk, getCellValue);
+
+    if (isLastChunk) {
+      const photoY = 120;
+      const photoH = 90;
+      const photoW = 495;
+      page.drawRectangle({
+        x: tableDef.origin.x,
+        y: photoY,
+        width: photoW,
+        height: photoH,
+        borderColor: rgb(0.95, 0.6, 0.2),
+        borderWidth: 0.8
+      });
+      page.drawText('레벨기 점검 사진', { x: tableDef.origin.x + 8, y: photoY + photoH - 14, size: 9, font });
+    }
+
     offset += chunk.length;
     if (offset >= items.length) break;
     pdfDoc.insertPage(slotIndex + 1, [LAYOUT.PAGE_WIDTH, LAYOUT.PAGE_HEIGHT]);
@@ -675,33 +860,51 @@ function drawLevelTablePages(pdfDoc, slotIndex, font, reportData) {
 }
 
 /** 템플릿 8·10·12·13p를 제거하고, 같은 위치에 빈 A4 4장 삽입 후 점검결과만 별도 페이지로 그림. 항목 많으면 추가 페이지 삽입. */
-async function assembleFinalWithTemplatePages(templateDoc, reportData, font, pdfDoc) {
-  if (templateDoc.getPageCount() > 12) templateDoc.removePage(12);
-  if (templateDoc.getPageCount() > 11) templateDoc.removePage(11);
-  if (templateDoc.getPageCount() > 9) templateDoc.removePage(9);
-  if (templateDoc.getPageCount() > 7) templateDoc.removePage(7);
+async function assembleFinalWithTemplatePages(pdfDoc, reportData, font, airDiagramImage, levelDiagramImage) {
+  if (pdfDoc.getPageCount() > 12) pdfDoc.removePage(12);
+  if (pdfDoc.getPageCount() > 11) pdfDoc.removePage(11);
+  if (pdfDoc.getPageCount() > 9) pdfDoc.removePage(9);
+  if (pdfDoc.getPageCount() > 7) pdfDoc.removePage(7);
 
-  templateDoc.insertPage(7, [LAYOUT.PAGE_WIDTH, LAYOUT.PAGE_HEIGHT]);
-  templateDoc.insertPage(9, [LAYOUT.PAGE_WIDTH, LAYOUT.PAGE_HEIGHT]);
-  templateDoc.insertPage(11, [LAYOUT.PAGE_WIDTH, LAYOUT.PAGE_HEIGHT]);
-  templateDoc.insertPage(12, [LAYOUT.PAGE_WIDTH, LAYOUT.PAGE_HEIGHT]);
+  pdfDoc.insertPage(7, [LAYOUT.PAGE_WIDTH, LAYOUT.PAGE_HEIGHT]);
+  pdfDoc.insertPage(9, [LAYOUT.PAGE_WIDTH, LAYOUT.PAGE_HEIGHT]);
+  pdfDoc.insertPage(11, [LAYOUT.PAGE_WIDTH, LAYOUT.PAGE_HEIGHT]);
+  pdfDoc.insertPage(12, [LAYOUT.PAGE_WIDTH, LAYOUT.PAGE_HEIGHT]);
 
   const v = drawVisualTablePages(pdfDoc, 7, font, reportData);
   const t = drawThermalTablePages(pdfDoc, 9 + (v - 1), font, reportData);
-  const a = drawAirTablePages(pdfDoc, 11 + (v - 1) + (t - 1), font, reportData);
-  drawLevelTablePages(pdfDoc, 12 + (v - 1) + (t - 1) + (a - 1), font, reportData);
+  const a = drawAirTablePages(pdfDoc, 11 + (v - 1) + (t - 1), font, reportData, airDiagramImage);
+  drawLevelTablePages(pdfDoc, 12 + (v - 1) + (t - 1) + (a - 1), font, reportData, levelDiagramImage);
+}
+
+/** 수치중심: 육안/열화상은 동일, 공기질/레벨기는 리스트(표) + 하단 사진만. */
+async function assembleFinalWithTemplatePagesValues(pdfDoc, reportData, font) {
+  if (pdfDoc.getPageCount() > 12) pdfDoc.removePage(12);
+  if (pdfDoc.getPageCount() > 11) pdfDoc.removePage(11);
+  if (pdfDoc.getPageCount() > 9) pdfDoc.removePage(9);
+  if (pdfDoc.getPageCount() > 7) pdfDoc.removePage(7);
+
+  pdfDoc.insertPage(7, [LAYOUT.PAGE_WIDTH, LAYOUT.PAGE_HEIGHT]);
+  pdfDoc.insertPage(9, [LAYOUT.PAGE_WIDTH, LAYOUT.PAGE_HEIGHT]);
+  pdfDoc.insertPage(11, [LAYOUT.PAGE_WIDTH, LAYOUT.PAGE_HEIGHT]);
+  pdfDoc.insertPage(12, [LAYOUT.PAGE_WIDTH, LAYOUT.PAGE_HEIGHT]);
+
+  const v = drawVisualTablePages(pdfDoc, 7, font, reportData);
+  const t = drawThermalTablePages(pdfDoc, 9 + (v - 1), font, reportData);
+  const a = drawAirTablePagesValues(pdfDoc, 11 + (v - 1) + (t - 1), font, reportData);
+  drawLevelTablePagesValues(pdfDoc, 12 + (v - 1) + (t - 1) + (a - 1), font, reportData);
 }
 
 /** 템플릿 없이 점검 표 페이지만 생성 (항목 많으면 추가 페이지) */
-async function generateDataOnlyReport(reportData, font, pdfDoc) {
+async function generateDataOnlyReport(reportData, font, pdfDoc, airDiagramImage, levelDiagramImage) {
   pdfDoc.addPage([LAYOUT.PAGE_WIDTH, LAYOUT.PAGE_HEIGHT]);
   drawVisualTablePages(pdfDoc, pdfDoc.getPageCount() - 1, font, reportData);
   pdfDoc.addPage([LAYOUT.PAGE_WIDTH, LAYOUT.PAGE_HEIGHT]);
   drawThermalTablePages(pdfDoc, pdfDoc.getPageCount() - 1, font, reportData);
   pdfDoc.addPage([LAYOUT.PAGE_WIDTH, LAYOUT.PAGE_HEIGHT]);
-  drawAirTablePages(pdfDoc, pdfDoc.getPageCount() - 1, font, reportData);
+  drawAirTablePages(pdfDoc, pdfDoc.getPageCount() - 1, font, reportData, airDiagramImage);
   pdfDoc.addPage([LAYOUT.PAGE_WIDTH, LAYOUT.PAGE_HEIGHT]);
-  drawLevelTablePages(pdfDoc, pdfDoc.getPageCount() - 1, font, reportData);
+  drawLevelTablePages(pdfDoc, pdfDoc.getPageCount() - 1, font, reportData, levelDiagramImage);
 }
 
 async function generateFinalReport(reportData, options = {}) {
@@ -731,10 +934,80 @@ async function generateFinalReport(reportData, options = {}) {
 
   const font = await embedCustomFont(pdfDoc);
 
+  let airDiagramImage = null;
+  let levelDiagramImage = null;
+  if (fs.existsSync(AIR_DIAGRAM_PATH)) {
+    try {
+      airDiagramImage = await pdfDoc.embedPng(fs.readFileSync(AIR_DIAGRAM_PATH));
+    } catch (e) {
+      // ignore
+    }
+  }
+  if (fs.existsSync(LEVEL_DIAGRAM_PATH)) {
+    try {
+      levelDiagramImage = await pdfDoc.embedPng(fs.readFileSync(LEVEL_DIAGRAM_PATH));
+    } catch (e) {
+      // ignore
+    }
+  }
+
   if (usedTemplate && pdfDoc.getPageCount() >= 13) {
-    await assembleFinalWithTemplatePages(pdfDoc, reportData, font, pdfDoc);
+    await assembleFinalWithTemplatePages(pdfDoc, reportData, font, airDiagramImage, levelDiagramImage);
   } else {
-    await generateDataOnlyReport(reportData, font, pdfDoc);
+    await generateDataOnlyReport(reportData, font, pdfDoc, airDiagramImage, levelDiagramImage);
+  }
+
+  const bytes = await pdfDoc.save();
+  fs.writeFileSync(finalPath, bytes);
+
+  const size = fs.statSync(finalPath).size;
+  return {
+    filename: finalFilename,
+    path: finalPath,
+    url: `/reports/${finalFilename}`,
+    size
+  };
+}
+
+/** 최종보고서-수치중심: 동일 템플릿·육안·열화상, 공기질/레벨기는 리스트형 + 사진만 하단. */
+async function generateFinalReportValues(reportData, options = {}) {
+  const dong = reportData.dong || '';
+  const ho = reportData.ho || '';
+  const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 12);
+  const finalFilename = options.filename || `보고서_최종_수치중심_${dong}-${ho}_${timestamp}.pdf`;
+  const finalPath = path.join(REPORTS_DIR, finalFilename);
+
+  const templatePath = path.join(TEMPLATE_DIR, TEMPLATE_FILENAME);
+  let pdfDoc;
+  let usedTemplate = false;
+
+  if (fs.existsSync(templatePath)) {
+    try {
+      const templateBytes = fs.readFileSync(templatePath);
+      pdfDoc = await PDFDocument.load(templateBytes);
+      usedTemplate = pdfDoc.getPageCount() >= 13;
+    } catch (e) {
+      if (!/encrypted|password/i.test(String(e.message))) throw e;
+      pdfDoc = await PDFDocument.create();
+    }
+  }
+  if (!pdfDoc) {
+    pdfDoc = await PDFDocument.create();
+  }
+
+  const font = await embedCustomFont(pdfDoc);
+
+  if (usedTemplate && pdfDoc.getPageCount() >= 13) {
+    await assembleFinalWithTemplatePagesValues(pdfDoc, reportData, font);
+  } else {
+    pdfDoc.addPage([LAYOUT.PAGE_WIDTH, LAYOUT.PAGE_HEIGHT]);
+    drawVisualTablePages(pdfDoc, 0, font, reportData);
+    pdfDoc.addPage([LAYOUT.PAGE_WIDTH, LAYOUT.PAGE_HEIGHT]);
+    drawThermalTablePages(pdfDoc, 1, font, reportData);
+    pdfDoc.addPage([LAYOUT.PAGE_WIDTH, LAYOUT.PAGE_HEIGHT]);
+    drawAirTablePagesValues(pdfDoc, 2, font, reportData);
+    pdfDoc.addPage([LAYOUT.PAGE_WIDTH, LAYOUT.PAGE_HEIGHT]);
+    drawLevelTablePagesValues(pdfDoc, 3, font, reportData);
   }
 
   const bytes = await pdfDoc.save();
@@ -751,6 +1024,7 @@ async function generateFinalReport(reportData, options = {}) {
 
 module.exports = {
   generateFinalReport,
+  generateFinalReportValues,
   TEMPLATE_FILENAME,
   FILL_PAGE_INDICES: [7, 9, 11, 12]
 };
