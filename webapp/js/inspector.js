@@ -421,55 +421,27 @@ async function loadAllDefectsDirectly() {
       InspectorState.currentCaseId = result.defects[0].case_id;
     }
     
-    // 측정값 조회
-    const defectsWithInspections = await Promise.all(
-      result.defects.map(async (defect) => {
-        try {
-          const inspections = await api.getDefectInspections(defect.id);
-          return { ...defect, inspections: inspections.inspections || {} };
-        } catch (error) {
-          return { ...defect, inspections: {} };
-        }
-      })
-    );
-    
-    // 화면에 표시
-    container.innerHTML = defectsWithInspections.map(defect => {
-      const hasInspections = Object.keys(defect.inspections || {}).length > 0;
-      const inspectionSummary = hasInspections 
-        ? Object.entries(defect.inspections).map(([type, items]) => {
-            const typeNames = { air: '공기질', radon: '라돈', level: '레벨기', thermal: '열화상' };
-            return `${typeNames[type] || type} ${items.length}건`;
-          }).join(', ')
-        : '';
-      
-      return `
-        <div class="defect-card">
-          <div class="defect-card-header">
-            <div>
-              <div class="defect-card-title">${escapeHTML(defect.location || '')} - ${escapeHTML(defect.trade || '')}</div>
-              <div class="defect-card-meta">케이스: ${defect.case_id} | ${formatDate(defect.created_at)}</div>
-            </div>
-            ${hasInspections ? '<span class="inspection-badge">점검완료</span>' : '<span class="inspection-badge pending">점검대기</span>'}
-          </div>
-          <div class="defect-card-content">
-            <div class="label">내용</div>
-            <div class="value">${escapeHTML(defect.content || '')}</div>
-            ${defect.memo ? `
-              <div class="label">메모</div>
-              <div class="value">${escapeHTML(defect.memo)}</div>
-            ` : ''}
-            ${hasInspections ? `
-              <div class="label">점검결과</div>
-              <div class="value" style="color: #10b981; font-size: 14px;">${inspectionSummary}</div>
-              <button type="button" class="button ghost" style="margin-top:8px;font-size:13px;" onclick="showInspectionDetailModal(${defect.id})">점검결과 보기</button>
-            ` : ''}
+    // 화면에 표시 (하자와 점검은 분리되어 점검 상태/점검결과는 카드에 표시하지 않음)
+    container.innerHTML = result.defects.map((defect) => `
+      <div class="defect-card">
+        <div class="defect-card-header">
+          <div>
+            <div class="defect-card-title">${escapeHTML(defect.location || '')} - ${escapeHTML(defect.trade || '')}</div>
+            <div class="defect-card-meta">케이스: ${defect.case_id} | ${formatDate(defect.created_at)}</div>
           </div>
         </div>
-      `;
-    }).join('');
+        <div class="defect-card-content">
+          <div class="label">내용</div>
+          <div class="value">${escapeHTML(defect.content || '')}</div>
+          ${defect.memo ? `
+            <div class="label">메모</div>
+            <div class="value">${escapeHTML(defect.memo)}</div>
+          ` : ''}
+        </div>
+      </div>
+    `).join('');
 
-    console.log('✅ 하자목록 표시 완료:', defectsWithInspections.length, '개');
+    console.log('✅ 하자목록 표시 완료:', result.defects.length, '개');
   } catch (error) {
     console.error('❌ 직접 하자목록 조회 실패:', error);
     container.innerHTML = `
@@ -509,58 +481,32 @@ async function loadDefectsForHousehold(householdId) {
       return;
     }
 
-    const defectsWithInspections = await Promise.all(
-      defects.map(async (defect) => {
-        try {
-          const inspections = await api.getDefectInspections(defect.id);
-          return { ...defect, inspections: inspections.inspections || {} };
-        } catch (error) {
-          return { ...defect, inspections: {} };
-        }
-      })
-    );
-
     const baseUrl = api.baseURL.replace('/api', '');
-    container.innerHTML = defectsWithInspections.map((defect) => {
-      const hasInspections = Object.keys(defect.inspections || {}).length > 0;
-      const inspectionSummary = hasInspections
-        ? Object.entries(defect.inspections).map(([type, items]) => {
-            const typeNames = { air: '공기질', radon: '라돈', level: '레벨기', thermal: '열화상' };
-            return `${typeNames[type] || type} ${items.length}건`;
-          }).join(', ')
-        : '';
-      return `
-        <div class="defect-card">
-          <div class="defect-card-header">
-            <div>
-              <div class="defect-card-title">${escapeHTML(defect.location || '')} - ${escapeHTML(defect.trade || '')}</div>
-              <div class="defect-card-meta">케이스: ${defect.case_id} | ${formatDate(defect.created_at)}</div>
-            </div>
-            ${hasInspections ? '<span class="inspection-badge">점검완료</span>' : '<span class="inspection-badge pending">점검대기</span>'}
-          </div>
-          <div class="defect-card-content">
-            <div class="label">내용</div>
-            <div class="value">${escapeHTML(defect.content || '')}</div>
-            ${defect.memo ? `<div class="label">메모</div><div class="value">${escapeHTML(defect.memo)}</div>` : ''}
-            ${hasInspections ? `
-              <div class="label">점검결과</div>
-              <div class="value" style="color: #10b981; font-size: 14px;">${inspectionSummary}</div>
-              <button type="button" class="button ghost" style="margin-top:8px;font-size:13px;" onclick="showInspectionDetailModal(${defect.id})">점검결과 보기</button>
-            ` : ''}
-            ${defect.photos && defect.photos.length > 0 ? `
-              <div class="label">사진</div>
-              <div class="gallery" style="display:flex;gap:8px;margin-top:4px;">
-                ${defect.photos.map((photo) => `
-                  <div class="thumb has-image" style="background-image:url('${baseUrl}${photo.url}');cursor:pointer;" onclick="showImageModal('${baseUrl}${photo.url}')">
-                    ${photo.kind === 'near' ? '전체' : '근접'}
-                  </div>
-                `).join('')}
-              </div>
-            ` : ''}
+    container.innerHTML = defects.map((defect) => `
+      <div class="defect-card">
+        <div class="defect-card-header">
+          <div>
+            <div class="defect-card-title">${escapeHTML(defect.location || '')} - ${escapeHTML(defect.trade || '')}</div>
+            <div class="defect-card-meta">케이스: ${defect.case_id} | ${formatDate(defect.created_at)}</div>
           </div>
         </div>
-      `;
-    }).join('');
+        <div class="defect-card-content">
+          <div class="label">내용</div>
+          <div class="value">${escapeHTML(defect.content || '')}</div>
+          ${defect.memo ? `<div class="label">메모</div><div class="value">${escapeHTML(defect.memo)}</div>` : ''}
+          ${defect.photos && defect.photos.length > 0 ? `
+            <div class="label">사진</div>
+            <div class="gallery" style="display:flex;gap:8px;margin-top:4px;">
+              ${defect.photos.map((photo) => `
+                <div class="thumb has-image" style="background-image:url('${baseUrl}${photo.url}');cursor:pointer;" onclick="showImageModal('${baseUrl}${photo.url}')">
+                  ${photo.kind === 'near' ? '전체' : '근접'}
+                </div>
+              `).join('')}
+            </div>
+          ` : ''}
+        </div>
+      </div>
+    `).join('');
   } catch (error) {
     console.error('하자목록 조회 오류:', error);
     toast('하자목록을 불러오는데 실패했습니다', 'error');
