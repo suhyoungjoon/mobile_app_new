@@ -451,6 +451,7 @@ async function viewCaseDefects(caseId) {
         })
       );
       
+      const uploadBase = (typeof api !== 'undefined' && api.baseURL) ? api.baseURL.replace(/\/api\/?$/, '') : 'https://mobile-app-new.onrender.com';
       container.innerHTML = defectsWithInspections.map(defect => {
         const hasInspections = Object.keys(defect.inspections || {}).length > 0;
         const inspectionSummary = hasInspections 
@@ -480,13 +481,16 @@ async function viewCaseDefects(caseId) {
               ${defect.photos && defect.photos.length > 0 ? `
                 <div class="label" style="margin-top:8px;">사진:</div>
                 <div class="gallery" style="display:flex;gap:8px;margin-top:4px;">
-                  ${defect.photos.map(photo => `
+                  ${defect.photos.map(photo => {
+                    const fullUrl = (photo.url && photo.url.startsWith('http')) ? photo.url : (uploadBase + (photo.url || ''));
+                    return `
                     <div class="thumb has-image" 
-                         style="background-image:url('https://mobile-app-new.onrender.com${photo.url}');cursor:pointer;" 
-                         onclick="showImageModal('https://mobile-app-new.onrender.com${photo.url}')">
+                         style="background-image:url('${fullUrl}');cursor:pointer;" 
+                         onclick="showImageModal('${fullUrl}')">
                       ${photo.kind === 'near' ? '전체' : '근접'}
                     </div>
-                  `).join('')}
+                  `;
+                  }).join('')}
                 </div>
               ` : ''}
             </div>
@@ -551,9 +555,10 @@ async function editDefect(defectId) {
       photoFar.classList.remove('has-image');
       
       // 저장된 사진 표시
+      const uploadBase = (typeof api !== 'undefined' && api.baseURL) ? api.baseURL.replace(/\/api\/?$/, '') : 'https://mobile-app-new.onrender.com';
       if (defect.photos && defect.photos.length > 0) {
         defect.photos.forEach(photo => {
-          const photoUrl = `https://mobile-app-new.onrender.com${photo.url}`;
+          const photoUrl = (photo.url && photo.url.startsWith('http')) ? photo.url : (uploadBase + (photo.url || ''));
           if (photo.kind === 'near' && photoNear) {
             photoNear.style.backgroundImage = `url('${photoUrl}')`;
             photoNear.classList.add('has-image');
@@ -1234,12 +1239,13 @@ async function handlePhotoUpload(type, inputElement) {
         const uploadResult = await api.uploadImage(compressedFile);
         console.log('✅ 서버 업로드 완료:', uploadResult);
         
-        // AppState에 photo key 저장
+        // AppState에 photo key 저장 (업로드 API는 key 반환, filename은 호환용)
+        const photoKey = uploadResult.key || uploadResult.filename;
         const photoType = isEditMode ? type.replace('edit-', '') : type;
         if (photoType === 'near') {
-          AppState.photoNearKey = uploadResult.filename;
+          AppState.photoNearKey = photoKey;
         } else {
-          AppState.photoFarKey = uploadResult.filename;
+          AppState.photoFarKey = photoKey;
         }
         
         toast(`${photoType === 'near' ? '전체' : '근접'}사진 업로드 완료!`, 'success');
