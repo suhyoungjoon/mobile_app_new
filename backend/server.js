@@ -114,8 +114,12 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Static files (for uploaded images and reports)
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-app.use('/uploads/thumbs', express.static(path.join(__dirname, 'uploads', 'thumbs')));
+// 업로드: UPLOAD_DIR 있으면 사용(Persistent Disk), 없으면 backend/uploads
+const uploadDir = path.isAbsolute(config.upload.dir)
+  ? config.upload.dir
+  : path.join(__dirname, config.upload.dir);
+app.use('/uploads', express.static(uploadDir));
+app.use('/uploads/thumbs', express.static(path.join(uploadDir, 'thumbs')));
 app.use('/reports', express.static(path.join(__dirname, 'reports')));
 
 // API routes
