@@ -312,11 +312,11 @@ async function previewReportForUser(householdId) {
           ${d.memo ? `<div class="small" style="color: #666; margin-top: 4px;">메모: ${escapeHTML(d.memo)}</div>` : ''}
           ${d.photos && d.photos.length > 0 ? `
             <div class="gallery" style="margin-top:8px;">
-              ${d.photos.map((photo) => `
-                <div class="thumb has-image" style="background-image:url('${baseUrl}${photo.url}');cursor:pointer;" onclick="showImageModal('${baseUrl}${photo.url}')">
-                  ${photo.kind === 'near' ? '근접' : '원거리'}
-                </div>
-              `).join('')}
+              ${d.photos.map((photo) => {
+                const raw = photo.url || photo.file_url || '';
+                const fullUrl = raw.startsWith('http') ? raw : (baseUrl + raw);
+                return fullUrl ? `<div class="thumb has-image" style="background-image:url('${fullUrl}');cursor:pointer;" onclick="showImageModal('${fullUrl}')">${photo.kind === 'near' ? '근접' : '원거리'}</div>` : '';
+              }).filter(Boolean).join('')}
             </div>
           ` : ''}
         `;
@@ -497,11 +497,11 @@ async function loadDefectsForHousehold(householdId) {
           ${defect.photos && defect.photos.length > 0 ? `
             <div class="label">사진</div>
             <div class="gallery" style="display:flex;gap:8px;margin-top:4px;">
-              ${defect.photos.map((photo) => `
-                <div class="thumb has-image" style="background-image:url('${baseUrl}${photo.url}');cursor:pointer;" onclick="showImageModal('${baseUrl}${photo.url}')">
-                  ${photo.kind === 'near' ? '전체' : '근접'}
-                </div>
-              `).join('')}
+              ${defect.photos.map((photo) => {
+                const raw = photo.url || photo.file_url || '';
+                const fullUrl = raw.startsWith('http') ? raw : (baseUrl + raw);
+                return fullUrl ? `<div class="thumb has-image" style="background-image:url('${fullUrl}');cursor:pointer;" onclick="showImageModal('${fullUrl}')">${photo.kind === 'near' ? '전체' : '근접'}</div>` : '';
+              }).filter(Boolean).join('')}
             </div>
           ` : ''}
         </div>
@@ -716,7 +716,15 @@ function formatInspectionItemByType(type, item, opts = {}) {
       rows.push(`<tr><td class="ins-detail-label">4점</td><td>${p1}, ${p2}, ${p3}, ${p4} mm</td></tr>`);
     }
   }
-  if (item.photos && item.photos.length > 0) rows.push(`<tr><td class="ins-detail-label">사진</td><td>${item.photos.length}장</td></tr>`);
+  const baseUrl = (typeof api !== 'undefined' && api.baseURL) ? api.baseURL.replace(/\/api\/?$/, '') : '';
+  if (item.photos && item.photos.length > 0) {
+    const photoThumbs = item.photos.map((photo) => {
+      const raw = photo.file_url || photo.url || '';
+      const fullUrl = raw.startsWith('http') ? raw : (baseUrl + raw);
+      return fullUrl ? `<div class="thumb has-image" style="background-image:url('${fullUrl}');cursor:pointer;width:48px;height:48px;background-size:cover;display:inline-block;margin:2px;" onclick="showImageModal('${fullUrl}')" title="사진"></div>` : '';
+    }).filter(Boolean).join('');
+    rows.push(`<tr><td class="ins-detail-label">사진</td><td>${item.photos.length}장 ${photoThumbs ? `<span class="gallery" style="display:inline-flex;gap:4px;margin-left:8px;">${photoThumbs}</span>` : ''}</td></tr>`);
+  }
   const editBtn = (opts.showEdit && item.id) ? `<button type="button" class="button ghost" style="margin-top:6px;font-size:12px;" onclick="openInspectionEditModal('${item.id}')">수정</button>` : '';
   return `<div class="ins-detail-block" data-edit-id="${item.id || ''}" data-edit-type="${type}"><div class="ins-detail-type">${typeNames[type] || type}</div><table class="ins-detail-table">${rows.join('')}</table>${editBtn}</div>`;
 }
@@ -1416,13 +1424,11 @@ async function onPreviewReport() {
           ${d.memo ? `<div class="small" style="color: #666; margin-top: 4px;">메모: ${escapeHTML(d.memo)}</div>` : ''}
           ${d.photos && d.photos.length > 0 ? `
             <div class="gallery" style="margin-top:8px;">
-              ${d.photos.map(photo => `
-                <div class="thumb has-image" 
-                     style="background-image:url('${baseUrl}${photo.url}');cursor:pointer;" 
-                     onclick="showImageModal('${baseUrl}${photo.url}')">
-                  ${photo.kind === 'near' ? '근접' : '원거리'}
-                </div>
-              `).join('')}
+              ${d.photos.map(photo => {
+                const raw = photo.url || photo.file_url || '';
+                const fullUrl = raw.startsWith('http') ? raw : (baseUrl + raw);
+                return fullUrl ? `<div class="thumb has-image" style="background-image:url('${fullUrl}');cursor:pointer;" onclick="showImageModal('${fullUrl}')">${photo.kind === 'near' ? '근접' : '원거리'}</div>` : '';
+              }).filter(Boolean).join('')}
             </div>
           ` : ''}
         `;
