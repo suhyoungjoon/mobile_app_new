@@ -550,6 +550,13 @@ class APIClient {
     });
   }
 
+  // 점검 항목 사진 삭제 (교체 시 기존 사진 제거)
+  async deleteInspectionPhoto(itemId, photoId) {
+    return await this.request(`/inspections/items/${itemId}/photos/${photoId}`, {
+      method: 'DELETE'
+    });
+  }
+
   // 공기질 측정 등록
   async createAirMeasurement(caseId, location, trade, tvoc, hcho, co2, note, result = 'normal') {
     return await this.request('/inspections/air', {

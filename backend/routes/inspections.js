@@ -176,6 +176,24 @@ router.post('/items/:itemId/photos', authenticateToken, requireInspectorAccess, 
   }
 });
 
+// 점검 사진 삭제 (교체 시 기존 사진 제거용)
+router.delete('/items/:itemId/photos/:photoId', authenticateToken, requireInspectorAccess, async (req, res) => {
+  try {
+    const { itemId, photoId } = req.params;
+    const result = await pool.query(
+      'DELETE FROM inspection_photo WHERE id = $1 AND item_id = $2 RETURNING id',
+      [photoId, itemId]
+    );
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: '사진을 찾을 수 없습니다' });
+    }
+    res.json({ success: true, message: '사진이 삭제되었습니다' });
+  } catch (error) {
+    console.error('점검 사진 삭제 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다' });
+  }
+});
+
 // 공기질 측정 등록
 router.post('/air', authenticateToken, requireInspectorAccess, async (req, res) => {
   try {
@@ -483,7 +501,7 @@ router.get('/by-household/:householdId', authenticateToken, async (req, res) => 
         lm.reference_mm,
         (SELECT json_agg(json_build_object('file_url', tp.file_url, 'caption', tp.caption, 'shot_at', tp.shot_at))
          FROM thermal_photo tp WHERE tp.item_id = ii.id) as thermal_photos,
-        (SELECT json_agg(json_build_object('file_url', ip.file_url, 'caption', ip.caption, 'sort_order', ip.sort_order) ORDER BY ip.sort_order)
+        (SELECT json_agg(json_build_object('id', ip.id, 'file_url', ip.file_url, 'caption', ip.caption, 'sort_order', ip.sort_order) ORDER BY ip.sort_order)
          FROM inspection_photo ip WHERE ip.item_id = ii.id) as inspection_photos
       FROM inspection_item ii
       LEFT JOIN air_measure am ON ii.id = am.item_id
@@ -539,7 +557,7 @@ router.get('/:caseId', authenticateToken, async (req, res) => {
         lm.reference_mm,
         (SELECT json_agg(json_build_object('file_url', tp.file_url, 'caption', tp.caption, 'shot_at', tp.shot_at))
          FROM thermal_photo tp WHERE tp.item_id = ii.id) as thermal_photos,
-        (SELECT json_agg(json_build_object('file_url', ip.file_url, 'caption', ip.caption, 'sort_order', ip.sort_order) ORDER BY ip.sort_order)
+        (SELECT json_agg(json_build_object('id', ip.id, 'file_url', ip.file_url, 'caption', ip.caption, 'sort_order', ip.sort_order) ORDER BY ip.sort_order)
          FROM inspection_photo ip WHERE ip.item_id = ii.id) as inspection_photos
       FROM inspection_item ii
       LEFT JOIN air_measure am ON ii.id = am.item_id
@@ -602,7 +620,7 @@ router.get('/defects/:defectId', authenticateToken, async (req, res) => {
         lm.reference_mm,
         (SELECT json_agg(json_build_object('file_url', tp.file_url, 'caption', tp.caption, 'shot_at', tp.shot_at))
          FROM thermal_photo tp WHERE tp.item_id = ii.id) as thermal_photos,
-        (SELECT json_agg(json_build_object('file_url', ip.file_url, 'caption', ip.caption, 'sort_order', ip.sort_order) ORDER BY ip.sort_order)
+        (SELECT json_agg(json_build_object('id', ip.id, 'file_url', ip.file_url, 'caption', ip.caption, 'sort_order', ip.sort_order) ORDER BY ip.sort_order)
          FROM inspection_photo ip WHERE ip.item_id = ii.id) as inspection_photos
       FROM inspection_item ii
       LEFT JOIN air_measure am ON ii.id = am.item_id

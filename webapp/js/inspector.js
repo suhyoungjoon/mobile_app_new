@@ -14,7 +14,8 @@ const InspectorState = {
   userListCache: [], // loadUserList 결과 캐시 (selectUser에서 표시 정보 사용)
   measurementPhotos: {}, // 측정 타입별 사진 최대 2장 {air: [{url, file, key}, ...], visual: [...], ...}
   inspectionByHousehold: false, // true면 세대별 점검(하자 무관), defectId 미사용
-  householdInspections: null // getInspectionsByHousehold 결과 { visual: [], thermal: [], air: [], radon: [], level: [] }
+  householdInspections: null, // getInspectionsByHousehold 결과 { visual: [], thermal: [], air: [], radon: [], level: [] }
+  _editReplacementPhotos: {} // 수정 모달에서 교체할 사진 { photoId: { url, sort_order } }
 };
 
 // API Client는 api.js에서 전역 변수로 선언됨
@@ -571,6 +572,7 @@ function closeInspectionDetailModal() {
 function closeInspectionEditModal() {
   _editingInspectionId = null;
   _editingInspectionType = null;
+  InspectorState._editReplacementPhotos = {};
   const modal = $('#inspection-edit-modal');
   if (modal) {
     modal.classList.add('hidden');
@@ -605,21 +607,64 @@ function buildInspectionEditForm(type, item) {
   if (type === 'thermal') {
     html += `<p class="small" style="color:#6b7280;">열화상은 위치·메모·결과만 수정 가능합니다. 사진은 추가만 가능합니다.</p>`;
   }
-  // 기존 사진 표시
+  // 기존 사진 표시 + 교체 버튼
   if (item.photos && item.photos.length > 0) {
     const baseUrl = (typeof api !== 'undefined' && api.baseURL) ? api.baseURL.replace(/\/api\/?$/, '') : '';
     const photoItems = item.photos.map((photo, idx) => {
       const raw = photo.file_url || photo.url || '';
       const fullUrl = raw.startsWith('http') ? raw : (baseUrl + raw);
       if (!fullUrl) return '';
-      return `<div class="thumb has-image" style="background-image:url('${fullUrl}');cursor:pointer;width:80px;height:80px;background-size:contain;background-position:center;background-repeat:no-repeat;display:inline-block;margin:4px;border-radius:8px;border:1px solid #e5e7eb;" onclick="showImageModal('${fullUrl}')" title="사진 ${idx + 1}"></div>`;
+      const photoId = photo.id;
+      const sortOrder = photo.sort_order != null ? photo.sort_order : idx;
+      const replaceSection = photoId
+        ? `<input type="file" id="ins-edit-photo-replace-${photoId}" accept="image/*" style="display:none" onchange="handleEditPhotoReplace('${item.id}', '${photoId}', ${sortOrder}, this)" />
+        <button type="button" class="button ghost" style="font-size:12px;padding:4px 8px;" onclick="document.getElementById('ins-edit-photo-replace-${photoId}').click()">교체</button>`
+        : '';
+      const thumbId = photoId ? `ins-edit-photo-thumb-${photoId}` : `ins-edit-photo-thumb-${idx}`;
+      return `<div style="display:inline-flex;flex-direction:column;align-items:center;gap:4px;margin:4px;">
+        <div id="${thumbId}" class="thumb has-image" style="background-image:url('${fullUrl}');cursor:pointer;width:80px;height:80px;background-size:contain;background-position:center;background-repeat:no-repeat;border-radius:8px;border:1px solid #e5e7eb;" onclick="showImageModal('${fullUrl}')" title="사진 ${idx + 1}"></div>
+        ${replaceSection}
+      </div>`;
     }).filter(Boolean).join('');
     html += `<div class="form-group"><label class="form-label">등록된 사진 (${item.photos.length}장)</label><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">${photoItems}</div></div>`;
   }
   return html;
 }
 
+async function handleEditPhotoReplace(itemId, photoId, sortOrder, inputElement) {
+  const file = inputElement.files[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) {
+    toast('이미지 파일만 업로드 가능합니다', 'error');
+    return;
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    toast('파일 크기는 10MB 이하여야 합니다', 'error');
+    return;
+  }
+  try {
+    toast('사진 처리 중...', 'info');
+    const compressedFile = await compressImage(file, 1920, 1080, 0.85);
+    const uploadResult = await api.uploadImage(compressedFile);
+    const url = uploadResult.url || `/uploads/${uploadResult.key || uploadResult.filename}`;
+    InspectorState._editReplacementPhotos = InspectorState._editReplacementPhotos || {};
+    InspectorState._editReplacementPhotos[photoId] = { url, sort_order: sortOrder };
+    const baseUrl = (typeof api !== 'undefined' && api.baseURL) ? api.baseURL.replace(/\/api\/?$/, '') : '';
+    const fullUrl = url.startsWith('http') ? url : (baseUrl + url);
+    const thumbEl = $(`#ins-edit-photo-thumb-${photoId}`);
+    if (thumbEl) {
+      thumbEl.style.backgroundImage = `url('${fullUrl}')`;
+    }
+    inputElement.value = '';
+    toast('사진이 교체되었습니다. 저장 버튼을 눌러 반영하세요', 'success');
+  } catch (error) {
+    console.error('사진 교체 실패:', error);
+    toast(error.message || '사진 교체에 실패했습니다', 'error');
+  }
+}
+
 function openInspectionEditModal(itemId) {
+  InspectorState._editReplacementPhotos = {};
   const data = InspectorState._editItemsById && InspectorState._editItemsById[itemId];
   if (!data) {
     toast('항목 정보를 찾을 수 없습니다', 'error');
@@ -671,6 +716,17 @@ async function saveInspectionEdit() {
   setLoading(true);
   try {
     await api.updateInspectionItem(_editingInspectionId, body);
+    // 교체된 사진 반영: 기존 삭제 후 새 사진 추가
+    const replacements = InspectorState._editReplacementPhotos || {};
+    for (const [photoId, data] of Object.entries(replacements)) {
+      try {
+        await api.deleteInspectionPhoto(_editingInspectionId, photoId);
+        await api.addInspectionPhoto(_editingInspectionId, data.url, `사진 ${(data.sort_order || 0) + 1}`, data.sort_order ?? 0);
+      } catch (photoErr) {
+        console.error('사진 교체 반영 실패:', photoErr);
+        toast('일부 사진 교체 반영에 실패했습니다', 'warning');
+      }
+    }
     toast('수정되었습니다', 'success');
     closeInspectionEditModal();
     if (InspectorState.selectedHouseholdId) {
