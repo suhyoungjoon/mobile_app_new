@@ -605,6 +605,17 @@ function buildInspectionEditForm(type, item) {
   if (type === 'thermal') {
     html += `<p class="small" style="color:#6b7280;">열화상은 위치·메모·결과만 수정 가능합니다. 사진은 추가만 가능합니다.</p>`;
   }
+  // 기존 사진 표시
+  if (item.photos && item.photos.length > 0) {
+    const baseUrl = (typeof api !== 'undefined' && api.baseURL) ? api.baseURL.replace(/\/api\/?$/, '') : '';
+    const photoItems = item.photos.map((photo, idx) => {
+      const raw = photo.file_url || photo.url || '';
+      const fullUrl = raw.startsWith('http') ? raw : (baseUrl + raw);
+      if (!fullUrl) return '';
+      return `<div class="thumb has-image" style="background-image:url('${fullUrl}');cursor:pointer;width:80px;height:80px;background-size:contain;background-position:center;background-repeat:no-repeat;display:inline-block;margin:4px;border-radius:8px;border:1px solid #e5e7eb;" onclick="showImageModal('${fullUrl}')" title="사진 ${idx + 1}"></div>`;
+    }).filter(Boolean).join('');
+    html += `<div class="form-group"><label class="form-label">등록된 사진 (${item.photos.length}장)</label><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">${photoItems}</div></div>`;
+  }
   return html;
 }
 
