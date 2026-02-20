@@ -1,5 +1,5 @@
 // Enhanced Service Worker with Push Notifications
-const CACHE_NAME = 'insighti-v3.2-inspector-fix';
+const CACHE_NAME = 'insighti-v3.3-meta-removed';
 const ASSETS = [
   '/index.html',
   '/inspector.html',

@@ -75,8 +75,9 @@ class APIClient {
 
           const err = new Error(serverMessage || `HTTP ${resp.status}`);
           err.status = resp.status;
-          err.details = errorData.details;
+          err.details = errorData.details ?? errorData.detail;
           err.error = errorData.error;
+          err.responseText = text;
           throw err;
         }
         return await resp.json();
@@ -661,6 +662,13 @@ class APIClient {
   // 점검 항목 삭제
   async deleteInspection(itemId) {
     return await this.request(`/inspections/${itemId}`, {
+      method: 'DELETE'
+    });
+  }
+
+  // 세대별 점검결과 전체 삭제
+  async deleteHouseholdInspections(householdId) {
+    return await this.request(`/inspections/by-household/${householdId}`, {
       method: 'DELETE'
     });
   }

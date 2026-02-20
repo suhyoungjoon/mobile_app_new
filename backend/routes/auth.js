@@ -6,6 +6,17 @@ const config = require('../config');
 const { safeLog } = require('../utils/logger');
 const { encrypt, decrypt } = require('../utils/encryption');
 
+// 복호화 실패 시(로컬 ENCRYPTION_KEY 불일치 등) 500 방지
+function safeDecrypt(value, fallback) {
+  if (!value) return fallback || '';
+  try {
+    return decrypt(value);
+  } catch (e) {
+    console.warn('⚠️ 복호화 실패, fallback 사용:', e.message);
+    return fallback || value;
+  }
+}
+
 const router = express.Router();
 
 // Create session by household info
@@ -69,12 +80,12 @@ router.post('/session', async (req, res) => {
       householdId = householdResult.rows[0].id;
       const existing = householdResult.rows[0];
       
-      // 암호화된 필드가 있으면 복호화, 없으면 평문 사용 (호환성)
+      // 암호화된 필드가 있으면 복호화, 없으면 평문 사용 (호환성). 복호화 실패 시 평문/fallback 사용
       const existingName = existing.resident_name_encrypted 
-        ? decrypt(existing.resident_name_encrypted) 
+        ? safeDecrypt(existing.resident_name_encrypted, existing.resident_name) 
         : existing.resident_name;
       const existingPhone = existing.phone_encrypted 
-        ? decrypt(existing.phone_encrypted) 
+        ? safeDecrypt(existing.phone_encrypted, existing.phone) 
         : existing.phone;
       
       // 이름이나 전화번호가 다르면 업데이트 (암호화하여 저장)
@@ -133,7 +144,13 @@ router.post('/session', async (req, res) => {
 
   } catch (error) {
     safeLog('error', 'Auth error', { error: error.message });
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('❌ /api/auth/session error:', error.message, error.stack);
+    const msg = error.message || String(error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: msg,
+      details: msg
+    });
   }
 });
 

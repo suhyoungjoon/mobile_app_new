@@ -1,4 +1,6 @@
-// Main server file
+// Main server file - 로컬에서만 .env 로드 (서버 배포 시에는 Render 등에서 주입한 환경변수 사용)
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');

@@ -157,21 +157,26 @@ async function autoLogin() {
     route('user-list');
     
   } catch (error) {
+    var detailMsg = error.details || error.message || '알 수 없는 오류';
+    if (error.details == null && error.responseText) {
+      try {
+        var body = JSON.parse(error.responseText);
+        detailMsg = body.details || body.detail || body.error || detailMsg;
+      } catch (_) {
+        detailMsg = (error.responseText || '').slice(0, 200) || detailMsg;
+      }
+      console.error('서버 응답 본문:', error.responseText);
+    }
     console.error('❌ 자동 로그인 오류:', error);
-    console.error('에러 상세:', {
-      message: error.message,
-      stack: error.stack,
-      response: error.response
-    });
-    toast('점검원 계정으로 자동 로그인에 실패했습니다: ' + (error.message || '알 수 없는 오류'), 'error');
+    console.error('에러 상세:', { message: error.message, details: error.details, detailMsg: detailMsg });
+    toast('점검원 계정으로 자동 로그인에 실패했습니다: ' + detailMsg, 'error');
     
-    // 에러 시에도 화면 표시
     if (container) {
       container.innerHTML = `
         <div class="card" style="text-align: center; padding: 40px;">
           <div style="color: #e74c3c;">로그인에 실패했습니다.</div>
-          <div style="color: #999; font-size: 12px; margin-top: 8px;">${error.message || '알 수 없는 오류'}</div>
-          <div style="color: #999; font-size: 12px; margin-top: 4px;">페이지를 새로고침해주세요.</div>
+          <div style="color: #666; font-size: 13px; margin-top: 12px; word-break: break-all;">${escapeHTML(detailMsg)}</div>
+          <div style="color: #999; font-size: 12px; margin-top: 8px;">백엔드 터미널에서 "❌ /api/auth/session error" 로그를 확인하세요.</div>
         </div>
       `;
     }
@@ -222,12 +227,11 @@ async function loadUserList() {
             <span class="inspection-badge">하자 ${u.defect_count}건</span>
           </div>
         </div>
-        <div class="defect-card-meta">${escapeHTML(u.resident_name || '')} · 하자 ${u.defect_count}건</div>
-        <div class="button-group" style="display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap;">
-          <button class="button" style="flex: 1; min-width: 90px;" onclick="event.stopPropagation(); selectUser(${u.household_id})">하자목록 보기</button>
-          <button class="button success" style="flex: 1; min-width: 90px;" onclick="event.stopPropagation(); openInspectionForHousehold(${u.household_id})">점검결과 입력</button>
-          <button class="button" style="flex: 1; min-width: 90px;" onclick="event.stopPropagation(); previewReportForUser(${u.household_id})">보고서 미리보기</button>
-          <button class="button" style="flex: 1; min-width: 90px;" onclick="event.stopPropagation(); downloadReportForUser(${u.household_id})">보고서 다운로드</button>
+        <div class="defect-card-actions">
+          <button class="button" onclick="event.stopPropagation(); selectUser(${u.household_id})">하자목록 보기</button>
+          <button class="button success" onclick="event.stopPropagation(); openInspectionForHousehold(${u.household_id})">점검결과 입력</button>
+          <button class="button" onclick="event.stopPropagation(); previewReportForUser(${u.household_id})">보고서 미리보기</button>
+          <button class="button" onclick="event.stopPropagation(); downloadReportForUser(${u.household_id})">보고서 다운로드</button>
         </div>
       </div>
     `).join('');
@@ -582,6 +586,7 @@ function closeInspectionEditModal() {
 
 function buildInspectionEditForm(type, item) {
   const v = (x) => (x != null && x !== '' ? String(x) : '');
+  const lv = (key) => { const x = item[key] ?? (item.level_measure && item.level_measure[key]); return v(x); };
   const typeNames = { visual: '육안', air: '공기질', radon: '라돈', level: '레벨기', thermal: '열화상' };
   let html = `<input type="hidden" id="ins-edit-type" value="${escapeHTML(type)}" />`;
   html += `<div class="form-group"><label class="form-label">위치</label><input type="text" id="ins-edit-location" class="input" value="${escapeHTML(v(item.location))}" /></div>`;
@@ -598,37 +603,103 @@ function buildInspectionEditForm(type, item) {
     html += `<div class="form-group"><label class="form-label">단위</label><select id="ins-edit-unit_radon" class="input"><option value="Bq/m³" ${(item.unit_radon || item.unit) === 'Bq/m³' ? 'selected' : ''}>Bq/m³</option><option value="pCi/L" ${(item.unit_radon || item.unit) === 'pCi/L' ? 'selected' : ''}>pCi/L</option></select></div>`;
   }
   if (type === 'level') {
-    html += `<div class="form-group"><label class="form-label">기준(mm)</label><input type="text" id="ins-edit-reference_mm" class="input" value="${v(item.reference_mm) || '150'}" /></div>`;
-    html += `<div class="form-group"><label class="form-label">1번 좌/우</label><input type="text" id="ins-edit-p1_left" class="input" style="width:60px;display:inline-block;" value="${v(item.point1_left_mm)}" /> / <input type="text" id="ins-edit-p1_right" class="input" style="width:60px;display:inline-block;" value="${v(item.point1_right_mm)}" /></div>`;
-    html += `<div class="form-group"><label class="form-label">2번 좌/우</label><input type="text" id="ins-edit-p2_left" class="input" style="width:60px;" value="${v(item.point2_left_mm)}" /> / <input type="text" id="ins-edit-p2_right" class="input" style="width:60px;" value="${v(item.point2_right_mm)}" /></div>`;
-    html += `<div class="form-group"><label class="form-label">3번 좌/우</label><input type="text" id="ins-edit-p3_left" class="input" style="width:60px;" value="${v(item.point3_left_mm)}" /> / <input type="text" id="ins-edit-p3_right" class="input" style="width:60px;" value="${v(item.point3_right_mm)}" /></div>`;
-    html += `<div class="form-group"><label class="form-label">4번 좌/우</label><input type="text" id="ins-edit-p4_left" class="input" style="width:60px;" value="${v(item.point4_left_mm)}" /> / <input type="text" id="ins-edit-p4_right" class="input" style="width:60px;" value="${v(item.point4_right_mm)}" /></div>`;
+    const p1L = lv('point1_left_mm') || lv('left_mm');
+    const p1R = lv('point1_right_mm') || lv('right_mm');
+    html += `<div class="form-group"><label class="form-label">기준(mm)</label><input type="text" id="ins-edit-reference_mm" class="input" value="${lv('reference_mm') || '150'}" /></div>`;
+    html += `<div class="form-group"><label class="form-label">1번 좌/우</label><input type="text" id="ins-edit-p1_left" class="input" style="width:60px;display:inline-block;" value="${p1L}" /> / <input type="text" id="ins-edit-p1_right" class="input" style="width:60px;display:inline-block;" value="${p1R}" /></div>`;
+    html += `<div class="form-group"><label class="form-label">2번 좌/우</label><input type="text" id="ins-edit-p2_left" class="input" style="width:60px;" value="${lv('point2_left_mm')}" /> / <input type="text" id="ins-edit-p2_right" class="input" style="width:60px;" value="${lv('point2_right_mm')}" /></div>`;
+    html += `<div class="form-group"><label class="form-label">3번 좌/우</label><input type="text" id="ins-edit-p3_left" class="input" style="width:60px;" value="${lv('point3_left_mm')}" /> / <input type="text" id="ins-edit-p3_right" class="input" style="width:60px;" value="${lv('point3_right_mm')}" /></div>`;
+    html += `<div class="form-group"><label class="form-label">4번 좌/우</label><input type="text" id="ins-edit-p4_left" class="input" style="width:60px;" value="${lv('point4_left_mm')}" /> / <input type="text" id="ins-edit-p4_right" class="input" style="width:60px;" value="${lv('point4_right_mm')}" /></div>`;
   }
   if (type === 'thermal') {
-    html += `<p class="small" style="color:#6b7280;">열화상은 위치·메모·결과만 수정 가능합니다. 사진은 추가만 가능합니다.</p>`;
+    html += `<p class="small" style="color:#6b7280;">열화상은 위치·메모·결과·사진을 수정할 수 있습니다.</p>`;
   }
-  // 기존 사진 표시 + 교체 버튼
-  if (item.photos && item.photos.length > 0) {
-    const baseUrl = (typeof api !== 'undefined' && api.baseURL) ? api.baseURL.replace(/\/api\/?$/, '') : '';
-    const photoItems = item.photos.map((photo, idx) => {
+  const baseUrl = (typeof api !== 'undefined' && api.baseURL) ? api.baseURL.replace(/\/api\/?$/, '') : '';
+  const photos = item.photos || [];
+  // 육안·열화상: 사진 2슬롯 항상 표시 — 사진 영역 클릭 시 촬영/갤러리 선택 (세대주와 동일)
+  if (type === 'visual' || type === 'thermal') {
+    let photoSlotsHtml = '';
+    for (let idx = 0; idx < 2; idx++) {
+      const photo = photos[idx];
+      if (photo) {
+        const raw = photo.file_url || photo.url || '';
+        const fullUrl = raw.startsWith('http') ? raw : (baseUrl + raw);
+        const photoId = photo.id;
+        const sortOrder = photo.sort_order != null ? photo.sort_order : idx;
+        const inputId = photoId ? `ins-edit-photo-replace-${photoId}` : `ins-edit-photo-replace-${type}-${idx}`;
+        const thumbId = photoId ? `ins-edit-photo-thumb-${photoId}` : `ins-edit-photo-thumb-${type}-${idx}`;
+        const thumbStyle = fullUrl
+          ? `background-image:url('${fullUrl}');cursor:pointer;`
+          : 'background-color:#f5f5f5;cursor:pointer;';
+        const clickHandler = photoId
+          ? `document.getElementById('ins-edit-photo-replace-${photoId}').click()`
+          : `document.getElementById('ins-edit-photo-replace-${type}-${idx}').click()`;
+        photoSlotsHtml += `<div style="display:inline-flex;flex-direction:column;align-items:center;gap:4px;margin:4px;">
+          <input type="file" id="${inputId}" accept="image/*" style="display:none" onchange="handleEditPhotoReplace('${item.id}', '${photoId || ''}', ${sortOrder}, this)" />
+          <div id="${thumbId}" class="thumb" style="${thumbStyle}width:80px;height:80px;background-size:contain;background-position:center;background-repeat:no-repeat;border-radius:8px;border:1px solid #e5e7eb;" onclick="${clickHandler}" title="탭하여 사진 촬영 또는 갤러리에서 선택"></div>
+        </div>`;
+      } else {
+        photoSlotsHtml += `<div style="display:inline-flex;flex-direction:column;align-items:center;gap:4px;margin:4px;">
+          <input type="file" id="ins-edit-photo-add-${idx}" accept="image/*" style="display:none" onchange="handleEditPhotoAdd('${item.id}', ${idx}, this)" />
+          <div id="ins-edit-photo-new-thumb-${idx}" class="thumb" style="width:80px;height:80px;background-color:#f5f5f5;background-size:contain;background-position:center;background-repeat:no-repeat;border-radius:8px;border:1px dashed #d1d5db;cursor:pointer;" onclick="document.getElementById('ins-edit-photo-add-${idx}').click()" title="탭하여 사진 촬영 또는 갤러리에서 선택"></div>
+        </div>`;
+      }
+    }
+    html += `<div class="form-group"><label class="form-label">사진 (최대 2장) — 탭하여 촬영/갤러리</label><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">${photoSlotsHtml}</div></div>`;
+  } else if (photos.length > 0) {
+    // 공기질·라돈·레벨기: 기존 사진 있으면 탭하여 교체 (사진 영역 클릭 = 촬영/갤러리)
+    const photoItems = photos.map((photo, idx) => {
       const raw = photo.file_url || photo.url || '';
       const fullUrl = raw.startsWith('http') ? raw : (baseUrl + raw);
       if (!fullUrl) return '';
       const photoId = photo.id;
       const sortOrder = photo.sort_order != null ? photo.sort_order : idx;
-      const replaceSection = photoId
-        ? `<input type="file" id="ins-edit-photo-replace-${photoId}" accept="image/*" style="display:none" onchange="handleEditPhotoReplace('${item.id}', '${photoId}', ${sortOrder}, this)" />
-        <button type="button" class="button ghost" style="font-size:12px;padding:4px 8px;" onclick="document.getElementById('ins-edit-photo-replace-${photoId}').click()">교체</button>`
-        : '';
-      const thumbId = photoId ? `ins-edit-photo-thumb-${photoId}` : `ins-edit-photo-thumb-${idx}`;
+      const inputId = photoId ? `ins-edit-photo-replace-${photoId}` : `ins-edit-photo-replace-other-${idx}`;
+      const thumbId = photoId ? `ins-edit-photo-thumb-${photoId}` : `ins-edit-photo-thumb-other-${idx}`;
       return `<div style="display:inline-flex;flex-direction:column;align-items:center;gap:4px;margin:4px;">
-        <div id="${thumbId}" class="thumb has-image" style="background-image:url('${fullUrl}');cursor:pointer;width:80px;height:80px;background-size:contain;background-position:center;background-repeat:no-repeat;border-radius:8px;border:1px solid #e5e7eb;" onclick="showImageModal('${fullUrl}')" title="사진 ${idx + 1}"></div>
-        ${replaceSection}
+        <input type="file" id="${inputId}" accept="image/*" style="display:none" onchange="handleEditPhotoReplace('${item.id}', '${photoId || ''}', ${sortOrder}, this)" />
+        <div id="${thumbId}" class="thumb has-image" style="background-image:url('${fullUrl}');cursor:pointer;width:80px;height:80px;background-size:contain;background-position:center;background-repeat:no-repeat;border-radius:8px;border:1px solid #e5e7eb;" onclick="document.getElementById('${inputId}').click()" title="탭하여 사진 촬영 또는 갤러리에서 선택"></div>
       </div>`;
     }).filter(Boolean).join('');
-    html += `<div class="form-group"><label class="form-label">등록된 사진 (${item.photos.length}장)</label><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">${photoItems}</div></div>`;
+    html += `<div class="form-group"><label class="form-label">등록된 사진 (${photos.length}장) — 탭하여 교체</label><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">${photoItems}</div></div>`;
   }
   return html;
+}
+
+async function handleEditPhotoAdd(itemId, slotIndex, inputElement) {
+  const file = inputElement.files[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) {
+    toast('이미지 파일만 업로드 가능합니다', 'error');
+    return;
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    toast('파일 크기는 10MB 이하여야 합니다', 'error');
+    return;
+  }
+  try {
+    toast('사진 처리 중...', 'info');
+    const compressedFile = await compressImage(file, 1920, 1080, 0.85);
+    const uploadResult = await api.uploadImage(compressedFile);
+    const url = uploadResult.url || `/uploads/${uploadResult.key || uploadResult.filename}`;
+    InspectorState._editNewPhotos = InspectorState._editNewPhotos || {};
+    InspectorState._editNewPhotos[slotIndex] = { url, sort_order: slotIndex };
+    const baseUrl = (typeof api !== 'undefined' && api.baseURL) ? api.baseURL.replace(/\/api\/?$/, '') : '';
+    const fullUrl = url.startsWith('http') ? url : (baseUrl + url);
+    const thumbEl = $(`#ins-edit-photo-new-thumb-${slotIndex}`);
+    if (thumbEl) {
+      thumbEl.style.backgroundImage = `url('${fullUrl}')`;
+      thumbEl.style.backgroundColor = 'transparent';
+      thumbEl.style.cursor = 'pointer';
+      thumbEl.onclick = () => showImageModal(fullUrl);
+      thumbEl.title = '사진 ' + (slotIndex + 1);
+    }
+    inputElement.value = '';
+    toast('사진이 추가되었습니다. 저장 버튼을 눌러 반영하세요', 'success');
+  } catch (error) {
+    console.error('사진 추가 실패:', error);
+    toast(error.message || '사진 추가에 실패했습니다', 'error');
+  }
 }
 
 async function handleEditPhotoReplace(itemId, photoId, sortOrder, inputElement) {
@@ -665,6 +736,7 @@ async function handleEditPhotoReplace(itemId, photoId, sortOrder, inputElement) 
 
 function openInspectionEditModal(itemId) {
   InspectorState._editReplacementPhotos = {};
+  InspectorState._editNewPhotos = {};
   const data = InspectorState._editItemsById && InspectorState._editItemsById[itemId];
   if (!data) {
     toast('항목 정보를 찾을 수 없습니다', 'error');
@@ -727,6 +799,19 @@ async function saveInspectionEdit() {
         toast('일부 사진 교체 반영에 실패했습니다', 'warning');
       }
     }
+    // 육안: 새로 추가한 사진 반영
+    const newPhotos = InspectorState._editNewPhotos || {};
+    for (let slot = 0; slot < 2; slot++) {
+      const data = newPhotos[slot];
+      if (data && data.url) {
+        try {
+          await api.addInspectionPhoto(_editingInspectionId, data.url, `사진 ${slot + 1}`, data.sort_order ?? slot);
+        } catch (photoErr) {
+          console.error('사진 추가 반영 실패:', photoErr);
+          toast('일부 사진 추가 반영에 실패했습니다', 'warning');
+        }
+      }
+    }
     toast('수정되었습니다', 'success');
     closeInspectionEditModal();
     if (InspectorState.selectedHouseholdId) {
@@ -758,8 +843,75 @@ async function saveInspectionEdit() {
   }
 }
 
+async function deleteInspectionItem(itemId) {
+  if (!confirm('이 점검결과를 삭제하시겠습니까?')) return;
+  setLoading(true);
+  try {
+    await api.deleteInspection(itemId);
+    toast('삭제되었습니다', 'success');
+    closeInspectionEditModal();
+    if (InspectorState._editItemsById && itemId in InspectorState._editItemsById) {
+      delete InspectorState._editItemsById[itemId];
+    }
+    if (InspectorState.selectedHouseholdId) {
+      const inspRes = await api.getInspectionsByHousehold(InspectorState.selectedHouseholdId);
+      InspectorState.householdInspections = inspRes.inspections || { visual: [], thermal: [], air: [], radon: [], level: [] };
+      renderHouseholdInspectionsList();
+    }
+    if (_detailModalDefectId) {
+      const res = await api.getDefectInspections(_detailModalDefectId);
+      const inspections = res.inspections || {};
+      InspectorState._editItemsById = InspectorState._editItemsById || {};
+      const typeOrder = ['visual', 'air', 'radon', 'level', 'thermal'];
+      let html = '';
+      for (const type of typeOrder) {
+        const items = inspections[type] || [];
+        items.forEach((it) => {
+          if (it.id) InspectorState._editItemsById[it.id] = { item: it, type };
+          html += formatInspectionItemByType(type, it, { showEdit: true });
+        });
+      }
+      const detailBody = $('#inspection-detail-modal-body');
+      if (detailBody) detailBody.innerHTML = html || '<p style="color:#6b7280;">등록된 점검결과가 없습니다.</p>';
+    }
+  } catch (e) {
+    console.error('점검결과 삭제 오류:', e);
+    toast(e.message || '삭제에 실패했습니다', 'error');
+  } finally {
+    setLoading(false);
+  }
+}
+
+async function deleteHouseholdInspections() {
+  const householdId = InspectorState.selectedHouseholdId;
+  if (!householdId) {
+    toast('세대 정보를 찾을 수 없습니다', 'error');
+    return;
+  }
+  if (!InspectorState.inspectionByHousehold) {
+    toast('세대별 점검결과 입력 화면에서만 사용할 수 있습니다', 'error');
+    return;
+  }
+  if (!confirm('이 세대의 모든 점검결과(육안·공기질·라돈·레벨기·열화상)를 삭제합니다. 계속하시겠습니까?')) return;
+  if (!confirm('삭제된 데이터는 복구할 수 없습니다. 정말 삭제하시겠습니까?')) return;
+  setLoading(true);
+  try {
+    const res = await api.deleteHouseholdInspections(householdId);
+    const count = res.deleted || 0;
+    toast(`${count}건이 삭제되었습니다`, 'success');
+    InspectorState.householdInspections = { visual: [], thermal: [], air: [], radon: [], level: [] };
+    renderHouseholdInspectionsList();
+  } catch (e) {
+    console.error('세대 점검결과 삭제 오류:', e);
+    toast(e.message || '삭제에 실패했습니다', 'error');
+  } finally {
+    setLoading(false);
+  }
+}
+
 function formatInspectionItemByType(type, item, opts = {}) {
   const v = (x) => (x != null && x !== '' ? String(x) : '-');
+  const lv = (key) => { const x = item[key] ?? (item.level_measure && item.level_measure[key]); return v(x); };
   const typeNames = { visual: '육안', air: '공기질', radon: '라돈', level: '레벨기', thermal: '열화상' };
   const rows = [];
   rows.push(`<tr><td class="ins-detail-label">위치</td><td>${escapeHTML(v(item.location))}</td></tr>`);
@@ -771,17 +923,20 @@ function formatInspectionItemByType(type, item, opts = {}) {
     if (item.tvoc != null) rows.push(`<tr><td class="ins-detail-label">TVOC</td><td>${v(item.tvoc)}</td></tr>`);
     if (item.hcho != null) rows.push(`<tr><td class="ins-detail-label">HCHO</td><td>${v(item.hcho)}</td></tr>`);
   }
-  if (type === 'radon' && (item.radon != null || item.unit)) rows.push(`<tr><td class="ins-detail-label">라돈</td><td>${v(item.radon)} ${v(item.unit)}</td></tr>`);
+  if (type === 'radon' && (item.radon != null || item.unit_radon || item.unit)) rows.push(`<tr><td class="ins-detail-label">라돈</td><td>${v(item.radon)} ${v(item.unit_radon || item.unit)}</td></tr>`);
   if (type === 'level') {
-    if (item.reference_mm != null) rows.push(`<tr><td class="ins-detail-label">기준(mm)</td><td>${v(item.reference_mm)}</td></tr>`);
-    if (item.left_mm != null || item.right_mm != null) rows.push(`<tr><td class="ins-detail-label">좌/우</td><td>${v(item.left_mm)} / ${v(item.right_mm)} mm</td></tr>`);
-    if (item.point1_left_mm != null || item.point1_right_mm != null) {
-      const p1 = `1번 ${v(item.point1_left_mm)}/${v(item.point1_right_mm)}`;
-      const p2 = `2번 ${v(item.point2_left_mm)}/${v(item.point2_right_mm)}`;
-      const p3 = `3번 ${v(item.point3_left_mm)}/${v(item.point3_right_mm)}`;
-      const p4 = `4번 ${v(item.point4_left_mm)}/${v(item.point4_right_mm)}`;
+    const refMm = item.reference_mm ?? item.level_reference_mm;
+    if (refMm != null) rows.push(`<tr><td class="ins-detail-label">기준(mm)</td><td>${v(refMm)}</td></tr>`);
+    const has4 = item.point1_left_mm != null || item.point1_right_mm != null || item.point2_left_mm != null || item.point2_right_mm != null || item.point3_left_mm != null || item.point3_right_mm != null || item.point4_left_mm != null || item.point4_right_mm != null;
+    const hasLegacy = item.left_mm != null || item.right_mm != null;
+    if (has4) {
+      const p1 = `1번 ${lv('point1_left_mm')}/${lv('point1_right_mm')}`;
+      const p2 = `2번 ${lv('point2_left_mm')}/${lv('point2_right_mm')}`;
+      const p3 = `3번 ${lv('point3_left_mm')}/${lv('point3_right_mm')}`;
+      const p4 = `4번 ${lv('point4_left_mm')}/${lv('point4_right_mm')}`;
       rows.push(`<tr><td class="ins-detail-label">4점</td><td>${p1}, ${p2}, ${p3}, ${p4} mm</td></tr>`);
     }
+    if (hasLegacy && !has4) rows.push(`<tr><td class="ins-detail-label">좌/우</td><td>${v(item.left_mm)} / ${v(item.right_mm)} mm</td></tr>`);
   }
   const baseUrl = (typeof api !== 'undefined' && api.baseURL) ? api.baseURL.replace(/\/api\/?$/, '') : '';
   if (item.photos && item.photos.length > 0) {
@@ -792,8 +947,9 @@ function formatInspectionItemByType(type, item, opts = {}) {
     }).filter(Boolean).join('');
     rows.push(`<tr><td class="ins-detail-label">사진</td><td>${item.photos.length}장 ${photoThumbs ? `<span class="gallery" style="display:inline-flex;gap:4px;margin-left:8px;">${photoThumbs}</span>` : ''}</td></tr>`);
   }
-  const editBtn = (opts.showEdit && item.id) ? `<button type="button" class="button ghost" style="margin-top:6px;font-size:12px;" onclick="openInspectionEditModal('${item.id}')">수정</button>` : '';
-  return `<div class="ins-detail-block" data-edit-id="${item.id || ''}" data-edit-type="${type}"><div class="ins-detail-type">${typeNames[type] || type}</div><table class="ins-detail-table">${rows.join('')}</table>${editBtn}</div>`;
+  const editBtn = (opts.showEdit && item.id) ? `<button type="button" class="button ghost" style="margin-top:6px;font-size:12px;margin-right:6px;" onclick="openInspectionEditModal('${item.id}')">수정</button>` : '';
+  const deleteBtn = (opts.showEdit && item.id) ? `<button type="button" class="button ghost" style="margin-top:6px;font-size:12px;color:#dc2626;" onclick="deleteInspectionItem('${item.id}')">삭제</button>` : '';
+  return `<div class="ins-detail-block" data-edit-id="${item.id || ''}" data-edit-type="${type}"><div class="ins-detail-type">${typeNames[type] || type}</div><table class="ins-detail-table">${rows.join('')}</table>${editBtn}${deleteBtn}</div>`;
 }
 
 async function showInspectionDetailModal(defectId) {
@@ -835,31 +991,55 @@ async function showInspectionDetailModal(defectId) {
   }
 }
 
-// 점검결과 입력 화면: 입력된 점검결과 목록 렌더 (세대별) — 수정 버튼용으로 itemById 저장
+// 점검결과 입력 화면: 입력된 점검결과 목록 렌더 (세대별, 점검방법별 탭) — 수정 버튼용으로 itemById 저장
 function renderHouseholdInspectionsList() {
   const ref = $('#defect-inspection-saved-ref');
-  const body = $('#defect-inspection-saved-body');
-  if (!ref || !body) return;
+  if (!ref) return;
   const insp = InspectorState.householdInspections || { visual: [], thermal: [], air: [], radon: [], level: [] };
   InspectorState._editItemsById = InspectorState._editItemsById || {};
   const typeOrder = ['visual', 'air', 'radon', 'level', 'thermal'];
+  const typeNames = { visual: '육안', air: '공기질', radon: '라돈', level: '레벨기', thermal: '열화상' };
   let total = 0;
-  let html = '';
+  const panelById = {
+    visual: $('#saved-visual-panel'),
+    air: $('#saved-air-panel'),
+    radon: $('#saved-radon-panel'),
+    level: $('#saved-level-panel'),
+    thermal: $('#saved-thermal-panel')
+  };
+  let firstActiveType = null;
   for (const type of typeOrder) {
     const items = insp[type] || [];
     total += items.length;
+    let html = '';
     items.forEach((item) => {
       if (item.id) InspectorState._editItemsById[item.id] = { item, type };
       html += formatInspectionItemByType(type, item, { showEdit: true });
     });
+    const panel = panelById[type];
+    if (panel) {
+      panel.innerHTML = html || `<p style="color:#9ca3af;font-size:13px;">${typeNames[type]} 점검결과가 없습니다.</p>`;
+      if (items.length > 0 && !firstActiveType) firstActiveType = type;
+    }
   }
   if (total > 0) {
     ref.style.display = 'block';
-    body.innerHTML = html;
+    showSavedResultsTab(firstActiveType || 'visual');
   } else {
     ref.style.display = 'none';
-    body.innerHTML = '';
   }
+}
+
+function showSavedResultsTab(type) {
+  const container = document.querySelector('#defect-inspection-saved-ref');
+  if (!container) return;
+  container.querySelectorAll('.saved-tab').forEach((tab) => {
+    tab.classList.toggle('active', tab.getAttribute('data-type') === type);
+  });
+  ['visual', 'air', 'radon', 'level', 'thermal'].forEach((t) => {
+    const panel = document.getElementById('saved-' + t + '-panel');
+    if (panel) panel.classList.toggle('hidden', t !== type);
+  });
 }
 
 // 세대(household)별 점검결과 입력 화면 열기 (하자 선택 없이, 타입별 N건 입력)
@@ -922,6 +1102,9 @@ async function openInspectionForHousehold(householdId) {
 
     renderHouseholdInspectionsList();
 
+    const householdDeleteRef = $('#defect-inspection-household-delete-ref');
+    if (householdDeleteRef) householdDeleteRef.style.display = 'block';
+
     const visualSummaryEl = $('#defect-visual-defect-summary');
     if (visualSummaryEl) {
       visualSummaryEl.innerHTML = InspectorState.allDefects.length > 0
@@ -951,6 +1134,8 @@ async function openDefectInspection(defectId, caseId) {
   InspectorState.inspectionByHousehold = false;
   const savedRef = $('#defect-inspection-saved-ref');
   if (savedRef) savedRef.style.display = 'none';
+  const householdDeleteRef = $('#defect-inspection-household-delete-ref');
+  if (householdDeleteRef) householdDeleteRef.style.display = 'none';
   setLoading(true);
   try {
     InspectorState.currentDefectId = defectId;

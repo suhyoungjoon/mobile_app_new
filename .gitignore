@@ -10,6 +10,7 @@ dist/
 build/
 .env
 .env.*
+backend/.env
 azure/azure-resources.json
 .vercel
 

@@ -4,6 +4,33 @@ const pool = require('../database');
 const { authenticateToken, requireInspectorAccess } = require('../middleware/auth');
 const { decrypt } = require('../utils/encryption');
 
+// 암호화된 값(IV:hex 형식)이 화면에 그대로 노출되지 않도록: 로컬(키 없음)에서도 hex 문자가 안 보이게
+function isEncryptedFormat(s) {
+  if (!s || typeof s !== 'string') return false;
+  const t = s.trim();
+  // IV(32자 hex):암호문(hex) 형식 또는 그냥 긴 hex:hex 형태
+  return /^[a-f0-9]{32}:[a-f0-9]+$/i.test(t) || (t.length > 50 && /^[a-f0-9:]+$/i.test(t));
+}
+function getDisplayName(row) {
+  let name = (row.resident_name != null ? String(row.resident_name) : '').trim();
+  if (row.resident_name_encrypted) {
+    try {
+      const decoded = decrypt(row.resident_name_encrypted);
+      if (decoded && typeof decoded === 'string' && decoded.trim()) name = decoded.trim();
+    } catch (e) {
+      // 복호화 실패 시 기존 name 유지
+    }
+  }
+  if (isEncryptedFormat(name)) {
+    try {
+      const decoded = decrypt(name);
+      if (decoded && !isEncryptedFormat(decoded)) name = decoded;
+    } catch (e) {}
+    if (isEncryptedFormat(name)) name = '세대주';
+  }
+  return name;
+}
+
 const router = express.Router();
 
 // Get defects by case_id
@@ -108,15 +135,6 @@ router.get('/users', authenticateToken, requireInspectorAccess, async (req, res)
       }
     }
     const users = (result.rows || []).map((row) => {
-      let name = row.resident_name || '';
-      if (row.resident_name_encrypted) {
-        try {
-          const decoded = decrypt(row.resident_name_encrypted);
-          if (decoded && typeof decoded === 'string') name = decoded;
-        } catch (e) {
-          // 복호화 실패 시 평문 유지
-        }
-      }
       const inspectedCount = parseInt(row.inspected_count, 10) || 0;
       const defectCount = parseInt(row.defect_count, 10) || 0;
       return {
@@ -124,7 +142,7 @@ router.get('/users', authenticateToken, requireInspectorAccess, async (req, res)
         complex_name: row.complex_name || '',
         dong: row.dong || '',
         ho: row.ho || '',
-        resident_name: name,
+        resident_name: getDisplayName(row),
         defect_count: defectCount,
         has_inspected: inspectedCount > 0
       };

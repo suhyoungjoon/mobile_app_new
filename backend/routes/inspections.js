@@ -512,11 +512,28 @@ router.get('/by-household/:householdId', authenticateToken, async (req, res) => 
     `;
     const result = await pool.query(query, [hid]);
 
+    const normalizeLevelItem = (i) => {
+      if (i.type !== 'level') return i;
+      return {
+        ...i,
+        reference_mm: i.reference_mm ?? i.level_reference_mm ?? 150,
+        point1_left_mm: i.point1_left_mm ?? i.left_mm,
+        point1_right_mm: i.point1_right_mm ?? i.right_mm,
+        point2_left_mm: i.point2_left_mm,
+        point2_right_mm: i.point2_right_mm,
+        point3_left_mm: i.point3_left_mm,
+        point3_right_mm: i.point3_right_mm,
+        point4_left_mm: i.point4_left_mm,
+        point4_right_mm: i.point4_right_mm,
+        left_mm: i.left_mm,
+        right_mm: i.right_mm
+      };
+    };
     const grouped = { visual: [], thermal: [], air: [], radon: [], level: [] };
     (result.rows || []).forEach((row) => {
       const type = row.type || 'thermal';
       if (!grouped[type]) grouped[type] = [];
-      const item = { ...row };
+      const item = normalizeLevelItem({ ...row });
       const inspectionPhotos = (row.inspection_photos && Array.isArray(row.inspection_photos))
         ? row.inspection_photos
         : (row.inspection_photos ? [row.inspection_photos] : []);
@@ -537,6 +554,66 @@ router.get('/by-household/:householdId', authenticateToken, async (req, res) => 
     });
   } catch (error) {
     console.error('세대별 점검 항목 조회 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다' });
+  }
+});
+
+// 세대(household)별 점검결과 전체 삭제
+router.delete('/by-household/:householdId', authenticateToken, requireInspectorAccess, async (req, res) => {
+  try {
+    const { householdId } = req.params;
+    const hid = parseInt(householdId, 10);
+    if (isNaN(hid)) {
+      return res.status(400).json({ error: '유효한 세대 ID가 필요합니다' });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const caseIdsResult = await client.query(
+        'SELECT id FROM case_header WHERE household_id = $1',
+        [hid]
+      );
+      const caseIds = (caseIdsResult.rows || []).map((r) => r.id);
+      if (caseIds.length === 0) {
+        await client.query('ROLLBACK');
+        return res.json({ success: true, deleted: 0, message: '삭제할 점검결과가 없습니다' });
+      }
+
+      const itemIdsResult = await client.query(
+        'SELECT id FROM inspection_item WHERE case_id = ANY($1::text[])',
+        [caseIds]
+      );
+      const itemIds = (itemIdsResult.rows || []).map((r) => r.id);
+
+      if (itemIds.length === 0) {
+        await client.query('ROLLBACK');
+        return res.json({ success: true, deleted: 0, message: '삭제할 점검결과가 없습니다' });
+      }
+
+      await client.query('DELETE FROM air_measure WHERE item_id = ANY($1::text[])', [itemIds]);
+      await client.query('DELETE FROM radon_measure WHERE item_id = ANY($1::text[])', [itemIds]);
+      await client.query('DELETE FROM level_measure WHERE item_id = ANY($1::text[])', [itemIds]);
+      await client.query('DELETE FROM thermal_photo WHERE item_id = ANY($1::text[])', [itemIds]);
+      await client.query('DELETE FROM inspection_photo WHERE item_id = ANY($1::text[])', [itemIds]);
+      const delResult = await client.query('DELETE FROM inspection_item WHERE case_id = ANY($1::text[]) RETURNING id', [caseIds]);
+
+      await client.query('COMMIT');
+      const deleted = delResult.rowCount || 0;
+      res.json({
+        success: true,
+        deleted,
+        message: `${deleted}건의 점검결과가 삭제되었습니다`
+      });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('세대별 점검결과 삭제 오류:', error);
     res.status(500).json({ error: '서버 오류가 발생했습니다' });
   }
 });
@@ -568,9 +645,25 @@ router.get('/:caseId', authenticateToken, async (req, res) => {
     `;
     
     const result = await pool.query(query, [caseId]);
-    
+    const normalizeLevelItem = (i) => {
+      if (i.type !== 'level') return i;
+      return {
+        ...i,
+        reference_mm: i.reference_mm ?? i.level_reference_mm ?? 150,
+        point1_left_mm: i.point1_left_mm ?? i.left_mm,
+        point1_right_mm: i.point1_right_mm ?? i.right_mm,
+        point2_left_mm: i.point2_left_mm,
+        point2_right_mm: i.point2_right_mm,
+        point3_left_mm: i.point3_left_mm,
+        point3_right_mm: i.point3_right_mm,
+        point4_left_mm: i.point4_left_mm,
+        point4_right_mm: i.point4_right_mm,
+        left_mm: i.left_mm,
+        right_mm: i.right_mm
+      };
+    };
     const withPhotos = (result.rows || []).map((row) => {
-      const item = { ...row };
+      const item = normalizeLevelItem({ ...row });
       const inspectionPhotos = (row.inspection_photos && Array.isArray(row.inspection_photos))
         ? row.inspection_photos
         : (row.inspection_photos ? [row.inspection_photos] : []);
@@ -632,8 +725,25 @@ router.get('/defects/:defectId', authenticateToken, async (req, res) => {
     
     const result = await pool.query(query, [defectId]);
     
+    const normalizeLevelItem = (i) => {
+      if (i.type !== 'level') return i;
+      return {
+        ...i,
+        reference_mm: i.reference_mm ?? i.level_reference_mm ?? 150,
+        point1_left_mm: i.point1_left_mm ?? i.left_mm,
+        point1_right_mm: i.point1_right_mm ?? i.right_mm,
+        point2_left_mm: i.point2_left_mm,
+        point2_right_mm: i.point2_right_mm,
+        point3_left_mm: i.point3_left_mm,
+        point3_right_mm: i.point3_right_mm,
+        point4_left_mm: i.point4_left_mm,
+        point4_right_mm: i.point4_right_mm,
+        left_mm: i.left_mm,
+        right_mm: i.right_mm
+      };
+    };
     const withPhotos = (result.rows || []).map((row) => {
-      const item = { ...row };
+      const item = normalizeLevelItem({ ...row });
       const inspectionPhotos = (row.inspection_photos && Array.isArray(row.inspection_photos))
         ? row.inspection_photos
         : (row.inspection_photos ? [row.inspection_photos] : []);

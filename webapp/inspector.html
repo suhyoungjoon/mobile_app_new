@@ -78,6 +78,19 @@
       border-color: #10b981;
       background: linear-gradient(to bottom, #ecfdf5 0%, white 12px);
     }
+    .defect-card-actions {
+      display: flex;
+      gap: 6px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+    .defect-card-actions .button {
+      flex: 1;
+      min-width: 68px;
+      padding: 6px 8px;
+      font-size: 11px;
+      line-height: 1.2;
+    }
     .inspector-action-buttons {
       display: flex;
       flex-direction: column;
@@ -111,6 +124,8 @@
     .ins-detail-table { width: 100%; border-collapse: collapse; font-size: 13px; }
     .ins-detail-table td { padding: 4px 8px 4px 0; vertical-align: top; }
     .ins-detail-label { color: #6b7280; width: 80px; }
+    .saved-results-panel { min-height: 60px; }
+    .saved-results-panel.hidden { display: none !important; }
   </style>
 </head>
 <body>
@@ -193,6 +208,9 @@
           <div class="label">세대 정보</div>
           <div id="defect-inspection-details"></div>
           <div style="font-size: 12px; color: #6b7280; margin-top: 8px;">점검결과는 이 세대 단위로 저장됩니다. 하자와 1:1로 묶이지 않습니다.</div>
+          <div id="defect-inspection-household-delete-ref" style="display: none; margin-top: 12px;">
+            <button type="button" class="button ghost" style="color: #dc2626; font-size: 13px;" onclick="deleteHouseholdInspections()">세대 점검결과 전체 삭제</button>
+          </div>
         </div>
         <!-- 세대주 등록 하자 (참고용, 조회만) -->
         <div id="defect-inspection-defects-ref" style="margin-bottom: 16px; display: none;">
@@ -202,11 +220,24 @@
           </details>
         </div>
 
-        <!-- 입력된 점검결과 보기 (세대별 저장된 점검 항목) -->
+        <!-- 입력된 점검결과 보기 (세대별 저장된 점검 항목, 점검방법별 탭) -->
         <div id="defect-inspection-saved-ref" style="margin-bottom: 16px; display: none;">
-          <details style="border: 1px solid #10b981; border-radius: 8px; padding: 12px; background: #f0fdf4;">
+          <details style="border: 1px solid #10b981; border-radius: 8px; padding: 12px; background: #f0fdf4;" open>
             <summary style="cursor: pointer; font-weight: 600; color: #059669;">입력된 점검결과 보기</summary>
-            <div id="defect-inspection-saved-body" style="margin-top: 12px;"></div>
+            <div style="margin-top: 12px;">
+              <div class="equipment-tabs" style="margin-bottom: 12px;">
+                <button type="button" class="equipment-tab saved-tab" data-type="visual" onclick="showSavedResultsTab('visual')">육안</button>
+                <button type="button" class="equipment-tab saved-tab" data-type="air" onclick="showSavedResultsTab('air')">공기질</button>
+                <button type="button" class="equipment-tab saved-tab" data-type="radon" onclick="showSavedResultsTab('radon')">라돈</button>
+                <button type="button" class="equipment-tab saved-tab" data-type="level" onclick="showSavedResultsTab('level')">레벨기</button>
+                <button type="button" class="equipment-tab saved-tab" data-type="thermal" onclick="showSavedResultsTab('thermal')">열화상</button>
+              </div>
+              <div id="saved-visual-panel" class="saved-results-panel hidden"></div>
+              <div id="saved-air-panel" class="saved-results-panel hidden"></div>
+              <div id="saved-radon-panel" class="saved-results-panel hidden"></div>
+              <div id="saved-level-panel" class="saved-results-panel hidden"></div>
+              <div id="saved-thermal-panel" class="saved-results-panel hidden"></div>
+            </div>
           </details>
         </div>
 
