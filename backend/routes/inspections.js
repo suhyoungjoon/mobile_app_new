@@ -529,18 +529,20 @@ router.get('/by-household/:householdId', authenticateToken, async (req, res) => 
         right_mm: i.right_mm
       };
     };
+    const toPhotoArr = (v) => {
+      if (!v) return [];
+      if (Array.isArray(v)) return v;
+      return [v];
+    };
     const grouped = { visual: [], thermal: [], air: [], radon: [], level: [] };
     (result.rows || []).forEach((row) => {
       const type = row.type || 'thermal';
       if (!grouped[type]) grouped[type] = [];
       const item = normalizeLevelItem({ ...row });
-      const inspectionPhotos = (row.inspection_photos && Array.isArray(row.inspection_photos))
-        ? row.inspection_photos
-        : (row.inspection_photos ? [row.inspection_photos] : []);
-      const thermalPhotos = (row.thermal_photos && Array.isArray(row.thermal_photos))
-        ? row.thermal_photos
-        : (row.thermal_photos ? [row.thermal_photos] : []);
-      item.photos = [...inspectionPhotos, ...thermalPhotos];
+      const inspectionPhotos = toPhotoArr(row.inspection_photos);
+      const thermalPhotos = toPhotoArr(row.thermal_photos);
+      const merged = [...inspectionPhotos, ...thermalPhotos];
+      item.photos = merged.filter((p) => p && (p.file_url || p.url || p.thumb_url));
       delete item.thermal_photos;
       delete item.inspection_photos;
       grouped[type].push(item);

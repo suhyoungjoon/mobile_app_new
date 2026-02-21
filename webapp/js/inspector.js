@@ -228,10 +228,10 @@ async function loadUserList() {
           </div>
         </div>
         <div class="defect-card-actions">
-          <button class="button" onclick="event.stopPropagation(); selectUser(${u.household_id})">하자목록 보기</button>
-          <button class="button success" onclick="event.stopPropagation(); openInspectionForHousehold(${u.household_id})">점검결과 입력</button>
-          <button class="button" onclick="event.stopPropagation(); previewReportForUser(${u.household_id})">보고서 미리보기</button>
-          <button class="button" onclick="event.stopPropagation(); downloadReportForUser(${u.household_id})">보고서 다운로드</button>
+          <button class="button button-cta" onclick="event.stopPropagation(); selectUser(${u.household_id})">하자목록 보기</button>
+          <button class="button success button-cta" onclick="event.stopPropagation(); openInspectionForHousehold(${u.household_id})">점검결과 입력</button>
+          <button class="button button-cta" onclick="event.stopPropagation(); previewReportForUser(${u.household_id})">보고서 미리보기</button>
+          <button class="button button-cta" onclick="event.stopPropagation(); downloadReportForUser(${u.household_id})">보고서 다운로드</button>
         </div>
       </div>
     `).join('');
@@ -426,7 +426,35 @@ async function loadAllDefectsDirectly() {
       InspectorState.currentCaseId = result.defects[0].case_id;
     }
     
-    // 화면에 표시 (하자와 점검은 분리되어 점검 상태/점검결과는 카드에 표시하지 않음)
+    const baseUrl = (api.baseURL || '').replace(/\/api\/?$/, '').replace(/\/$/, '') || '';
+    const toFullUrl = (raw) => {
+      if (!raw || typeof raw !== 'string') return '';
+      const s = String(raw).trim();
+      if (s.startsWith('http://') || s.startsWith('https://')) return s;
+      const path = s.startsWith('/') ? s : '/' + s;
+      return baseUrl ? baseUrl + path : s;
+    };
+    const buildPhotos = (d) => {
+      const list = d.photos && Array.isArray(d.photos) ? d.photos : [];
+      if (list.length > 0) return list;
+      const out = [];
+      if (d.photo_near) out.push({ url: d.photo_near, kind: 'near' });
+      if (d.photo_far) out.push({ url: d.photo_far, kind: 'far' });
+      return out;
+    };
+    const renderPhotos = (defect) => {
+      const arr = buildPhotos(defect || {});
+      if (arr.length === 0) return '';
+      const thumbs = arr.map((p) => {
+        const raw = p.url || p.file_url || '';
+        const fullUrl = toFullUrl(raw);
+        if (!fullUrl) return '';
+        const safe = (s) => String(s).replace(/'/g, "\\'");
+        const label = p.kind === 'near' ? '전체' : (p.kind === 'far' ? '근접' : '사진');
+        return `<div class="thumb has-image" style="background-image:url('${safe(fullUrl)}');cursor:pointer;width:48px;height:48px;background-size:cover;display:inline-block;margin:2px;" onclick="showImageModal('${safe(fullUrl)}')" title="${label}"></div>`;
+      }).filter(Boolean).join('');
+      return thumbs ? `<div class="label">사진</div><div class="gallery" style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;">${thumbs}</div>` : '';
+    };
     container.innerHTML = result.defects.map((defect) => `
       <div class="defect-card">
         <div class="defect-card-header">
@@ -442,6 +470,7 @@ async function loadAllDefectsDirectly() {
             <div class="label">메모</div>
             <div class="value">${escapeHTML(defect.memo)}</div>
           ` : ''}
+          ${renderPhotos(defect)}
         </div>
       </div>
     `).join('');
@@ -486,7 +515,35 @@ async function loadDefectsForHousehold(householdId) {
       return;
     }
 
-    const baseUrl = api.baseURL.replace('/api', '');
+    const baseUrl = (api.baseURL || '').replace(/\/api\/?$/, '').replace(/\/$/, '') || '';
+    const toFullUrl = (raw) => {
+      if (!raw || typeof raw !== 'string') return '';
+      const s = String(raw).trim();
+      if (s.startsWith('http://') || s.startsWith('https://')) return s;
+      const path = s.startsWith('/') ? s : '/' + s;
+      return baseUrl ? baseUrl + path : s;
+    };
+    const buildPhotos = (d) => {
+      const list = d.photos && Array.isArray(d.photos) ? d.photos : [];
+      if (list.length > 0) return list;
+      const out = [];
+      if (d.photo_near) out.push({ url: d.photo_near, kind: 'near' });
+      if (d.photo_far) out.push({ url: d.photo_far, kind: 'far' });
+      return out;
+    };
+    const renderPhotos = (defect) => {
+      const arr = buildPhotos(defect || {});
+      if (arr.length === 0) return '';
+      const thumbs = arr.map((p) => {
+        const raw = p.url || p.file_url || '';
+        const fullUrl = toFullUrl(raw);
+        if (!fullUrl) return '';
+        const safe = (s) => String(s).replace(/'/g, "\\'");
+        const label = p.kind === 'near' ? '전체' : (p.kind === 'far' ? '근접' : '사진');
+        return `<div class="thumb has-image" style="background-image:url('${safe(fullUrl)}');cursor:pointer;width:48px;height:48px;background-size:cover;display:inline-block;margin:2px;" onclick="showImageModal('${safe(fullUrl)}')" title="${label}"></div>`;
+      }).filter(Boolean).join('');
+      return thumbs ? `<div class="label">사진</div><div class="gallery" style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;">${thumbs}</div>` : '';
+    };
     container.innerHTML = defects.map((defect) => `
       <div class="defect-card">
         <div class="defect-card-header">
@@ -499,16 +556,7 @@ async function loadDefectsForHousehold(householdId) {
           <div class="label">내용</div>
           <div class="value">${escapeHTML(defect.content || '')}</div>
           ${defect.memo ? `<div class="label">메모</div><div class="value">${escapeHTML(defect.memo)}</div>` : ''}
-          ${defect.photos && defect.photos.length > 0 ? `
-            <div class="label">사진</div>
-            <div class="gallery" style="display:flex;gap:8px;margin-top:4px;">
-              ${defect.photos.map((photo) => {
-                const raw = photo.url || photo.file_url || '';
-                const fullUrl = raw.startsWith('http') ? raw : (baseUrl + raw);
-                return fullUrl ? `<div class="thumb has-image" style="background-image:url('${fullUrl}');cursor:pointer;" onclick="showImageModal('${fullUrl}')">${photo.kind === 'near' ? '전체' : '근접'}</div>` : '';
-              }).filter(Boolean).join('')}
-            </div>
-          ` : ''}
+          ${renderPhotos(defect)}
         </div>
       </div>
     `).join('');
@@ -545,7 +593,7 @@ function openDefectSelectModal() {
     <div class="defect-card" style="margin-bottom:8px;">
       <div style="font-weight:700;">${escapeHTML(d.location || '')} - ${escapeHTML(d.trade || '')}</div>
       <div class="small" style="color:#666;margin-top:4px;">${escapeHTML((d.content || '').slice(0, 60))}${(d.content || '').length > 60 ? '…' : ''}</div>
-      <button type="button" class="button success" style="width:100%;margin-top:8px;" onclick="closeDefectSelectModal(); openDefectInspection('${d.id}', '${d.case_id}')">선택</button>
+      <button type="button" class="button success button-cta" style="width:100%;margin-top:8px;" onclick="closeDefectSelectModal(); openDefectInspection('${d.id}', '${d.case_id}')">선택</button>
     </div>
   `).join('');
   modal.classList.remove('hidden');
@@ -938,15 +986,33 @@ function formatInspectionItemByType(type, item, opts = {}) {
     }
     if (hasLegacy && !has4) rows.push(`<tr><td class="ins-detail-label">좌/우</td><td>${v(item.left_mm)} / ${v(item.right_mm)} mm</td></tr>`);
   }
-  const baseUrl = (typeof api !== 'undefined' && api.baseURL) ? api.baseURL.replace(/\/api\/?$/, '') : '';
-  if (item.photos && item.photos.length > 0) {
-    const photoThumbs = item.photos.map((photo) => {
-      const raw = photo.file_url || photo.url || '';
-      const fullUrl = raw.startsWith('http') ? raw : (baseUrl + raw);
-      return fullUrl ? `<div class="thumb has-image" style="background-image:url('${fullUrl}');cursor:pointer;width:48px;height:48px;background-size:cover;display:inline-block;margin:2px;" onclick="showImageModal('${fullUrl}')" title="사진"></div>` : '';
-    }).filter(Boolean).join('');
-    rows.push(`<tr><td class="ins-detail-label">사진</td><td>${item.photos.length}장 ${photoThumbs ? `<span class="gallery" style="display:inline-flex;gap:4px;margin-left:8px;">${photoThumbs}</span>` : ''}</td></tr>`);
-  }
+  const baseUrl = (typeof api !== 'undefined' && api.baseURL) ? api.baseURL.replace(/\/api\/?$/, '').replace(/\/$/, '') : '';
+  const photos = (() => {
+    const p = item.photos;
+    if (Array.isArray(p)) return p;
+    if (p && typeof p === 'object') return Object.values(p);
+    return [];
+  })();
+  const toFullUrl = (raw) => {
+    if (raw == null || typeof raw !== 'string') return '';
+    const s = String(raw).trim();
+    if (!s) return '';
+    if (s.startsWith('http://') || s.startsWith('https://')) return s;
+    const path = s.startsWith('/') ? s : '/' + s;
+    return baseUrl ? baseUrl + path : s;
+  };
+  const getPhotoUrl = (photo) => {
+    const raw = photo.file_url ?? photo.url ?? photo.thumb_url ?? '';
+    return toFullUrl(raw);
+  };
+  const validPhotos = photos.filter((p) => p && getPhotoUrl(p));
+  const photoThumbs = validPhotos.map((photo) => {
+    const fullUrl = getPhotoUrl(photo);
+    if (!fullUrl) return '';
+    const safe = (s) => String(s).replace(/'/g, "\\'");
+    return `<div class="thumb has-image" style="background-image:url('${safe(fullUrl)}');cursor:pointer;width:48px;height:48px;background-size:cover;display:inline-block;margin:2px;" onclick="showImageModal('${safe(fullUrl)}')" title="사진"></div>`;
+  }).filter(Boolean).join('');
+  rows.push(`<tr><td class="ins-detail-label">사진</td><td>${validPhotos.length > 0 ? `${validPhotos.length}장 ${photoThumbs ? `<span class="gallery" style="display:inline-flex;gap:4px;margin-left:8px;flex-wrap:wrap;">${photoThumbs}</span>` : ''}` : '<span style="color:#9ca3af;">없음</span>'}</td></tr>`);
   const editBtn = (opts.showEdit && item.id) ? `<button type="button" class="button ghost" style="margin-top:6px;font-size:12px;margin-right:6px;" onclick="openInspectionEditModal('${item.id}')">수정</button>` : '';
   const deleteBtn = (opts.showEdit && item.id) ? `<button type="button" class="button ghost" style="margin-top:6px;font-size:12px;color:#dc2626;" onclick="deleteInspectionItem('${item.id}')">삭제</button>` : '';
   return `<div class="ins-detail-block" data-edit-id="${item.id || ''}" data-edit-type="${type}"><div class="ins-detail-type">${typeNames[type] || type}</div><table class="ins-detail-table">${rows.join('')}</table>${editBtn}${deleteBtn}</div>`;
@@ -1024,13 +1090,18 @@ function renderHouseholdInspectionsList() {
   }
   if (total > 0) {
     ref.style.display = 'block';
-    showSavedResultsTab(firstActiveType || 'visual');
+    // 수정/삭제 후 현재 보고 있던 탭 유지 (해당 탭에 항목이 있으면), 없으면 첫 번째 탭으로
+    const keepTab = InspectorState._currentSavedTab;
+    const keepTabHasItems = keepTab && (insp[keepTab] || []).length > 0;
+    const tabToShow = keepTabHasItems ? keepTab : (firstActiveType || 'visual');
+    showSavedResultsTab(tabToShow);
   } else {
     ref.style.display = 'none';
   }
 }
 
 function showSavedResultsTab(type) {
+  InspectorState._currentSavedTab = type;
   const container = document.querySelector('#defect-inspection-saved-ref');
   if (!container) return;
   container.querySelectorAll('.saved-tab').forEach((tab) => {

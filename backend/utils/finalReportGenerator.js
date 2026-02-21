@@ -13,16 +13,25 @@ const TEMPLATE_DIR = path.join(__dirname, '..', 'templates');
 const REPORTS_DIR = path.join(__dirname, '..', 'reports');
 const FONTS_DIR = path.join(__dirname, '..', 'fonts');
 const ASSETS_DIR = path.join(__dirname, '..', 'assets');
-const UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
+const config = require('../config');
+const UPLOADS_DIR = path.isAbsolute(config.upload.dir)
+  ? config.upload.dir
+  : path.join(__dirname, '..', config.upload.dir.replace(/^\.\//, ''));
 const AIR_DIAGRAM_PATH = path.join(ASSETS_DIR, 'air_quality_diagram.png');
 const LEVEL_DIAGRAM_PATH = path.join(ASSETS_DIR, 'level_diagram.png');
 
-/** file_url(/uploads/xxx 또는 uploads/xxx) → 서버 내 절대 경로. 없으면 null */
+/** file_url(/uploads/xxx, uploads/xxx, http(s)://host/uploads/xxx) → 서버 내 절대 경로. 없으면 null */
 function getPhotoPath(fileUrl) {
   if (!fileUrl || typeof fileUrl !== 'string') return null;
-  const rel = fileUrl.replace(/^\//, '');
-  if (!rel) return null;
-  const full = path.isAbsolute(rel) ? rel : path.join(__dirname, '..', rel);
+  let rel = String(fileUrl).trim();
+  // http(s)://host/uploads/xxx → /uploads/xxx
+  const urlMatch = rel.match(/^https?:\/\/[^/]+(\/uploads\/.+)$/i);
+  if (urlMatch) rel = urlMatch[1];
+  rel = rel.replace(/^\//, '');
+  if (!rel || !rel.startsWith('uploads')) return null;
+  // uploads/2024/photo.jpg → UPLOADS_DIR/2024/photo.jpg
+  const sub = rel.replace(/^uploads\/?/, '') || rel;
+  const full = path.join(UPLOADS_DIR, sub);
   return fs.existsSync(full) ? full : null;
 }
 

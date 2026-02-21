@@ -43,6 +43,28 @@ html, body {
 .button.success { background: var(--success); }
 .button.warn { background: var(--warning); }
 
+/* 특정 영역만 적용: Pill + Soft shadow + transition (주요 CTA/카드 액션) */
+.button-cta {
+  border-radius: 9999px !important;
+  box-shadow: 0 2px 8px rgba(26, 115, 232, 0.25);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+.button-cta:hover {
+  box-shadow: 0 4px 12px rgba(26, 115, 232, 0.35);
+}
+.button-cta.success {
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+}
+.button-cta.success:hover {
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+}
+.button-cta.ghost {
+  box-shadow: 0 1px 4px rgba(26, 115, 232, 0.15);
+}
+.button-cta.ghost:hover {
+  box-shadow: 0 2px 8px rgba(26, 115, 232, 0.25);
+}
+
 .tabbar {
   position: sticky; bottom: 0; background: var(--card); border-top: 1px solid var(--border);
   display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0;

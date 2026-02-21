@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <title>점검원 - 하자 점검</title>
   <meta name="theme-color" content="#1e88e8" />
-  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/style.css?v=3.5" />
   <style>
     .inspector-header {
       background: linear-gradient(135deg, #1e88e8 0%, #1565c0 100%);
@@ -161,8 +161,8 @@
       <p style="color: #6b7280; font-size: 13px; margin-bottom: 12px;">세대주가 등록한 하자입니다. 조회만 가능하며, 점검결과는 아래 버튼으로 <strong>세대별</strong>로 입력합니다.</p>
       
       <div class="inspector-action-buttons">
-        <button class="button success" onclick="openInspectionForHousehold(InspectorState.selectedHouseholdId)">📊 점검결과 입력 (세대별)</button>
-        <button class="button ghost" onclick="onPreviewReport()">📄 보고서 미리보기</button>
+        <button class="button success button-cta" onclick="openInspectionForHousehold(InspectorState.selectedHouseholdId)">📊 점검결과 입력 (세대별)</button>
+        <button class="button ghost button-cta" onclick="onPreviewReport()">📄 보고서 미리보기</button>
       </div>
       
       <div id="defect-list-container">
@@ -181,16 +181,16 @@
       <div class="report-download-actions button-group" style="display: flex; flex-direction: column;">
         <p style="color: #6b7280; font-size: 13px; margin-bottom: 12px;">다운로드·미리보기는 최종보고서와 수기보고서만 제공됩니다.</p>
         <div class="report-primary-buttons">
-          <button class="button success" onclick="downloadFinalReportAsPdf()">최종보고서 다운로드</button>
-          <button class="button" onclick="previewFinalReportAsPdf()">최종보고서 미리보기</button>
+          <button class="button success button-cta" onclick="downloadFinalReportAsPdf()">최종보고서 다운로드</button>
+          <button class="button button-cta" onclick="previewFinalReportAsPdf()">최종보고서 미리보기</button>
         </div>
         <div class="report-primary-buttons">
-          <button class="button ghost" onclick="downloadFinalReportValuesAsPdf()">최종보고서-수치중심 다운로드</button>
-          <button class="button ghost" onclick="previewFinalReportValuesAsPdf()">최종보고서-수치중심 미리보기</button>
+          <button class="button ghost button-cta" onclick="downloadFinalReportValuesAsPdf()">최종보고서-수치중심 다운로드</button>
+          <button class="button ghost button-cta" onclick="previewFinalReportValuesAsPdf()">최종보고서-수치중심 미리보기</button>
         </div>
         <div class="report-primary-buttons">
-          <button class="button ghost" onclick="downloadSummaryReportAsPdf()">수기보고서 다운로드</button>
-          <button class="button ghost" onclick="previewSummaryReportAsPdf()">수기보고서 미리보기</button>
+          <button class="button ghost button-cta" onclick="downloadSummaryReportAsPdf()">수기보고서 다운로드</button>
+          <button class="button ghost button-cta" onclick="previewSummaryReportAsPdf()">수기보고서 미리보기</button>
         </div>
       </div>
     </div>
@@ -523,7 +523,7 @@
         <!-- 저장 버튼 -->
         <div class="button-group" style="margin-top: 20px;">
           <button class="button" onclick="resetDefectInspectionForm()">재설정</button>
-          <button class="button success" onclick="saveDefectInspection()">저장</button>
+          <button class="button success button-cta" onclick="saveDefectInspection()">저장</button>
         </div>
       </div>
     </div>
@@ -565,7 +565,7 @@
     <div id="inspection-edit-modal-body"></div>
     <div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end;">
       <button type="button" class="button ghost" onclick="closeInspectionEditModal()">취소</button>
-      <button type="button" class="button success" id="inspection-edit-save-btn" onclick="saveInspectionEdit()">저장</button>
+      <button type="button" class="button success button-cta" id="inspection-edit-save-btn" onclick="saveInspectionEdit()">저장</button>
     </div>
   </div>
 </div>
