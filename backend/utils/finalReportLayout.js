@@ -83,18 +83,25 @@ const THERMAL_TABLE = {
   maxRowsPerPage: 22
 };
 
-// 공기질점검: 블록형 (좌: 위치/결과/유형/메모, 중: 항목설명, 우: 측정값 테이블, 맨우: 라돈 사진 빈칸)
+// 공기질점검: 블록형 [점검내용] [고정그림] [수치|단위] [사진1개]
 const AIR_BLOCK = {
   title: '공기질점검',
   origin: { x: 50, y: 680 },
   blockWidth: 495,
-  blockHeight: 120,
+  blockHeight: 200,
+  // 점검내용: 위치/결과/유형/메모
   metaLabelWidth: 50,
   metaValueWidth: 100,
   metaRowHeight: 20,
-  paramsWidth: 180,
-  valuesWidth: 100,
-  photoWidth: 120,
+  // 고정그림(다이어그램) 너비/높이
+  diagramWidth: 80,
+  diagramHeight: 80,
+  // 수치 테이블: 값열 | 단위열
+  valuesValColWidth: 48,
+  valuesUnitColWidth: 72,
+  valuesRowHeight: 22,
+  // 사진 1개
+  photoWidth: 100,
   photoHeight: 100,
   blockGap: 12,
   borderWidth: 0.8,

@@ -457,7 +457,7 @@ async function drawThermalTablePages(pdfDoc, slotIndex, font, reportData) {
   return slotIndex - initialSlot + 1;
 }
 
-/** 공기질점검 1페이지분: 블록형. 점검 사진 있으면 공기질/라돈 사진 칸에 채움 */
+/** 공기질점검 1페이지분: 블록형 [점검내용][고정그림][수치|단위][사진1개] */
 async function drawAirBlocksOnPage(pdfDoc, page, font, reportData, chunk, airDiagramImage) {
   const dong = reportData.dong || '';
   const ho = reportData.ho || '';
@@ -468,6 +468,11 @@ async function drawAirBlocksOnPage(pdfDoc, page, font, reportData, chunk, airDia
   const mVw = block.metaValueWidth;
   const phW = block.photoWidth;
   const phH = block.photoHeight;
+  const dgW = block.diagramWidth || 80;
+  const dgH = block.diagramHeight || 80;
+  const valColW = block.valuesValColWidth || 48;
+  const unitColW = block.valuesUnitColWidth || 72;
+  const tableRowH = block.valuesRowHeight || 22;
   const gap = block.blockGap;
   const rgbPhoto = () => rgb(block.colors.photoBorder.r, block.colors.photoBorder.g, block.colors.photoBorder.b);
   const rgbBeige = () => rgb(0.96, 0.94, 0.88);
@@ -480,11 +485,12 @@ async function drawAirBlocksOnPage(pdfDoc, page, font, reportData, chunk, airDia
   page.drawText(`${dong}동 ${ho}호  최종점검결과`, { x: ox, y: LAYOUT.PAGE_HEIGHT - 70, size: 11, font });
 
   const totalBlockH = block.blockHeight + gap;
-  const airImgW = 220;
-  const airImgH = 72;
   const metaEndX = ox + mLw + mVw;
-  const blockContentW = 495;
-  const blockContentH = 120;
+  const diagramX = metaEndX + 8;
+  const tableW = valColW + unitColW;
+  const tableX = diagramX + dgW + 8;
+  const photoX = tableX + tableW + 8;
+  const blockContentW = photoX + phW - ox;
 
   for (let idx = 0; idx < chunk.length; idx++) {
     const row = chunk[idx];
@@ -501,12 +507,12 @@ async function drawAirBlocksOnPage(pdfDoc, page, font, reportData, chunk, airDia
     const radonVal = r ? `${r.radon ?? '-'}`.trim() : '-';
 
     const blockLeft = ox;
-    const blockBottom = by - blockContentH - 25;
+    const blockBottom = by - mH * 4 - phH - 20;
     page.drawRectangle({
       x: blockLeft - 2,
       y: blockBottom - 2,
       width: blockContentW + 4,
-      height: blockContentH + phH + 30,
+      height: mH * 4 + phH + 24,
       borderColor: rgbOuterBorder(),
       borderWidth: 1.2
     });
@@ -514,12 +520,13 @@ async function drawAirBlocksOnPage(pdfDoc, page, font, reportData, chunk, airDia
       x: blockLeft,
       y: blockBottom,
       width: blockContentW,
-      height: blockContentH + phH + 26,
+      height: mH * 4 + phH + 20,
       color: rgbBeige(),
       borderColor: rgbInnerBorder(),
       borderWidth: 0.5
     });
 
+    // 1) 점검내용: 위치/결과/유형/메모
     [['위치', locVal], ['결과', resVal], ['유형', typeVal], ['메모', memoVal]].forEach(([label, val], i) => {
       const rowY = by - (i + 1) * mH;
       page.drawRectangle({ x: metaX, y: rowY, width: mLw, height: mH, color: rgbLabelBg(), borderColor: rgbBlack(), borderWidth: 0.4 });
@@ -528,21 +535,14 @@ async function drawAirBlocksOnPage(pdfDoc, page, font, reportData, chunk, airDia
       page.drawText(truncateToFit(val, 12), { x: metaX + mLw + 2, y: rowY + 4, size: 8, font });
     });
 
+    // 2) 점검내용 옆 고정그림
     if (airDiagramImage) {
-      page.drawImage(airDiagramImage, {
-        x: metaEndX + 10,
-        y: by - airImgH - 10,
-        width: airImgW,
-        height: airImgH
-      });
+      page.drawImage(airDiagramImage, { x: diagramX, y: by - dgH - mH, width: dgW, height: dgH });
     }
 
-    const tableX = metaEndX + 10 + airImgW + 8;
-    const tableRowH = 22;
-    const tableW = 120;
-    const valColW = 52;
+    // 3) 수치 | 4) 수치 옆 단위 (고정)
     const tableH = tableRowH * 3;
-    const tableY = by - 60;
+    const tableY = by - mH;
     page.drawRectangle({
       x: tableX,
       y: tableY - tableH,
@@ -552,25 +552,26 @@ async function drawAirBlocksOnPage(pdfDoc, page, font, reportData, chunk, airDia
       borderColor: rgbBlack(),
       borderWidth: 0.4
     });
+    const paramUnits = ['TVOC (mg/m\u00B3)', 'HCHO (mg/m\u00B3)', 'Radon (Bq/m\u00B3)'];
     [tvocVal, hchoVal, radonVal].forEach((v, i) => {
       const rowY = tableY - (i + 1) * tableRowH;
       page.drawLine({ start: { x: tableX, y: rowY }, end: { x: tableX + tableW, y: rowY }, thickness: 0.4, color: rgbBlack() });
       page.drawText(truncateToFit(v, 8), { x: tableX + 4, y: rowY + 5, size: 8, font });
-      const paramLabels = ['TVOC (mg/m\u00B3)', 'HCHO (mg/m\u00B3)', 'Radon (Bq/m\u00B3)'];
-      page.drawText(truncateToFit(paramLabels[i], 14), { x: tableX + valColW + 4, y: rowY + 5, size: 7, font });
+      page.drawText(truncateToFit(paramUnits[i], 14), { x: tableX + valColW + 4, y: rowY + 5, size: 7, font });
     });
     page.drawLine({ start: { x: tableX + valColW, y: tableY - tableH }, end: { x: tableX + valColW, y: tableY }, thickness: 0.4, color: rgbBlack() });
 
-    const photoX = tableX + tableW + 10;
-    const halfPhW = phW / 2;
-    page.drawRectangle({ x: photoX, y: by - phH - 20, width: halfPhW, height: phH, borderColor: rgbPhoto(), borderWidth: 0.8 });
-    page.drawRectangle({ x: photoX + halfPhW, y: by - phH - 20, width: halfPhW, height: phH, borderColor: rgbPhoto(), borderWidth: 0.8 });
-    const photos = (a && a.photos) ? a.photos : (r && r.photos) ? r.photos : [];
-    const url0 = photos[0] && (photos[0].file_url || photos[0].url);
-    const url1 = photos[1] && (photos[1].file_url || photos[1].url);
-    if (url0) await embedAndDrawPhoto(pdfDoc, page, url0, photoX + 2, by - phH - 18, halfPhW - 4, phH - 4);
-    if (url1) await embedAndDrawPhoto(pdfDoc, page, url1, photoX + halfPhW + 2, by - phH - 18, halfPhW - 4, phH - 4);
-    if (!url0 && !url1) page.drawText('공기질/라돈 사진', { x: photoX + 8, y: by - 18, size: 8, font });
+    // 5) 사진 1개 (라돈 우선, 없으면 공기질)
+    const photoY = by - mH - phH;
+    page.drawRectangle({ x: photoX, y: photoY, width: phW, height: phH, borderColor: rgbPhoto(), borderWidth: 0.8 });
+    page.drawText('라돈 사진', { x: photoX + 2, y: photoY + phH - 10, size: 7, font });
+    const photos = (r && r.photos) ? r.photos : (a && a.photos) ? a.photos : [];
+    const photoUrl = photos[0] && (photos[0].file_url || photos[0].url);
+    if (photoUrl) {
+      await embedAndDrawPhoto(pdfDoc, page, photoUrl, photoX + 2, photoY + 2, phW - 4, phH - 14);
+    } else {
+      page.drawText('-', { x: photoX + phW / 2 - 4, y: photoY + phH / 2 - 6, size: 9, font });
+    }
   }
 }
 
