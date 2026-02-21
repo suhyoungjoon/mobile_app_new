@@ -83,19 +83,21 @@ const THERMAL_TABLE = {
   maxRowsPerPage: 22
 };
 
-// 공기질점검: 블록형 [점검내용] [고정그림] [수치|단위] [사진1개]
+// 공기질점검: 블록형 [점검내용][고정그림][수치|단위][사진1개] — 세로 높이 통일
 const AIR_BLOCK = {
   title: '공기질점검',
   origin: { x: 50, y: 680 },
   blockWidth: 495,
-  blockHeight: 200,
+  blockHeight: 120,
+  // 한 행(점검결과 1개)의 세로 높이 — 점검내용/고정그림/수치/사진 모두 동일
+  contentRowHeight: 100,
   // 점검내용: 위치/결과/유형/메모
   metaLabelWidth: 50,
   metaValueWidth: 100,
   metaRowHeight: 20,
   // 고정그림(다이어그램) 너비/높이
-  diagramWidth: 80,
-  diagramHeight: 80,
+  diagramWidth: 90,
+  diagramHeight: 90,
   // 수치 테이블: 값열 | 단위열
   valuesValColWidth: 48,
   valuesUnitColWidth: 72,
@@ -130,20 +132,24 @@ const AIR_TABLE = {
   maxRowsPerPage: 22
 };
 
-// 레벨기점검: 블록형 (상단 문구 + 4점 측정 + 중앙 다이어그램 + 우측 메타 + 하단 점검사진)
+// 레벨기점검: [좌: 1번2번/고정그림/3번4번][중: 점검내용][우: 사진] — 세로 높이 통일
 const LEVEL_BLOCK = {
   title: '레벨기점검',
   origin: { x: 50, y: 660 },
-  topNote: '4개의 point에서 ±10mm 오차는 정상 시공입니다.',
+  contentRowHeight: 120,
   rowHeight: 20,
   labelWidth: 70,
-  pointLabelWidth: 60,
-  pointValueWidth: 50,
-  diagramWidth: 200,
-  diagramHeight: 140,
-  metaWidth: 140,
-  photoHeight: 80,
-  blockGap: 14,
+  metaValueWidth: 110,
+  // 좌측: 수치행 + 다이어그램
+  pointRowHeight: 22,
+  pointLabelWidth: 50,
+  pointValueWidth: 45,
+  leftSectionWidth: 140,
+  diagramWidth: 120,
+  diagramHeight: 80,
+  photoWidth: 100,
+  photoHeight: 100,
+  blockGap: 12,
   borderWidth: 0.8,
   colors: {
     labelBorder: { r: 0.2, g: 0.4, b: 0.9 },

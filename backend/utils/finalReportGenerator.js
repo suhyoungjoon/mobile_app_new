@@ -457,7 +457,7 @@ async function drawThermalTablePages(pdfDoc, slotIndex, font, reportData) {
   return slotIndex - initialSlot + 1;
 }
 
-/** 공기질점검 1페이지분: 블록형 [점검내용][고정그림][수치|단위][사진1개] */
+/** 공기질점검 1페이지분: 블록형 [점검내용][고정그림][수치|단위][사진1개] — 세로 높이 통일 */
 async function drawAirBlocksOnPage(pdfDoc, page, font, reportData, chunk, airDiagramImage) {
   const dong = reportData.dong || '';
   const ho = reportData.ho || '';
@@ -468,8 +468,9 @@ async function drawAirBlocksOnPage(pdfDoc, page, font, reportData, chunk, airDia
   const mVw = block.metaValueWidth;
   const phW = block.photoWidth;
   const phH = block.photoHeight;
-  const dgW = block.diagramWidth || 80;
-  const dgH = block.diagramHeight || 80;
+  const rowH = block.contentRowHeight || 100;
+  const dgW = block.diagramWidth || 90;
+  const dgH = block.diagramHeight || 90;
   const valColW = block.valuesValColWidth || 48;
   const unitColW = block.valuesUnitColWidth || 72;
   const tableRowH = block.valuesRowHeight || 22;
@@ -484,20 +485,22 @@ async function drawAirBlocksOnPage(pdfDoc, page, font, reportData, chunk, airDia
   page.drawText(block.title, { x: ox, y: LAYOUT.PAGE_HEIGHT - 50, size: TITLE_FONT_SIZE, font });
   page.drawText(`${dong}동 ${ho}호  최종점검결과`, { x: ox, y: LAYOUT.PAGE_HEIGHT - 70, size: 11, font });
 
-  const totalBlockH = block.blockHeight + gap;
+  const totalBlockH = rowH + gap;
   const metaEndX = ox + mLw + mVw;
-  const diagramX = metaEndX + 8;
+  const diagramX = metaEndX + 6;
   const tableW = valColW + unitColW;
-  const tableX = diagramX + dgW + 8;
-  const photoX = tableX + tableW + 8;
+  const tableX = diagramX + dgW + 6;
+  const photoX = tableX + tableW + 6;
   const blockContentW = photoX + phW - ox;
 
   for (let idx = 0; idx < chunk.length; idx++) {
     const row = chunk[idx];
     const a = row.air;
     const r = row.radon;
-    const by = block.origin.y - idx * totalBlockH;
+    const rowTop = block.origin.y - idx * totalBlockH;
+    const rowBottom = rowTop - rowH;
     const metaX = ox;
+
     const locVal = a ? safeText(a.location) : (r ? safeText(r.location) : '-');
     const resVal = a ? (a.result_text ?? a.result ?? '-') : (r ? (r.result_text ?? r.result ?? '-') : '-');
     const typeVal = a ? (a.process_type_label ?? a.process_type ?? '-') : '-';
@@ -506,43 +509,47 @@ async function drawAirBlocksOnPage(pdfDoc, page, font, reportData, chunk, airDia
     const hchoVal = a ? String(a.hcho ?? '-') : '-';
     const radonVal = r ? `${r.radon ?? '-'}`.trim() : '-';
 
-    const blockLeft = ox;
-    const blockBottom = by - mH * 4 - phH - 20;
+    // 하나의 점검결과 박스: 점검내용·고정그림·수치·사진 세로 높이 동일(rowH)
     page.drawRectangle({
-      x: blockLeft - 2,
-      y: blockBottom - 2,
+      x: ox - 2,
+      y: rowBottom - 2,
       width: blockContentW + 4,
-      height: mH * 4 + phH + 24,
+      height: rowH + 4,
       borderColor: rgbOuterBorder(),
       borderWidth: 1.2
     });
     page.drawRectangle({
-      x: blockLeft,
-      y: blockBottom,
+      x: ox,
+      y: rowBottom,
       width: blockContentW,
-      height: mH * 4 + phH + 20,
+      height: rowH,
       color: rgbBeige(),
       borderColor: rgbInnerBorder(),
       borderWidth: 0.5
     });
 
-    // 1) 점검내용: 위치/결과/유형/메모
+    // 1) 점검내용: 위치/결과/유형/메모 (rowH 안에 4행)
+    const contentTop = rowTop - 8;
     [['위치', locVal], ['결과', resVal], ['유형', typeVal], ['메모', memoVal]].forEach(([label, val], i) => {
-      const rowY = by - (i + 1) * mH;
+      const rowY = contentTop - (i + 1) * mH;
       page.drawRectangle({ x: metaX, y: rowY, width: mLw, height: mH, color: rgbLabelBg(), borderColor: rgbBlack(), borderWidth: 0.4 });
       page.drawText(truncateToFit(label, 4), { x: metaX + 2, y: rowY + 4, size: 8, font });
       page.drawRectangle({ x: metaX + mLw, y: rowY, width: mVw, height: mH, color: rgb(1, 1, 1), borderColor: rgbBlack(), borderWidth: 0.4 });
       page.drawText(truncateToFit(val, 12), { x: metaX + mLw + 2, y: rowY + 4, size: 8, font });
     });
 
-    // 2) 점검내용 옆 고정그림
+    // 2) 점검내용과 수치 사이 고정그림 (동일 세로 범위 rowBottom ~ rowTop)
+    const diagramY = rowBottom + (rowH - dgH) / 2;
     if (airDiagramImage) {
-      page.drawImage(airDiagramImage, { x: diagramX, y: by - dgH - mH, width: dgW, height: dgH });
+      page.drawImage(airDiagramImage, { x: diagramX, y: diagramY, width: dgW, height: dgH });
+    } else {
+      page.drawRectangle({ x: diagramX, y: diagramY, width: dgW, height: dgH, color: rgb(0.85, 0.45, 0.35), borderColor: rgbBlack(), borderWidth: 0.4 });
+      page.drawText('공기질', { x: diagramX + dgW / 2 - 18, y: diagramY + dgH / 2 - 6, size: 9, font });
     }
 
-    // 3) 수치 | 4) 수치 옆 단위 (고정)
+    // 3) 수치 | 4) 수치 옆 단위 (rowH 안에 3행, 세로 중앙)
     const tableH = tableRowH * 3;
-    const tableY = by - mH;
+    const tableY = rowBottom + (rowH - tableH) / 2 + tableH;
     page.drawRectangle({
       x: tableX,
       y: tableY - tableH,
@@ -554,15 +561,15 @@ async function drawAirBlocksOnPage(pdfDoc, page, font, reportData, chunk, airDia
     });
     const paramUnits = ['TVOC (mg/m\u00B3)', 'HCHO (mg/m\u00B3)', 'Radon (Bq/m\u00B3)'];
     [tvocVal, hchoVal, radonVal].forEach((v, i) => {
-      const rowY = tableY - (i + 1) * tableRowH;
-      page.drawLine({ start: { x: tableX, y: rowY }, end: { x: tableX + tableW, y: rowY }, thickness: 0.4, color: rgbBlack() });
-      page.drawText(truncateToFit(v, 8), { x: tableX + 4, y: rowY + 5, size: 8, font });
-      page.drawText(truncateToFit(paramUnits[i], 14), { x: tableX + valColW + 4, y: rowY + 5, size: 7, font });
+      const rY = tableY - (i + 1) * tableRowH;
+      page.drawLine({ start: { x: tableX, y: rY }, end: { x: tableX + tableW, y: rY }, thickness: 0.4, color: rgbBlack() });
+      page.drawText(truncateToFit(v, 8), { x: tableX + 4, y: rY + 5, size: 8, font });
+      page.drawText(truncateToFit(paramUnits[i], 14), { x: tableX + valColW + 4, y: rY + 5, size: 7, font });
     });
     page.drawLine({ start: { x: tableX + valColW, y: tableY - tableH }, end: { x: tableX + valColW, y: tableY }, thickness: 0.4, color: rgbBlack() });
 
-    // 5) 사진 1개 (라돈 우선, 없으면 공기질)
-    const photoY = by - mH - phH;
+    // 5) 사진 1개 (동일 세로 범위 rowBottom ~ rowTop)
+    const photoY = rowBottom + (rowH - phH) / 2;
     page.drawRectangle({ x: photoX, y: photoY, width: phW, height: phH, borderColor: rgbPhoto(), borderWidth: 0.8 });
     page.drawText('라돈 사진', { x: photoX + 2, y: photoY + phH - 10, size: 7, font });
     const photos = (r && r.photos) ? r.photos : (a && a.photos) ? a.photos : [];
@@ -587,7 +594,8 @@ async function drawAirTablePages(pdfDoc, slotIndex, font, reportData, airDiagram
     radonList.forEach((r) => combined.push({ air: null, radon: r }));
   }
   const block = LAYOUT.AIR_BLOCK;
-  const totalBlockH = block.blockHeight + block.blockGap;
+  const rowH = block.contentRowHeight ?? block.blockHeight;
+  const totalBlockH = rowH + block.blockGap;
   const maxBlocks = Math.max(1, Math.floor((block.origin.y - 80) / totalBlockH));
   const initialSlot = slotIndex;
   let offset = 0;
@@ -766,102 +774,115 @@ function drawLevelDiagram(page, font, diagramX, diagramY, diagramWidth, diagramH
   });
 }
 
-/** 레벨기점검 블록형 1페이지분: 점검 사진 있으면 하단 칸에 채움 */
+/** 레벨기점검 블록형: [좌: 1번2번/고정그림/3번4번][중: 점검내용][우: 사진] — 세로 높이 통일 */
 async function drawLevelBlocksOnPage(pdfDoc, page, font, reportData, chunk, levelDiagramImage) {
   const dong = reportData.dong || '';
   const ho = reportData.ho || '';
   const block = LAYOUT.LEVEL_BLOCK;
   const ox = block.origin.x;
-  const rowH = block.rowHeight;
-  const lw = block.labelWidth;
-  const pLw = block.pointLabelWidth;
-  const pVw = block.pointValueWidth;
-  const dW = block.diagramWidth;
-  const dH = block.diagramHeight;
-  const metaW = block.metaWidth;
-  const phH = block.photoHeight;
+  const rowH = block.contentRowHeight || 120;
+  const mRowH = block.rowHeight || 20;
+  const lw = block.labelWidth || 70;
+  const mVw = block.metaValueWidth || 110;
+  const pRowH = block.pointRowHeight || 22;
+  const pLw = block.pointLabelWidth || 50;
+  const pVw = block.pointValueWidth || 45;
+  const leftW = block.leftSectionWidth || 140;
+  const dW = block.diagramWidth || 120;
+  const dH = block.diagramHeight || 80;
+  const phW = block.photoWidth || 100;
+  const phH = block.photoHeight || 100;
   const gap = block.blockGap;
   const bw = block.borderWidth;
   const rgbLabel = () => rgb(block.colors.labelBorder.r, block.colors.labelBorder.g, block.colors.labelBorder.b);
   const rgbValue = () => rgb(block.colors.valueBorder.r, block.colors.valueBorder.g, block.colors.valueBorder.b);
   const rgbPhoto = () => rgb(block.colors.photoBorder.r, block.colors.photoBorder.g, block.colors.photoBorder.b);
-  const rgbRed = () => rgb(0.9, 0.2, 0.2);
-  const photoTotalW = 495;
-  const halfPhotoW = photoTotalW / 2;
+  const rgbBeige = () => rgb(0.96, 0.94, 0.88);
+  const rgbOuter = () => rgb(0.85, 0.45, 0.35);
+  const rgbInner = () => rgb(0.55, 0.4, 0.32);
 
   page.drawText(block.title, { x: ox, y: LAYOUT.PAGE_HEIGHT - 50, size: TITLE_FONT_SIZE, font });
   page.drawText(`${dong}동 ${ho}호  최종점검결과`, { x: ox, y: LAYOUT.PAGE_HEIGHT - 70, size: 11, font });
 
-  const pointLabels = ['1. 좌측', '2. 우측', '3. 우측', '4. 좌측'];
-  const blockHeight = 120 + dH + phH + 60;
-  const totalBlockH = blockHeight + gap;
+  const totalBlockH = rowH + gap;
   const startY = block.origin.y;
-  const diagramX = ox + 100;
+  const metaX = ox + leftW + 6;
+  const metaW = 180;
+  const photoX = metaX + lw + mVw + 6;
+
+  const fmt = (v) => (v != null && v !== '') ? String(v) : '-';
+  const p1L = (i) => fmt(i.point1_left_mm);
+  const p1R = (i) => fmt(i.point1_right_mm);
+  const p2L = (i) => fmt(i.point2_left_mm);
+  const p2R = (i) => fmt(i.point2_right_mm);
+  const p3L = (i) => fmt(i.point3_left_mm);
+  const p3R = (i) => fmt(i.point3_right_mm);
+  const p4L = (i) => fmt(i.point4_left_mm);
+  const p4R = (i) => fmt(i.point4_right_mm);
 
   for (let idx = 0; idx < chunk.length; idx++) {
     const item = chunk[idx];
-    const by = startY - idx * totalBlockH;
-    const diagramY = by - 26 - 20 - dH - 30;
-
-    const topNote = block.topNote;
-    const noteW = 320;
-    const noteH = 22;
-    const noteX = ox;
-    const noteY = by - noteH - 4;
-    page.drawRectangle({
-      x: noteX,
-      y: noteY,
-      width: noteW,
-      height: noteH,
-      borderColor: rgbRed(),
-      borderWidth: 0.8
-    });
-    page.drawText(topNote, { x: noteX + 6, y: noteY + 6, size: 8, font, color: rgbRed() });
-
-    const pointsText = item.level_summary_text || item.points || '-';
-    const points = String(pointsText).split(/[,/]\s*/).slice(0, 4);
+    const rowTop = startY - idx * totalBlockH;
+    const rowBottom = rowTop - rowH;
     const refMm = String(item.level_reference_mm ?? item.reference_mm ?? 150);
+    const blockW = photoX + phW - ox;
 
-    const pointMargin = 6;
-    const ph = 22;
-    const positions = [
-      { x: diagramX - pLw - pVw - 40 - pointMargin, y: diagramY + dH - 10 },
-      { x: diagramX + dW + pointMargin, y: diagramY + dH - 10 },
-      { x: diagramX - pLw - pVw - 40 - pointMargin, y: diagramY - ph - 8 },
-      { x: diagramX + dW + pointMargin, y: diagramY - ph - 8 }
-    ];
-    pointLabels.forEach((label, i) => {
-      const px = positions[i].x;
-      const py = positions[i].y;
-      page.drawRectangle({ x: px, y: py, width: pLw, height: ph, borderColor: rgbLabel(), borderWidth: bw });
-      page.drawText(truncateToFit(label, 8), { x: px + 2, y: py + 4, size: FONT_SIZE - 1, font });
-      page.drawRectangle({ x: px + pLw, y: py, width: pVw, height: ph, borderColor: rgbValue(), borderWidth: bw });
-      page.drawText(truncateToFit(points[i] || '-', 6), { x: px + pLw + 2, y: py + 4, size: FONT_SIZE - 1, font });
-      page.drawRectangle({ x: px + pLw + pVw, y: py, width: 32, height: ph, borderColor: rgbValue(), borderWidth: bw });
-      page.drawText('mm', { x: px + pLw + pVw + 4, y: py + 4, size: FONT_SIZE - 1, font });
+    page.drawRectangle({ x: ox - 2, y: rowBottom - 2, width: blockW + 4, height: rowH + 4, borderColor: rgbOuter(), borderWidth: 1.2 });
+    page.drawRectangle({ x: ox, y: rowBottom, width: blockW, height: rowH, color: rgbBeige(), borderColor: rgbInner(), borderWidth: 0.5 });
+
+    const leftX = ox + 4;
+    const halfLeft = (leftW - 8) / 2;
+    const topRowY = rowTop - 8 - pRowH;
+    const botRowY = rowBottom + 6;
+    const diagramY = botRowY + pRowH + 4;
+
+    // 1번수치 2번수치 (상단, 나란히)
+    [['1번', `${p1L(item)}/${p1R(item)}`], ['2번', `${p2L(item)}/${p2R(item)}`]].forEach(([label, val], i) => {
+      const cx = leftX + i * halfLeft;
+      page.drawRectangle({ x: cx, y: topRowY, width: halfLeft - 2, height: pRowH, borderColor: rgbLabel(), borderWidth: bw });
+      page.drawText(truncateToFit(label, 4), { x: cx + 2, y: topRowY + 4, size: 7, font });
+      page.drawRectangle({ x: cx + pLw, y: topRowY, width: halfLeft - 2 - pLw, height: pRowH, borderColor: rgbValue(), borderWidth: bw });
+      page.drawText(truncateToFit(val, 8), { x: cx + pLw + 2, y: topRowY + 4, size: 7, font });
     });
 
-    drawLevelDiagram(page, font, diagramX, diagramY, dW, dH, levelDiagramImage);
+    // 고정그림 (중앙)
+    const diagramX = leftX + (leftW - 8 - dW) / 2;
+    if (levelDiagramImage) {
+      page.drawImage(levelDiagramImage, { x: diagramX, y: diagramY, width: dW, height: dH });
+    } else {
+      drawLevelDiagram(page, font, diagramX, diagramY, dW, dH, null);
+    }
 
-    const metaX = diagramX + dW + 12;
-    let metaY = by - 32;
+    // 3번수치 4번수치 (하단, 나란히)
+    [['3번', `${p3L(item)}/${p3R(item)}`], ['4번', `${p4L(item)}/${p4R(item)}`]].forEach(([label, val], i) => {
+      const cx = leftX + i * halfLeft;
+      page.drawRectangle({ x: cx, y: botRowY, width: halfLeft - 2, height: pRowH, borderColor: rgbLabel(), borderWidth: bw });
+      page.drawText(truncateToFit(label, 4), { x: cx + 2, y: botRowY + 4, size: 7, font });
+      page.drawRectangle({ x: cx + pLw, y: botRowY, width: halfLeft - 2 - pLw, height: pRowH, borderColor: rgbValue(), borderWidth: bw });
+      page.drawText(truncateToFit(val, 8), { x: cx + pLw + 2, y: botRowY + 4, size: 7, font });
+    });
+
+    // 점검내용: 위치/결과/기준/메모 (가운데)
+    let metaY = rowTop - 6;
     [['위치', safeText(item.location)], ['결과', item.result_text ?? item.result ?? '-'], ['기준', refMm], ['메모', safeText(item.note)]].forEach(([label, val]) => {
-      page.drawRectangle({ x: metaX, y: metaY, width: lw, height: rowH, borderColor: rgbLabel(), borderWidth: bw });
+      metaY -= mRowH;
+      page.drawRectangle({ x: metaX, y: metaY, width: lw, height: mRowH, color: rgbBeige(), borderColor: rgb(0.2, 0.2, 0.2), borderWidth: 0.4 });
       page.drawText(truncateToFit(label, 4), { x: metaX + 2, y: metaY + 4, size: 8, font });
-      page.drawRectangle({ x: metaX + lw, y: metaY, width: metaW - lw, height: rowH, borderColor: rgbValue(), borderWidth: bw });
-      page.drawText(truncateToFit(val, 12), { x: metaX + lw + 2, y: metaY + 4, size: 8, font });
-      metaY -= rowH;
+      page.drawRectangle({ x: metaX + lw, y: metaY, width: mVw, height: mRowH, color: rgb(1, 1, 1), borderColor: rgb(0.2, 0.2, 0.2), borderWidth: 0.4 });
+      page.drawText(truncateToFit(val, 14), { x: metaX + lw + 2, y: metaY + 4, size: 8, font });
     });
 
-    const photoY = diagramY - phH - 12;
-    page.drawRectangle({ x: ox, y: photoY, width: halfPhotoW, height: phH, borderColor: rgbPhoto(), borderWidth: bw });
-    page.drawRectangle({ x: ox + halfPhotoW, y: photoY, width: halfPhotoW, height: phH, borderColor: rgbPhoto(), borderWidth: bw });
+    // 사진 1개 (우측)
+    const photoY = rowBottom + (rowH - phH) / 2;
+    page.drawRectangle({ x: photoX, y: photoY, width: phW, height: phH, borderColor: rgbPhoto(), borderWidth: bw });
+    page.drawText('점검사진', { x: photoX + 2, y: photoY + phH - 10, size: 7, font });
     const photos = item.photos && Array.isArray(item.photos) ? item.photos : [];
-    const url0 = photos[0] && (photos[0].file_url || photos[0].url);
-    const url1 = photos[1] && (photos[1].file_url || photos[1].url);
-    if (url0) await embedAndDrawPhoto(pdfDoc, page, url0, ox + 2, photoY + 2, halfPhotoW - 4, phH - 4);
-    if (url1) await embedAndDrawPhoto(pdfDoc, page, url1, ox + halfPhotoW + 2, photoY + 2, halfPhotoW - 4, phH - 4);
-    if (!url0 && !url1) page.drawText('점검사진', { x: ox + 8, y: photoY + phH - 14, size: 8, font });
+    const photoUrl = photos[0] && (photos[0].file_url || photos[0].url);
+    if (photoUrl) {
+      await embedAndDrawPhoto(pdfDoc, page, photoUrl, photoX + 2, photoY + 2, phW - 4, phH - 14);
+    } else {
+      page.drawText('-', { x: photoX + phW / 2 - 4, y: photoY + phH / 2 - 6, size: 9, font });
+    }
   }
 }
 
@@ -869,11 +890,9 @@ async function drawLevelBlocksOnPage(pdfDoc, page, font, reportData, chunk, leve
 async function drawLevelTablePages(pdfDoc, slotIndex, font, reportData, levelDiagramImage) {
   const items = reportData.level_measurements || [];
   const block = LAYOUT.LEVEL_BLOCK;
-  const dH = block.diagramHeight;
-  const phH = block.photoHeight;
+  const rowH = block.contentRowHeight ?? 120;
   const gap = block.blockGap;
-  const blockHeight = 120 + dH + phH + 60;
-  const totalBlockH = blockHeight + gap;
+  const totalBlockH = rowH + gap;
   const maxBlocks = Math.max(1, Math.floor((block.origin.y - 80) / totalBlockH));
   const initialSlot = slotIndex;
   let offset = 0;
