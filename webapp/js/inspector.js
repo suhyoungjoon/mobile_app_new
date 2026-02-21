@@ -318,39 +318,12 @@ async function previewReportForUser(householdId) {
     const cont = $('#report-preview');
     const buttonGroup = document.querySelector('#report .button-group');
     if (buttonGroup) buttonGroup.style.display = 'flex';
-    cont.innerHTML = '';
-    const baseUrl = api.baseURL.replace('/api', '');
-    const defects = reportData && reportData.defects != null
-      ? (Array.isArray(reportData.defects) ? reportData.defects : [reportData.defects])
-      : [];
-    if (defects.length > 0) {
-      defects.forEach((d) => {
-        const card = document.createElement('div');
-        card.className = 'card';
-        card.innerHTML = `
-          <div style="font-weight:700;">${escapeHTML(d.location || '')} / ${escapeHTML(d.trade || '')}</div>
-          <div class="small">${escapeHTML(d.content || '')}</div>
-          ${d.memo ? `<div class="small" style="color: #666; margin-top: 4px;">메모: ${escapeHTML(d.memo)}</div>` : ''}
-          ${d.photos && d.photos.length > 0 ? `
-            <div class="gallery" style="margin-top:8px;">
-              ${d.photos.map((photo) => {
-                const raw = photo.url || photo.file_url || '';
-                const fullUrl = toPhotoFullUrl(baseUrl, raw);
-                return fullUrl ? `<div class="thumb has-image" style="background-image:url('${fullUrl}');cursor:pointer;" onclick="showImageModal('${fullUrl}')">${photo.kind === 'near' ? '근접' : '원거리'}</div>` : '';
-              }).filter(Boolean).join('')}
-            </div>
-          ` : ''}
-        `;
-        cont.appendChild(card);
-      });
-    } else {
-      cont.innerHTML = `
-        <div class="card" style="text-align: center; padding: 40px;">
-          <div style="color: #666;">${defects.length === 0 ? '등록된 하자가 없습니다.' : '보고서 미리보기 데이터를 불러왔습니다.'}</div>
-          <div style="color: #999; font-size: 12px; margin-top: 10px;">점검결과 유무와 관계없이 PDF 미리보기·다운로드를 이용할 수 있습니다.</div>
-        </div>
-      `;
-    }
+    cont.innerHTML = `
+      <div class="card" style="text-align: center; padding: 40px;">
+        <div style="color: #666;">보고서 미리보기</div>
+        <div style="color: #999; font-size: 12px; margin-top: 10px;">아래 버튼으로 PDF 미리보기·다운로드를 이용할 수 있습니다.</div>
+      </div>
+    `;
     route('report');
   } catch (error) {
     console.error('보고서 미리보기 오류:', error);
@@ -1717,59 +1690,16 @@ async function onPreviewReport() {
   try {
     const reportData = await api.getReportPreview(InspectorState.selectedHouseholdId, InspectorState.currentCaseId);
     const cont = $('#report-preview');
-    cont.innerHTML = '';
-    
-    // PDF 버튼 그룹 요소 찾기
     const buttonGroup = document.querySelector('#report .button-group');
-    
-    // 케이스 ID 설정 (PDF 생성에 필요)
-    if (reportData.case_id) {
-      InspectorState.currentCaseId = reportData.case_id;
-    }
-    
-    const defects = reportData.defects != null
-      ? (Array.isArray(reportData.defects) ? reportData.defects : [reportData.defects])
-      : [];
-    if (defects.length > 0) {
-      // 하자가 있는 경우: 버튼 표시
-      if (buttonGroup) {
-        buttonGroup.style.display = 'flex';
-      }
-      
-      const baseUrl = api.baseURL.replace('/api', '');
-      defects.forEach((d, index) => {
-        const card = document.createElement('div');
-        card.className = 'card';
-        card.innerHTML = `
-          <div style="font-weight:700;">${escapeHTML(d.location || '')} / ${escapeHTML(d.trade || '')}</div>
-          <div class="small">${escapeHTML(d.content || '')}</div>
-          ${d.memo ? `<div class="small" style="color: #666; margin-top: 4px;">메모: ${escapeHTML(d.memo)}</div>` : ''}
-          ${d.photos && d.photos.length > 0 ? `
-            <div class="gallery" style="margin-top:8px;">
-              ${d.photos.map(photo => {
-                const raw = photo.url || photo.file_url || '';
-                const fullUrl = toPhotoFullUrl(baseUrl, raw);
-                return fullUrl ? `<div class="thumb has-image" style="background-image:url('${fullUrl}');cursor:pointer;" onclick="showImageModal('${fullUrl}')">${photo.kind === 'near' ? '근접' : '원거리'}</div>` : '';
-              }).filter(Boolean).join('')}
-            </div>
-          ` : ''}
-        `;
-        cont.appendChild(card);
-      });
-    } else {
-      // 하자가 없는 경우: 버튼 숨김
-      if (buttonGroup) {
-        buttonGroup.style.display = 'none';
-      }
-      
-      cont.innerHTML = `
-        <div class="card" style="text-align: center; padding: 40px;">
-          <div style="color: #666;">등록된 하자가 없습니다.</div>
-          <div style="color: #999; font-size: 12px; margin-top: 10px;">하자를 등록하면 PDF 보고서를 생성할 수 있습니다.</div>
-        </div>
-      `;
-    }
-    
+    if (reportData.case_id) InspectorState.currentCaseId = reportData.case_id;
+    cont.innerHTML = '';
+    if (buttonGroup) buttonGroup.style.display = 'flex';
+    cont.innerHTML = `
+      <div class="card" style="text-align: center; padding: 40px;">
+        <div style="color: #666;">보고서 미리보기</div>
+        <div style="color: #999; font-size: 12px; margin-top: 10px;">아래 버튼으로 PDF 미리보기·다운로드를 이용할 수 있습니다.</div>
+      </div>
+    `;
     route('report');
     
   } catch (error) {

@@ -287,9 +287,9 @@ async function drawVisualBlocksOnPage(pdfDoc, page, font, reportData, chunk) {
     if (!url0) page.drawText('근거리', { x: ox + halfW / 2 - 15, y: photoY + photoH / 2 - 4, size: 9, font });
     if (!url1) page.drawText('원거리', { x: ox + halfW + halfW / 2 - 15, y: photoY + photoH / 2 - 4, size: 9, font });
 
-    // 3) 공종/하자내용 행: [공 종][값][하자내용][값]
+    // 3) 공종/하자내용 행: [공 종][값][하자내용][값] — 하자내용 한글 10자, 글자축소
     const row2Y = photoY - rowH;
-    [['공 종', tradeVal], ['하자내용', defectVal]].forEach(([label, val], i) => {
+    [['공 종', tradeVal, 14], ['하자내용', defectVal, 15]].forEach(([label, val, maxC], i) => {
       const cx = ox + i * (cdw * 2);
       page.drawRectangle({
         x: cx,
@@ -313,15 +313,15 @@ async function drawVisualBlocksOnPage(pdfDoc, page, font, reportData, chunk) {
         borderColor: rgbValue(),
         borderWidth: bw
       });
-      page.drawText(truncateToFit(val, 14), {
+      page.drawText(truncateToFit(val, maxC), {
         x: cx + lw + 4,
         y: row2Y + 5,
-        size: FONT_SIZE,
+        size: 7,
         font
       });
     });
 
-    // 4) 특이사항 행: [특이사항][값]
+    // 4) 특이사항 행: [특이사항][값] — 한글 10자, 글자축소
     const row3Y = row2Y - rowH;
     page.drawRectangle({
       x: ox,
@@ -345,10 +345,10 @@ async function drawVisualBlocksOnPage(pdfDoc, page, font, reportData, chunk) {
       borderColor: rgbValue(),
       borderWidth: bw
     });
-    page.drawText(truncateToFit(noteVal, 42), {
+    page.drawText(truncateToFit(noteVal, 15), {
       x: ox + lw + 4,
       y: row3Y + 5,
-      size: FONT_SIZE,
+      size: 7,
       font
     });
   }
@@ -429,12 +429,12 @@ async function drawThermalBlocksOnPage(pdfDoc, page, font, reportData, chunk) {
     if (!url1) page.drawText('열화상', { x: ox + halfW + halfW / 2 - 12, y: photoY + photoH / 2 - 4, size: 9, font });
 
     const row2Y = photoY - rowH;
-    [['공종', tradeVal], ['점검내용', noteVal]].forEach(([label, val], i) => {
+    [['공종', tradeVal, 14], ['점검내용', noteVal, 15]].forEach(([label, val, maxC], i) => {
       const cx = ox + i * (cdw * 2);
       page.drawRectangle({ x: cx, y: row2Y, width: lw, height: rowH, borderColor: rgbLabel(), borderWidth: bw });
       page.drawText(truncateToFit(label, 6), { x: cx + 4, y: row2Y + 5, size: FONT_SIZE, font });
       page.drawRectangle({ x: cx + lw, y: row2Y, width: cdw * 2 - lw, height: rowH, borderColor: rgbValue(), borderWidth: bw });
-      page.drawText(truncateToFit(val, 14), { x: cx + lw + 4, y: row2Y + 5, size: FONT_SIZE, font });
+      page.drawText(truncateToFit(val, maxC), { x: cx + lw + 4, y: row2Y + 5, size: 7, font });
     });
   }
 }
@@ -535,14 +535,14 @@ async function drawAirBlocksOnPage(pdfDoc, page, font, reportData, chunk, airDia
       borderWidth: 0.5
     });
 
-    // 1) 점검내용: 위치/결과/유형/메모 (rowH 안에 4행)
+    // 1) 점검내용: 위치/결과/유형/메모 — 메모 한글 10자, 글자축소
     const contentTop = rowTop - 8;
-    [['위치', locVal], ['결과', resVal], ['유형', typeVal], ['메모', memoVal]].forEach(([label, val], i) => {
+    [['위치', locVal, 12], ['결과', resVal, 12], ['유형', typeVal, 12], ['메모', memoVal, 15]].forEach(([label, val, maxC], i) => {
       const rowY = contentTop - (i + 1) * mH;
       page.drawRectangle({ x: metaX, y: rowY, width: mLw, height: mH, color: rgbLabelBg(), borderColor: rgbBlack(), borderWidth: 0.4 });
       page.drawText(truncateToFit(label, 4), { x: metaX + 2, y: rowY + 4, size: 8, font });
       page.drawRectangle({ x: metaX + mLw, y: rowY, width: mVw, height: mH, color: rgb(1, 1, 1), borderColor: rgbBlack(), borderWidth: 0.4 });
-      page.drawText(truncateToFit(val, 12), { x: metaX + mLw + 2, y: rowY + 4, size: 8, font });
+      page.drawText(truncateToFit(val, maxC), { x: metaX + mLw + 2, y: rowY + 4, size: label === '메모' ? 7 : 8, font });
     });
 
     // 2) 점검내용과 수치 사이 고정그림 (동일 세로 범위 rowBottom ~ rowTop)
@@ -839,22 +839,21 @@ async function drawLevelBlocksOnPage(pdfDoc, page, font, reportData, chunk, leve
 
     const leftX = ox + 4;
     const halfLeft = (leftW - 8) / 2;
-    const diagramGap = 8;
     const topRowY = rowTop - 8 - pRowH;
-    const diagramY = rowBottom + pRowH + diagramGap + 2;
-    const botRowY = rowBottom + 6;
+    const diagramY = rowBottom + pRowH + 10;
+    const botRowY = rowBottom + 4;
 
-    // 1번수치 2번수치 (상단, 나란히) — 값 영역 확대
+    // 1번수치 2번수치 (상단, 나란히) — 세로 높이 절반
     const valW = Math.max(halfLeft - 2 - pLw, 48);
     [['1번', `${p1L(item)}/${p1R(item)}`], ['2번', `${p2L(item)}/${p2R(item)}`]].forEach(([label, val], i) => {
       const cx = leftX + i * halfLeft;
       page.drawRectangle({ x: cx, y: topRowY, width: pLw, height: pRowH, borderColor: rgbLabel(), borderWidth: bw });
-      page.drawText(truncateToFit(label, 4), { x: cx + 2, y: topRowY + 5, size: 7, font });
+      page.drawText(truncateToFit(label, 4), { x: cx + 2, y: topRowY + 2, size: 6, font });
       page.drawRectangle({ x: cx + pLw, y: topRowY, width: valW, height: pRowH, borderColor: rgbValue(), borderWidth: bw });
-      page.drawText(truncateToFit(val, 10), { x: cx + pLw + 2, y: topRowY + 5, size: 7, font });
+      page.drawText(truncateToFit(val, 10), { x: cx + pLw + 2, y: topRowY + 2, size: 6, font });
     });
 
-    // 고정그림 (중앙, 1번2번·3번4번과 겹치지 않도록 상하 간격 확보)
+    // 고정그림 (중앙, 확대)
     const diagramX = leftX + (leftW - 8 - dW) / 2;
     if (levelDiagramImage) {
       page.drawImage(levelDiagramImage, { x: diagramX, y: diagramY, width: dW, height: dH });
@@ -862,23 +861,23 @@ async function drawLevelBlocksOnPage(pdfDoc, page, font, reportData, chunk, leve
       drawLevelDiagram(page, font, diagramX, diagramY, dW, dH, null);
     }
 
-    // 3번수치 4번수치 (하단, 나란히) — 값 영역 확대
+    // 3번수치 4번수치 (하단, 나란히) — 세로 높이 절반
     [['3번', `${p3L(item)}/${p3R(item)}`], ['4번', `${p4L(item)}/${p4R(item)}`]].forEach(([label, val], i) => {
       const cx = leftX + i * halfLeft;
       page.drawRectangle({ x: cx, y: botRowY, width: pLw, height: pRowH, borderColor: rgbLabel(), borderWidth: bw });
-      page.drawText(truncateToFit(label, 4), { x: cx + 2, y: botRowY + 5, size: 7, font });
+      page.drawText(truncateToFit(label, 4), { x: cx + 2, y: botRowY + 2, size: 6, font });
       page.drawRectangle({ x: cx + pLw, y: botRowY, width: valW, height: pRowH, borderColor: rgbValue(), borderWidth: bw });
-      page.drawText(truncateToFit(val, 10), { x: cx + pLw + 2, y: botRowY + 5, size: 7, font });
+      page.drawText(truncateToFit(val, 10), { x: cx + pLw + 2, y: botRowY + 2, size: 6, font });
     });
 
-    // 점검내용: 위치/결과/기준/메모 (가운데)
+    // 점검내용: 위치/결과/기준/메모 — 메모 한글 10자, 글자축소
     let metaY = rowTop - 6;
-    [['위치', safeText(item.location)], ['결과', item.result_text ?? item.result ?? '-'], ['기준', refMm], ['메모', safeText(item.note)]].forEach(([label, val]) => {
+    [['위치', safeText(item.location), 14], ['결과', item.result_text ?? item.result ?? '-', 14], ['기준', refMm, 14], ['메모', safeText(item.note), 15]].forEach(([label, val, maxC]) => {
       metaY -= mRowH;
       page.drawRectangle({ x: metaX, y: metaY, width: lw, height: mRowH, color: rgbBeige(), borderColor: rgb(0.2, 0.2, 0.2), borderWidth: 0.4 });
       page.drawText(truncateToFit(label, 4), { x: metaX + 2, y: metaY + 4, size: 8, font });
       page.drawRectangle({ x: metaX + lw, y: metaY, width: mVw, height: mRowH, color: rgb(1, 1, 1), borderColor: rgb(0.2, 0.2, 0.2), borderWidth: 0.4 });
-      page.drawText(truncateToFit(val, 14), { x: metaX + lw + 2, y: metaY + 4, size: 8, font });
+      page.drawText(truncateToFit(val, maxC), { x: metaX + lw + 2, y: metaY + 4, size: label === '메모' ? 7 : 8, font });
     });
 
     // 사진 1개 (우측)

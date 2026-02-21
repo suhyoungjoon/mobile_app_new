@@ -41,7 +41,7 @@ const VISUAL_TABLE = {
   columns: [
     { field: 'location', w: 90, maxChars: 12 },
     { field: 'trade', w: 90, maxChars: 12 },
-    { field: 'note', w: 250, maxChars: 36 },
+    { field: 'note', w: 250, maxChars: 15 },
     { field: 'result', w: 70, maxChars: 8 }
   ],
   origin: { x: 50, y: 760 },
@@ -74,7 +74,7 @@ const THERMAL_TABLE = {
   columns: [
     { field: 'location', w: 90, maxChars: 12 },
     { field: 'trade', w: 90, maxChars: 12 },
-    { field: 'note', w: 250, maxChars: 36 },
+    { field: 'note', w: 250, maxChars: 15 },
     { field: 'result', w: 70, maxChars: 8 }
   ],
   origin: { x: 50, y: 760 },
@@ -121,7 +121,7 @@ const AIR_TABLE = {
     { field: 'location', w: 70, maxChars: 10 },
     { field: 'result', w: 60, maxChars: 8 },
     { field: 'process_type', w: 70, maxChars: 10 },
-    { field: 'note', w: 120, maxChars: 18 },
+    { field: 'note', w: 120, maxChars: 15 },
     { field: 'tvoc', w: 48, maxChars: 6 },
     { field: 'hcho', w: 48, maxChars: 6 },
     { field: 'radon', w: 55, maxChars: 8 }
@@ -141,13 +141,13 @@ const LEVEL_BLOCK = {
   rowHeight: 20,
   labelWidth: 70,
   metaValueWidth: 110,
-  // 좌측: 수치행 + 다이어그램 (1번2번3번4번 값 영역 확대)
-  pointRowHeight: 26,
+  // 좌측: 수치행 + 다이어그램 (1~4번 세로 절반, 중간 그림 확대)
+  pointRowHeight: 13,
   pointLabelWidth: 26,
   pointValueWidth: 55,
   leftSectionWidth: 175,
-  diagramWidth: 95,
-  diagramHeight: 52,
+  diagramWidth: 130,
+  diagramHeight: 62,
   photoWidth: 100,
   photoHeight: 100,
   blockGap: 12,
@@ -166,7 +166,7 @@ const LEVEL_TABLE = {
     { field: 'location', w: 90, maxChars: 12 },
     { field: 'result', w: 70, maxChars: 8 },
     { field: 'reference_mm', w: 55, maxChars: 6 },
-    { field: 'note', w: 180, maxChars: 28 },
+    { field: 'note', w: 180, maxChars: 15 },
     { field: 'points', w: 140, maxChars: 24 }
   ],
   origin: { x: 50, y: 760 },
