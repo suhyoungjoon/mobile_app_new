@@ -451,7 +451,16 @@ async function viewCaseDefects(caseId) {
         })
       );
       
-      const uploadBase = (typeof api !== 'undefined' && api.baseURL) ? api.baseURL.replace(/\/api\/?$/, '') : 'https://mobile-app-new.onrender.com';
+      const uploadBase = (typeof api !== 'undefined' && api.baseURL) ? api.baseURL.replace(/\/api\/?$/, '').replace(/\/$/, '') : 'https://mobile-app-new.onrender.com';
+      const toPhotoUrl = (raw) => {
+        if (!raw || typeof raw !== 'string') return '';
+        const s = String(raw).trim();
+        if (s.startsWith('http://') || s.startsWith('https://')) return s;
+        const m = s.match(/^\/?uploads\/(.+)$/);
+        if (m && uploadBase) return uploadBase + '/api/upload/serve/' + encodeURIComponent(m[1]);
+        const p = s.startsWith('/') ? s : '/' + s;
+        return uploadBase ? uploadBase + p : s;
+      };
       container.innerHTML = defectsWithInspections.map(defect => {
         const hasInspections = Object.keys(defect.inspections || {}).length > 0;
         const inspectionSummary = hasInspections 
@@ -482,7 +491,7 @@ async function viewCaseDefects(caseId) {
                 <div class="label" style="margin-top:8px;">사진:</div>
                 <div class="gallery" style="display:flex;gap:8px;margin-top:4px;">
                   ${defect.photos.map(photo => {
-                    const fullUrl = (photo.url && photo.url.startsWith('http')) ? photo.url : (uploadBase + (photo.url || ''));
+                    const fullUrl = toPhotoUrl(photo.url || '');
                     return `
                     <div class="thumb has-image" 
                          style="background-image:url('${fullUrl}');cursor:pointer;" 
@@ -555,10 +564,19 @@ async function editDefect(defectId) {
       photoFar.classList.remove('has-image');
       
       // 저장된 사진 표시
-      const uploadBase = (typeof api !== 'undefined' && api.baseURL) ? api.baseURL.replace(/\/api\/?$/, '') : 'https://mobile-app-new.onrender.com';
+      const uploadBase = (typeof api !== 'undefined' && api.baseURL) ? api.baseURL.replace(/\/api\/?$/, '').replace(/\/$/, '') : 'https://mobile-app-new.onrender.com';
+      const toPhotoUrl = (raw) => {
+        if (!raw || typeof raw !== 'string') return '';
+        const s = String(raw).trim();
+        if (s.startsWith('http://') || s.startsWith('https://')) return s;
+        const m = s.match(/^\/?uploads\/(.+)$/);
+        if (m && uploadBase) return uploadBase + '/api/upload/serve/' + encodeURIComponent(m[1]);
+        const p = s.startsWith('/') ? s : '/' + s;
+        return uploadBase ? uploadBase + p : s;
+      };
       if (defect.photos && defect.photos.length > 0) {
         defect.photos.forEach(photo => {
-          const photoUrl = (photo.url && photo.url.startsWith('http')) ? photo.url : (uploadBase + (photo.url || ''));
+          const photoUrl = toPhotoUrl(photo.url || '');
           if (photo.kind === 'near' && photoNear) {
             photoNear.style.backgroundImage = `url('${photoUrl}')`;
             photoNear.classList.add('has-image');

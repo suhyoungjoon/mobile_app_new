@@ -66,6 +66,18 @@ function formatDate(dateString) {
   });
 }
 
+/** file_url(/uploads/xxx) → API serve URL (크로스오리진 안정) */
+function toPhotoFullUrl(baseUrl, raw) {
+  if (!raw || typeof raw !== 'string') return '';
+  const s = String(raw).trim();
+  if (!s) return '';
+  if (s.startsWith('http://') || s.startsWith('https://')) return s;
+  const m = s.match(/^\/?uploads\/(.+)$/);
+  if (m && baseUrl) return baseUrl + '/api/upload/serve/' + encodeURIComponent(m[1]);
+  const p = s.startsWith('/') ? s : '/' + s;
+  return baseUrl ? baseUrl + p : s;
+}
+
 // 라우팅
 const navigationHistory = [];
 
@@ -319,7 +331,7 @@ async function previewReportForUser(householdId) {
             <div class="gallery" style="margin-top:8px;">
               ${d.photos.map((photo) => {
                 const raw = photo.url || photo.file_url || '';
-                const fullUrl = raw.startsWith('http') ? raw : (baseUrl + raw);
+                const fullUrl = toPhotoFullUrl(baseUrl, raw);
                 return fullUrl ? `<div class="thumb has-image" style="background-image:url('${fullUrl}');cursor:pointer;" onclick="showImageModal('${fullUrl}')">${photo.kind === 'near' ? '근접' : '원거리'}</div>` : '';
               }).filter(Boolean).join('')}
             </div>
@@ -431,6 +443,8 @@ async function loadAllDefectsDirectly() {
       if (!raw || typeof raw !== 'string') return '';
       const s = String(raw).trim();
       if (s.startsWith('http://') || s.startsWith('https://')) return s;
+      const m = s.match(/^\/?uploads\/(.+)$/);
+      if (m && baseUrl) return baseUrl + '/api/upload/serve/' + encodeURIComponent(m[1]);
       const path = s.startsWith('/') ? s : '/' + s;
       return baseUrl ? baseUrl + path : s;
     };
@@ -520,6 +534,8 @@ async function loadDefectsForHousehold(householdId) {
       if (!raw || typeof raw !== 'string') return '';
       const s = String(raw).trim();
       if (s.startsWith('http://') || s.startsWith('https://')) return s;
+      const m = s.match(/^\/?uploads\/(.+)$/);
+      if (m && baseUrl) return baseUrl + '/api/upload/serve/' + encodeURIComponent(m[1]);
       const path = s.startsWith('/') ? s : '/' + s;
       return baseUrl ? baseUrl + path : s;
     };
@@ -662,7 +678,7 @@ function buildInspectionEditForm(type, item) {
   if (type === 'thermal') {
     html += `<p class="small" style="color:#6b7280;">열화상은 위치·메모·결과·사진을 수정할 수 있습니다.</p>`;
   }
-  const baseUrl = (typeof api !== 'undefined' && api.baseURL) ? api.baseURL.replace(/\/api\/?$/, '') : '';
+  const baseUrl = (typeof api !== 'undefined' && api.baseURL) ? api.baseURL.replace(/\/api\/?$/, '').replace(/\/$/, '') : 'https://mobile-app-new.onrender.com';
   const photos = item.photos || [];
   // 육안·열화상: 사진 2슬롯 항상 표시 — 사진 영역 클릭 시 촬영/갤러리 선택 (세대주와 동일)
   if (type === 'visual' || type === 'thermal') {
@@ -671,7 +687,7 @@ function buildInspectionEditForm(type, item) {
       const photo = photos[idx];
       if (photo) {
         const raw = photo.file_url || photo.url || '';
-        const fullUrl = raw.startsWith('http') ? raw : (baseUrl + raw);
+        const fullUrl = toPhotoFullUrl(baseUrl, raw);
         const photoId = photo.id;
         const sortOrder = photo.sort_order != null ? photo.sort_order : idx;
         const inputId = photoId ? `ins-edit-photo-replace-${photoId}` : `ins-edit-photo-replace-${type}-${idx}`;
@@ -698,7 +714,7 @@ function buildInspectionEditForm(type, item) {
     // 공기질·라돈·레벨기: 기존 사진 있으면 탭하여 교체 (사진 영역 클릭 = 촬영/갤러리)
     const photoItems = photos.map((photo, idx) => {
       const raw = photo.file_url || photo.url || '';
-      const fullUrl = raw.startsWith('http') ? raw : (baseUrl + raw);
+      const fullUrl = toPhotoFullUrl(baseUrl, raw);
       if (!fullUrl) return '';
       const photoId = photo.id;
       const sortOrder = photo.sort_order != null ? photo.sort_order : idx;
@@ -732,8 +748,8 @@ async function handleEditPhotoAdd(itemId, slotIndex, inputElement) {
     const url = uploadResult.url || `/uploads/${uploadResult.key || uploadResult.filename}`;
     InspectorState._editNewPhotos = InspectorState._editNewPhotos || {};
     InspectorState._editNewPhotos[slotIndex] = { url, sort_order: slotIndex };
-    const baseUrl = (typeof api !== 'undefined' && api.baseURL) ? api.baseURL.replace(/\/api\/?$/, '') : '';
-    const fullUrl = url.startsWith('http') ? url : (baseUrl + url);
+    const baseUrl = (typeof api !== 'undefined' && api.baseURL) ? api.baseURL.replace(/\/api\/?$/, '').replace(/\/$/, '') : 'https://mobile-app-new.onrender.com';
+    const fullUrl = toPhotoFullUrl(baseUrl, url);
     const thumbEl = $(`#ins-edit-photo-new-thumb-${slotIndex}`);
     if (thumbEl) {
       thumbEl.style.backgroundImage = `url('${fullUrl}')`;
@@ -768,8 +784,8 @@ async function handleEditPhotoReplace(itemId, photoId, sortOrder, inputElement) 
     const url = uploadResult.url || `/uploads/${uploadResult.key || uploadResult.filename}`;
     InspectorState._editReplacementPhotos = InspectorState._editReplacementPhotos || {};
     InspectorState._editReplacementPhotos[photoId] = { url, sort_order: sortOrder };
-    const baseUrl = (typeof api !== 'undefined' && api.baseURL) ? api.baseURL.replace(/\/api\/?$/, '') : '';
-    const fullUrl = url.startsWith('http') ? url : (baseUrl + url);
+    const baseUrl = (typeof api !== 'undefined' && api.baseURL) ? api.baseURL.replace(/\/api\/?$/, '').replace(/\/$/, '') : 'https://mobile-app-new.onrender.com';
+    const fullUrl = toPhotoFullUrl(baseUrl, url);
     const thumbEl = $(`#ins-edit-photo-thumb-${photoId}`);
     if (thumbEl) {
       thumbEl.style.backgroundImage = `url('${fullUrl}')`;
@@ -1000,8 +1016,10 @@ function formatInspectionItemByType(type, item, opts = {}) {
     const s = String(raw).trim();
     if (!s) return '';
     if (s.startsWith('http://') || s.startsWith('https://')) return s;
-    const path = s.startsWith('/') ? s : '/' + s;
-    return baseUrl ? baseUrl + path : s;
+    const m = s.match(/^\/?uploads\/(.+)$/);
+    if (m && baseUrl) return baseUrl + '/api/upload/serve/' + encodeURIComponent(m[1]);
+    const p = s.startsWith('/') ? s : '/' + s;
+    return baseUrl ? baseUrl + p : s;
   };
   const getPhotoUrl = (photo) => {
     const raw = photo.file_url ?? photo.url ?? photo.thumb_url ?? '';

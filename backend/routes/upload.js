@@ -2,10 +2,42 @@
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
+const config = require('../config');
 const { authenticateToken } = require('../middleware/auth');
 const fileUploadService = require('../utils/fileUpload');
 
 const router = express.Router();
+
+/** 업로드 디렉터리 해석 (server.js, fileUpload와 동일) */
+function getUploadDir() {
+  const dir = config.upload.dir;
+  if (path.isAbsolute(dir)) return dir;
+  return path.join(__dirname, '..', dir.replace(/^\.\//, ''));
+}
+
+/** GET /api/upload/serve/:filename - 이미지 서빙 (크로스오리진/CORS 대응, 인증 불필요) */
+router.get('/serve/:filename', (req, res) => {
+  try {
+    let filename = req.params.filename;
+    if (!filename) return res.status(400).json({ error: 'Invalid filename' });
+    try { filename = decodeURIComponent(filename); } catch (_) { /* keep as-is */ }
+    if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+      return res.status(400).json({ error: 'Invalid filename' });
+    }
+    const uploadDir = getUploadDir();
+    const filePath = path.join(uploadDir, filename);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.sendFile(path.resolve(filePath));
+  } catch (err) {
+    console.error('Upload serve error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
 
 // Configure multer for file uploads
 const storage = multer.memoryStorage(); // Store in memory for processing
