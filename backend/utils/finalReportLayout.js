@@ -133,6 +133,7 @@ const AIR_TABLE = {
 };
 
 // 레벨기점검: [좌: 1번2번/고정그림/3번4번][중: 점검내용][우: 사진] — 세로 높이 통일
+// diagram을 축소해 1번2번/3번4번과 겹치지 않도록, 측정값 영역 확대
 const LEVEL_BLOCK = {
   title: '레벨기점검',
   origin: { x: 50, y: 660 },
@@ -140,13 +141,13 @@ const LEVEL_BLOCK = {
   rowHeight: 20,
   labelWidth: 70,
   metaValueWidth: 110,
-  // 좌측: 수치행 + 다이어그램
-  pointRowHeight: 22,
-  pointLabelWidth: 50,
-  pointValueWidth: 45,
-  leftSectionWidth: 140,
-  diagramWidth: 120,
-  diagramHeight: 80,
+  // 좌측: 수치행 + 다이어그램 (1번2번3번4번 값 영역 확대)
+  pointRowHeight: 26,
+  pointLabelWidth: 26,
+  pointValueWidth: 55,
+  leftSectionWidth: 175,
+  diagramWidth: 95,
+  diagramHeight: 52,
   photoWidth: 100,
   photoHeight: 100,
   blockGap: 12,
