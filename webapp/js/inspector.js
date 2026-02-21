@@ -66,16 +66,20 @@ function formatDate(dateString) {
   });
 }
 
-/** file_url(/uploads/xxx) → API serve URL (크로스오리진 안정) */
+/** file_url(/uploads/xxx, uploads/xxx, xxx.jpg) → API serve URL (크로스오리진 안정) */
 function toPhotoFullUrl(baseUrl, raw) {
   if (!raw || typeof raw !== 'string') return '';
   const s = String(raw).trim();
   if (!s) return '';
   if (s.startsWith('http://') || s.startsWith('https://')) return s;
   const m = s.match(/^\/?uploads\/(.+)$/);
-  if (m && baseUrl) return baseUrl + '/api/upload/serve/' + encodeURIComponent(m[1]);
+  if (m && baseUrl) return baseUrl.replace(/\/+$/, '') + '/api/upload/serve/' + encodeURIComponent(m[1]);
+  const bare = s.replace(/^\/+/, '');
+  if (bare && !bare.includes('/') && !bare.includes('..') && baseUrl) {
+    return baseUrl.replace(/\/+$/, '') + '/api/upload/serve/' + encodeURIComponent(bare);
+  }
   const p = s.startsWith('/') ? s : '/' + s;
-  return baseUrl ? baseUrl + p : s;
+  return baseUrl ? (baseUrl.replace(/\/+$/, '') + p) : s;
 }
 
 // 라우팅
@@ -439,15 +443,7 @@ async function loadAllDefectsDirectly() {
     }
     
     const baseUrl = (api.baseURL || '').replace(/\/api\/?$/, '').replace(/\/$/, '') || '';
-    const toFullUrl = (raw) => {
-      if (!raw || typeof raw !== 'string') return '';
-      const s = String(raw).trim();
-      if (s.startsWith('http://') || s.startsWith('https://')) return s;
-      const m = s.match(/^\/?uploads\/(.+)$/);
-      if (m && baseUrl) return baseUrl + '/api/upload/serve/' + encodeURIComponent(m[1]);
-      const path = s.startsWith('/') ? s : '/' + s;
-      return baseUrl ? baseUrl + path : s;
-    };
+    const toFullUrl = (raw) => toPhotoFullUrl(baseUrl, raw);
     const buildPhotos = (d) => {
       const list = d.photos && Array.isArray(d.photos) ? d.photos : [];
       if (list.length > 0) return list;
@@ -530,15 +526,7 @@ async function loadDefectsForHousehold(householdId) {
     }
 
     const baseUrl = (api.baseURL || '').replace(/\/api\/?$/, '').replace(/\/$/, '') || '';
-    const toFullUrl = (raw) => {
-      if (!raw || typeof raw !== 'string') return '';
-      const s = String(raw).trim();
-      if (s.startsWith('http://') || s.startsWith('https://')) return s;
-      const m = s.match(/^\/?uploads\/(.+)$/);
-      if (m && baseUrl) return baseUrl + '/api/upload/serve/' + encodeURIComponent(m[1]);
-      const path = s.startsWith('/') ? s : '/' + s;
-      return baseUrl ? baseUrl + path : s;
-    };
+    const toFullUrl = (raw) => toPhotoFullUrl(baseUrl, raw);
     const buildPhotos = (d) => {
       const list = d.photos && Array.isArray(d.photos) ? d.photos : [];
       if (list.length > 0) return list;
@@ -1011,16 +999,7 @@ function formatInspectionItemByType(type, item, opts = {}) {
     if (p && typeof p === 'object') return Object.values(p);
     return [];
   })();
-  const toFullUrl = (raw) => {
-    if (raw == null || typeof raw !== 'string') return '';
-    const s = String(raw).trim();
-    if (!s) return '';
-    if (s.startsWith('http://') || s.startsWith('https://')) return s;
-    const m = s.match(/^\/?uploads\/(.+)$/);
-    if (m && baseUrl) return baseUrl + '/api/upload/serve/' + encodeURIComponent(m[1]);
-    const p = s.startsWith('/') ? s : '/' + s;
-    return baseUrl ? baseUrl + p : s;
-  };
+  const toFullUrl = (raw) => toPhotoFullUrl(baseUrl, raw);
   const getPhotoUrl = (photo) => {
     const raw = photo.file_url ?? photo.url ?? photo.thumb_url ?? '';
     return toFullUrl(raw);
@@ -1769,7 +1748,7 @@ async function onPreviewReport() {
             <div class="gallery" style="margin-top:8px;">
               ${d.photos.map(photo => {
                 const raw = photo.url || photo.file_url || '';
-                const fullUrl = raw.startsWith('http') ? raw : (baseUrl + raw);
+                const fullUrl = toPhotoFullUrl(baseUrl, raw);
                 return fullUrl ? `<div class="thumb has-image" style="background-image:url('${fullUrl}');cursor:pointer;" onclick="showImageModal('${fullUrl}')">${photo.kind === 'near' ? '근접' : '원거리'}</div>` : '';
               }).filter(Boolean).join('')}
             </div>

@@ -455,11 +455,14 @@ async function viewCaseDefects(caseId) {
       const toPhotoUrl = (raw) => {
         if (!raw || typeof raw !== 'string') return '';
         const s = String(raw).trim();
+        if (!s) return '';
         if (s.startsWith('http://') || s.startsWith('https://')) return s;
         const m = s.match(/^\/?uploads\/(.+)$/);
-        if (m && uploadBase) return uploadBase + '/api/upload/serve/' + encodeURIComponent(m[1]);
+        if (m && uploadBase) return uploadBase.replace(/\/+$/, '') + '/api/upload/serve/' + encodeURIComponent(m[1]);
+        const bare = s.replace(/^\/+/, '');
+        if (bare && !bare.includes('/') && !bare.includes('..') && uploadBase) return uploadBase.replace(/\/+$/, '') + '/api/upload/serve/' + encodeURIComponent(bare);
         const p = s.startsWith('/') ? s : '/' + s;
-        return uploadBase ? uploadBase + p : s;
+        return uploadBase ? uploadBase.replace(/\/+$/, '') + p : s;
       };
       container.innerHTML = defectsWithInspections.map(defect => {
         const hasInspections = Object.keys(defect.inspections || {}).length > 0;
@@ -568,11 +571,14 @@ async function editDefect(defectId) {
       const toPhotoUrl = (raw) => {
         if (!raw || typeof raw !== 'string') return '';
         const s = String(raw).trim();
+        if (!s) return '';
         if (s.startsWith('http://') || s.startsWith('https://')) return s;
         const m = s.match(/^\/?uploads\/(.+)$/);
-        if (m && uploadBase) return uploadBase + '/api/upload/serve/' + encodeURIComponent(m[1]);
+        if (m && uploadBase) return uploadBase.replace(/\/+$/, '') + '/api/upload/serve/' + encodeURIComponent(m[1]);
+        const bare = s.replace(/^\/+/, '');
+        if (bare && !bare.includes('/') && !bare.includes('..') && uploadBase) return uploadBase.replace(/\/+$/, '') + '/api/upload/serve/' + encodeURIComponent(bare);
         const p = s.startsWith('/') ? s : '/' + s;
-        return uploadBase ? uploadBase + p : s;
+        return uploadBase ? uploadBase.replace(/\/+$/, '') + p : s;
       };
       if (defect.photos && defect.photos.length > 0) {
         defect.photos.forEach(photo => {
