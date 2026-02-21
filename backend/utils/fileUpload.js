@@ -5,9 +5,16 @@ const sharp = require('sharp');
 const { v4: uuidv4 } = require('uuid');
 const config = require('../config');
 
+/** server.js와 동일하게 upload 경로 해석 (절대경로면 그대로, 상대경로면 backend 기준) */
+function resolveUploadDir() {
+  const dir = config.upload.dir;
+  if (path.isAbsolute(dir)) return dir;
+  return path.join(__dirname, '..', dir.replace(/^\.\//, ''));
+}
+
 class FileUploadService {
   constructor() {
-    this.uploadDir = config.upload.dir;
+    this.uploadDir = resolveUploadDir();
     this.thumbDir = path.join(this.uploadDir, 'thumbs');
     this.ensureDirectories();
   }

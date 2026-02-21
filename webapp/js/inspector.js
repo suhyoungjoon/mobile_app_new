@@ -449,9 +449,9 @@ async function loadAllDefectsDirectly() {
         const raw = p.url || p.file_url || '';
         const fullUrl = toFullUrl(raw);
         if (!fullUrl) return '';
-        const safe = (s) => String(s).replace(/'/g, "\\'");
+        const safe = (s) => String(s).replace(/'/g, "\\'").replace(/"/g, '&quot;');
         const label = p.kind === 'near' ? '전체' : (p.kind === 'far' ? '근접' : '사진');
-        return `<div class="thumb has-image" style="background-image:url('${safe(fullUrl)}');cursor:pointer;width:48px;height:48px;background-size:cover;display:inline-block;margin:2px;" onclick="showImageModal('${safe(fullUrl)}')" title="${label}"></div>`;
+        return `<span style="display:inline-block;width:48px;height:48px;background:#e5e7eb;border-radius:8px;overflow:hidden;margin:2px;"><img src="${safe(fullUrl)}" alt="" style="width:100%;height:100%;object-fit:cover;cursor:pointer;" onclick="showImageModal('${safe(fullUrl)}')" title="${label}" onerror="this.style.display='none'" referrerpolicy="no-referrer" /></span>`;
       }).filter(Boolean).join('');
       return thumbs ? `<div class="label">사진</div><div class="gallery" style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;">${thumbs}</div>` : '';
     };
@@ -538,9 +538,9 @@ async function loadDefectsForHousehold(householdId) {
         const raw = p.url || p.file_url || '';
         const fullUrl = toFullUrl(raw);
         if (!fullUrl) return '';
-        const safe = (s) => String(s).replace(/'/g, "\\'");
+        const safe = (s) => String(s).replace(/'/g, "\\'").replace(/"/g, '&quot;');
         const label = p.kind === 'near' ? '전체' : (p.kind === 'far' ? '근접' : '사진');
-        return `<div class="thumb has-image" style="background-image:url('${safe(fullUrl)}');cursor:pointer;width:48px;height:48px;background-size:cover;display:inline-block;margin:2px;" onclick="showImageModal('${safe(fullUrl)}')" title="${label}"></div>`;
+        return `<span style="display:inline-block;width:48px;height:48px;background:#e5e7eb;border-radius:8px;overflow:hidden;margin:2px;"><img src="${safe(fullUrl)}" alt="" style="width:100%;height:100%;object-fit:cover;cursor:pointer;" onclick="showImageModal('${safe(fullUrl)}')" title="${label}" onerror="this.style.display='none'" referrerpolicy="no-referrer" /></span>`;
       }).filter(Boolean).join('');
       return thumbs ? `<div class="label">사진</div><div class="gallery" style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;">${thumbs}</div>` : '';
     };
@@ -986,7 +986,9 @@ function formatInspectionItemByType(type, item, opts = {}) {
     }
     if (hasLegacy && !has4) rows.push(`<tr><td class="ins-detail-label">좌/우</td><td>${v(item.left_mm)} / ${v(item.right_mm)} mm</td></tr>`);
   }
-  const baseUrl = (typeof api !== 'undefined' && api.baseURL) ? api.baseURL.replace(/\/api\/?$/, '').replace(/\/$/, '') : '';
+  const baseUrl = (typeof api !== 'undefined' && api && api.baseURL)
+    ? String(api.baseURL).replace(/\/api\/?$/, '').replace(/\/$/, '')
+    : 'https://mobile-app-new.onrender.com';
   const photos = (() => {
     const p = item.photos;
     if (Array.isArray(p)) return p;
@@ -1009,8 +1011,8 @@ function formatInspectionItemByType(type, item, opts = {}) {
   const photoThumbs = validPhotos.map((photo) => {
     const fullUrl = getPhotoUrl(photo);
     if (!fullUrl) return '';
-    const safe = (s) => String(s).replace(/'/g, "\\'");
-    return `<div class="thumb has-image" style="background-image:url('${safe(fullUrl)}');cursor:pointer;width:48px;height:48px;background-size:cover;display:inline-block;margin:2px;" onclick="showImageModal('${safe(fullUrl)}')" title="사진"></div>`;
+    const safe = (s) => String(s).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    return `<span style="display:inline-block;width:48px;height:48px;background:#e5e7eb;border-radius:8px;overflow:hidden;margin:2px;"><img src="${safe(fullUrl)}" alt="" style="width:100%;height:100%;object-fit:cover;cursor:pointer;" onclick="showImageModal('${safe(fullUrl)}')" title="사진" onerror="this.style.display='none'" referrerpolicy="no-referrer" /></span>`;
   }).filter(Boolean).join('');
   rows.push(`<tr><td class="ins-detail-label">사진</td><td>${validPhotos.length > 0 ? `${validPhotos.length}장 ${photoThumbs ? `<span class="gallery" style="display:inline-flex;gap:4px;margin-left:8px;flex-wrap:wrap;">${photoThumbs}</span>` : ''}` : '<span style="color:#9ca3af;">없음</span>'}</td></tr>`);
   const editBtn = (opts.showEdit && item.id) ? `<button type="button" class="button ghost" style="margin-top:6px;font-size:12px;margin-right:6px;" onclick="openInspectionEditModal('${item.id}')">수정</button>` : '';

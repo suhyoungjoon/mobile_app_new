@@ -29,10 +29,17 @@ function getPhotoPath(fileUrl) {
   if (urlMatch) rel = urlMatch[1];
   rel = rel.replace(/^\//, '');
   if (!rel || !rel.startsWith('uploads')) return null;
-  // uploads/2024/photo.jpg → UPLOADS_DIR/2024/photo.jpg
+  // uploads/2024/photo.jpg 또는 uploads/photo.jpg
   const sub = rel.replace(/^uploads\/?/, '') || rel;
-  const full = path.join(UPLOADS_DIR, sub);
-  return fs.existsSync(full) ? full : null;
+  let full = path.join(UPLOADS_DIR, sub);
+  if (fs.existsSync(full)) return full;
+  // fallback: 파일명만 사용 (uploads/ 직하위)
+  const baseName = path.basename(sub);
+  if (baseName && baseName !== sub) {
+    const alt = path.join(UPLOADS_DIR, baseName);
+    if (fs.existsSync(alt)) return alt;
+  }
+  return null;
 }
 
 /** 사진 파일을 PDF에 임베드하고 페이지에 그리기. 실패 시 무시 */
