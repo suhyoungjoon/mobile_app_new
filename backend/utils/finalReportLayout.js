@@ -13,6 +13,19 @@
 const PAGE_WIDTH = 595;
 const PAGE_HEIGHT = 842;
 
+/** 첫 페이지: 빨간 박스(수정영역), 파란 박스(세대주 정보), 파란 박스 밑 표(유지) */
+const FIRST_PAGE = {
+  /** 빨간 박스: 점검일자 등 수정 내용 (좌측 상단) */
+  redBox: { x: 80, y: 780, fontSize: 10 },
+  /** 파란 박스: 세대주 정보 (단지명, 동/호, 세대주명) */
+  blueBox: {
+    x: 80,
+    y: 720,
+    lineHeight: 22,
+    fontSize: 11
+  }
+};
+
 // 육안점검: 블록형 (위치 행 + 근거리/원거리 빈 사진 + 공종/하자내용 + 특이사항)
 const VISUAL_BLOCK = {
   title: '육안점검',
@@ -184,6 +197,7 @@ module.exports = {
   AIR_BLOCK,
   LEVEL_TABLE,
   LEVEL_BLOCK,
+  FIRST_PAGE,
   PAGE_WIDTH,
   PAGE_HEIGHT
 };

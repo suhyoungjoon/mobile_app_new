@@ -95,6 +95,43 @@ async function embedCustomFont(pdfDoc) {
   return await pdfDoc.embedFont(StandardFonts.Helvetica);
 }
 
+/** 첫 페이지: 빨간 박스에 점검일자, 파란 박스에 세대주 정보 그리기. 파란 박스 밑 표는 템플릿 그대로 유지. */
+function drawFirstPageHouseholdInfo(page, reportData, font) {
+  if (!page || !font) return;
+  const fp = LAYOUT.FIRST_PAGE;
+  if (!fp) return;
+
+  const complex = safeText(reportData.complex);
+  const dong = reportData.dong != null && reportData.dong !== '' ? String(reportData.dong) : '-';
+  const ho = reportData.ho != null && reportData.ho !== '' ? String(reportData.ho) : '-';
+  const name = safeText(reportData.name);
+
+  // 빨간 박스: 점검일자 수정
+  if (fp.redBox) {
+    const d = reportData.created_at ? new Date(reportData.created_at) : new Date();
+    const dateStr = `${d.getFullYear()}. ${String(d.getMonth() + 1).padStart(2, '0')}. ${String(d.getDate()).padStart(2, '0')}`;
+    page.drawText(`점검일자: ${dateStr}`, {
+      x: fp.redBox.x,
+      y: fp.redBox.y,
+      size: fp.redBox.fontSize || 10,
+      font
+    });
+  }
+
+  // 파란 박스: 세대주 정보
+  if (fp.blueBox) {
+    const { x, y, lineHeight, fontSize } = fp.blueBox;
+    const size = fontSize || 11;
+    const lh = lineHeight || 22;
+    let cy = y;
+    page.drawText(`단지명: ${complex}`, { x, y: cy, size, font });
+    cy -= lh;
+    page.drawText(`동/호: ${dong}동 ${ho}호`, { x, y: cy, size, font });
+    cy -= lh;
+    page.drawText(`세대주: ${name}`, { x, y: cy, size, font });
+  }
+}
+
 /** 표 한 페이지 그리기: 제목, 동/호, 헤더 행, 데이터 행(빨간 박스 단위). getCellValue(item, field) => string */
 function drawTablePage(page, font, tableDef, reportData, items, getCellValue) {
   const { x: ox, y: oy } = tableDef.origin;
@@ -976,6 +1013,10 @@ async function drawLevelTablePagesValues(pdfDoc, slotIndex, font, reportData) {
 
 /** 템플릿 8·10·12·13p를 제거하고, 같은 위치에 빈 A4 4장 삽입 후 점검결과만 별도 페이지로 그림. 항목 많으면 추가 페이지 삽입. */
 async function assembleFinalWithTemplatePages(pdfDoc, reportData, font, airDiagramImage, levelDiagramImage) {
+  // 첫 페이지: 빨간 박스에 점검일자, 파란 박스에 세대주 정보
+  const page0 = pdfDoc.getPage(0);
+  drawFirstPageHouseholdInfo(page0, reportData, font);
+
   if (pdfDoc.getPageCount() > 12) pdfDoc.removePage(12);
   if (pdfDoc.getPageCount() > 11) pdfDoc.removePage(11);
   if (pdfDoc.getPageCount() > 9) pdfDoc.removePage(9);
@@ -994,6 +1035,10 @@ async function assembleFinalWithTemplatePages(pdfDoc, reportData, font, airDiagr
 
 /** 수치중심: 육안/열화상은 동일, 공기질/레벨기는 리스트(표) + 하단 사진만. */
 async function assembleFinalWithTemplatePagesValues(pdfDoc, reportData, font) {
+  // 첫 페이지: 빨간 박스에 점검일자, 파란 박스에 세대주 정보
+  const page0 = pdfDoc.getPage(0);
+  drawFirstPageHouseholdInfo(page0, reportData, font);
+
   if (pdfDoc.getPageCount() > 12) pdfDoc.removePage(12);
   if (pdfDoc.getPageCount() > 11) pdfDoc.removePage(11);
   if (pdfDoc.getPageCount() > 9) pdfDoc.removePage(9);
