@@ -673,10 +673,21 @@ async function deleteDefect(defectId) {
 async function onSaveDefect(){
   if (isLoading) return;
   
+  const categoryId = $('#defect-category').value;
   const location = $('#def-location').value.trim();
-  const trade = $('#def-trade').value.trim();
-  const content = $('#def-content').value.trim();
+  let trade = $('#def-trade').value.trim();
+  let content = $('#def-content').value.trim();
   const memo = $('#def-memo').value.trim();
+  
+  if (categoryId === '__custom__') {
+    const customName = ($('#defect-category-custom').value || '').trim().slice(0, 10);
+    if (!customName) {
+      toast('하자명(직접 입력)을 입력해 주세요', 'error');
+      return;
+    }
+    trade = customName;
+    if (!content) content = customName;
+  }
   
   if(!location || !trade || !content){
     toast('위치/세부공정/내용을 입력해 주세요', 'error');
@@ -729,6 +740,10 @@ async function onSaveDefect(){
     $('#def-content').value = '';
     $('#def-memo').value = '';
     $('#defect-category').value = '';
+    const customWrap = $('#defect-category-custom-wrap');
+    const customInput = $('#defect-category-custom');
+    if (customWrap) customWrap.classList.add('hidden');
+    if (customInput) customInput.value = '';
     
     // Clear photos
     const photoNear = $('#photo-near');
@@ -920,21 +935,39 @@ async function loadDefectCategories() {
       
       select.appendChild(optgroup);
     });
+    // 직접 입력 옵션 추가
+    const customOpt = document.createElement('option');
+    customOpt.value = '__custom__';
+    customOpt.textContent = '직접 입력';
+    select.appendChild(customOpt);
   } catch (error) {
     console.error('하자 카테고리 로드 실패:', error);
     toast('하자 카테고리를 불러올 수 없습니다', 'error');
   }
 }
 
-// 하자명 선택 시 자동 설명 표시 (기획서 요구사항)
+// 하자명 선택 시 자동 설명 표시 또는 직접입력 영역 (기획서 요구사항)
 async function loadDefectDescription() {
   const categoryId = $('#defect-category').value;
   const descriptionArea = $('#defect-description');
   const videoSection = $('#video-section');
+  const customWrap = $('#defect-category-custom-wrap');
+  const customInput = $('#defect-category-custom');
+  
+  if (customWrap) customWrap.classList.add('hidden');
+  if (customInput) customInput.value = '';
   
   if (!categoryId) {
-    descriptionArea.classList.add('hidden');
-    videoSection.classList.add('hidden');
+    if (descriptionArea) descriptionArea.classList.add('hidden');
+    if (videoSection) videoSection.classList.add('hidden');
+    return;
+  }
+  
+  if (categoryId === '__custom__') {
+    if (descriptionArea) descriptionArea.classList.add('hidden');
+    if (videoSection) videoSection.classList.add('hidden');
+    if (customWrap) customWrap.classList.remove('hidden');
+    if (customInput) customInput.focus();
     return;
   }
   
