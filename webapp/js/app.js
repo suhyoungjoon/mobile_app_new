@@ -242,39 +242,48 @@ function goBack() {
 
 async function onLogin(){
   if (isLoading) return;
-  
+
   const complex = $('#login-complex').value.trim();
   const dong = $('#login-dong').value.trim();
   const ho = $('#login-ho').value.trim();
   const name = $('#login-name').value.trim();
   const phone = $('#login-phone').value.trim();
-  
-  if(!complex || !dong || !ho || !name || !phone){
-    toast('입력값을 확인해 주세요', 'error');
+
+  // 로그인 키: 아파트/동/호만 필수. 이름·전화는 재로그인 시 생략 가능(최초 로그인 시에만 서버에서 필수)
+  if (!complex || !dong || !ho) {
+    toast('아파트명, 동, 호수를 입력해 주세요.', 'error');
     return;
   }
 
   setLoading(true);
   toast('로그인 중... 서버 시작까지 1-2분 소요될 수 있습니다', 'info');
-  
+
   try {
     const response = await api.login(complex, dong, ho, name, phone);
-    
-    // Store session data
+
+    const user = response.user || {};
     AppState.session = {
-      complex, dong, ho, name, phone,
+      complex: user.complex ?? complex,
+      dong: user.dong ?? dong,
+      ho: user.ho ?? ho,
+      name: user.name ?? name,
+      phone: user.phone ?? phone,
       token: response.token,
       expires_at: response.expires_at
     };
-    
-    $('#badge-user').textContent = `${dong}-${ho} ${name}`;
+
+    $('#badge-user').textContent = `${user.dong ?? dong}-${user.ho ?? ho} ${user.name || '(세대주)'}`;
     toast('✅ 로그인 성공', 'success');
-    
+
     await loadCases();
     route('list');
-    
+
   } catch (error) {
-    handleAPIError(error, 'login');
+    if (error.code === 'FIRST_LOGIN_REQUIRED') {
+      toast('최초 로그인입니다. 성명과 전화번호를 입력해 주세요.', 'error');
+    } else {
+      handleAPIError(error, 'login');
+    }
   } finally {
     setLoading(false);
   }

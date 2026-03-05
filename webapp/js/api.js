@@ -77,6 +77,7 @@ class APIClient {
           err.status = resp.status;
           err.details = errorData.details ?? errorData.detail;
           err.error = errorData.error;
+          err.code = errorData.code;
           err.responseText = text;
           throw err;
         }

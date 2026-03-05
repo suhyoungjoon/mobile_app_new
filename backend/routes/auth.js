@@ -24,9 +24,9 @@ router.post('/session', async (req, res) => {
   try {
     const { complex, dong, ho, name, phone } = req.body;
 
-    // Validate required fields
-    if (!complex || !dong || !ho || !name || !phone) {
-      return res.status(400).json({ error: 'All fields are required' });
+    // 로그인 키: 아파트(단지명) + 동 + 호만 필수. 이름/전화는 최초 로그인 시에만 필수.
+    if (!complex || !dong || !ho) {
+      return res.status(400).json({ error: '아파트명, 동, 호수를 입력해 주세요.' });
     }
 
     // Complex 찾기 또는 생성
@@ -57,51 +57,63 @@ router.post('/session', async (req, res) => {
     );
     
     let householdId;
-    
+    let userName = name || '';
+    let userPhone = phone || '';
+
     if (householdResult.rows.length === 0) {
-      // 신규 세대 등록 - 암호화하여 저장
+      // 신규 세대 등록 — 최초 로그인 시에만 이름·전화 필수
+      if (!name || !phone) {
+        return res.status(400).json({
+          error: '최초 로그인입니다. 성명과 전화번호를 입력해 주세요.',
+          code: 'FIRST_LOGIN_REQUIRED'
+        });
+      }
       safeLog('info', '신규 세대 등록', { complex, dong, ho, name });
-      
+
       const nameEncrypted = encrypt(name);
       const phoneEncrypted = encrypt(phone);
-      
+
       const newHouseholdResult = await pool.query(
         `INSERT INTO household (complex_id, dong, ho, resident_name, phone, resident_name_encrypted, phone_encrypted)
          VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING id`,
         [complexId, dong, ho, name, phone, nameEncrypted, phoneEncrypted]
       );
-      
+
       householdId = newHouseholdResult.rows[0].id;
+      userName = name;
+      userPhone = phone;
       safeLog('info', '신규 세대 등록 완료', { householdId });
-      
     } else {
-      // 기존 세대 - 정보 업데이트
+      // 기존 세대 — 재로그인 시 이름/전화는 선택. 있으면 업데이트, 없으면 기존값 유지
       householdId = householdResult.rows[0].id;
       const existing = householdResult.rows[0];
-      
-      // 암호화된 필드가 있으면 복호화, 없으면 평문 사용 (호환성). 복호화 실패 시 평문/fallback 사용
-      const existingName = existing.resident_name_encrypted 
-        ? safeDecrypt(existing.resident_name_encrypted, existing.resident_name) 
-        : existing.resident_name;
-      const existingPhone = existing.phone_encrypted 
-        ? safeDecrypt(existing.phone_encrypted, existing.phone) 
-        : existing.phone;
-      
-      // 이름이나 전화번호가 다르면 업데이트 (암호화하여 저장)
-      if (existingName !== name || existingPhone !== phone) {
-        safeLog('info', '세대 정보 업데이트', { name, phone });
-        const nameEncrypted = encrypt(name);
-        const phoneEncrypted = encrypt(phone);
+
+      const existingName = existing.resident_name_encrypted
+        ? safeDecrypt(existing.resident_name_encrypted, existing.resident_name)
+        : (existing.resident_name || '');
+      const existingPhone = existing.phone_encrypted
+        ? safeDecrypt(existing.phone_encrypted, existing.phone)
+        : (existing.phone || '');
+
+      const finalName = (name != null && name !== '') ? name : existingName;
+      const finalPhone = (phone != null && phone !== '') ? phone : existingPhone;
+      userName = finalName;
+      userPhone = finalPhone;
+
+      if (finalName !== existingName || finalPhone !== existingPhone) {
+        safeLog('info', '세대 정보 업데이트', { name: finalName, phone: finalPhone });
+        const nameEncrypted = encrypt(finalName);
+        const phoneEncrypted = encrypt(finalPhone);
         await pool.query(
           `UPDATE household 
            SET resident_name = $1, phone = $2, 
                resident_name_encrypted = $4, phone_encrypted = $5 
            WHERE id = $3`,
-          [name, phone, householdId, nameEncrypted, phoneEncrypted]
+          [finalName, finalPhone, householdId, nameEncrypted, phoneEncrypted]
         );
       }
-      
+
       safeLog('info', '기존 세대 로그인', { householdId });
     }
 
@@ -134,8 +146,8 @@ router.post('/session', async (req, res) => {
         complex,
         dong,
         ho,
-        name,
-        phone,
+        name: userName,
+        phone: userPhone,
         user_type: userType
       },
       purpose: 'precheck',

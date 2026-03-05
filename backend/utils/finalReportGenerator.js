@@ -68,16 +68,13 @@ const TITLE_FONT_SIZE = 14;
 
 function safeText(v) {
   if (v == null || v === '') return '-';
-  return String(v).slice(0, 200);
+  return String(v);
 }
 
-function truncateToFit(text, maxChars = 999) {
+/** 최종보고서: 텍스트 자르지 않고 전부 표시 (표를 벗어나도 무방) */
+function truncateToFit(text) {
   const s = safeText(text);
-  if (s === '-' || !s) return s;
-  if (maxChars <= 0) return s;
-  const str = String(s);
-  if (str.length <= maxChars) return str;
-  return str.slice(0, Math.max(0, maxChars - 1)) + '…';
+  return s === '-' || !s ? s : String(s);
 }
 
 async function embedCustomFont(pdfDoc) {
@@ -95,41 +92,32 @@ async function embedCustomFont(pdfDoc) {
   return await pdfDoc.embedFont(StandardFonts.Helvetica);
 }
 
-/** 첫 페이지: 빨간 박스에 점검일자, 파란 박스에 세대주 정보 그리기. 파란 박스 밑 표는 템플릿 그대로 유지. */
+/** 첫 페이지: 빨간 점선 박스 안에 점검일자·세대주 정보만 그리기. 박스 아래 담당소장·팀장 표는 템플릿 그대로 유지. */
 function drawFirstPageHouseholdInfo(page, reportData, font) {
   if (!page || !font) return;
   const fp = LAYOUT.FIRST_PAGE;
-  if (!fp) return;
+  if (!fp || !fp.redBox) return;
 
   const complex = safeText(reportData.complex);
   const dong = reportData.dong != null && reportData.dong !== '' ? String(reportData.dong) : '-';
   const ho = reportData.ho != null && reportData.ho !== '' ? String(reportData.ho) : '-';
   const name = safeText(reportData.name);
 
-  // 빨간 박스: 점검일자 수정
-  if (fp.redBox) {
-    const d = reportData.created_at ? new Date(reportData.created_at) : new Date();
-    const dateStr = `${d.getFullYear()}. ${String(d.getMonth() + 1).padStart(2, '0')}. ${String(d.getDate()).padStart(2, '0')}`;
-    page.drawText(`점검일자: ${dateStr}`, {
-      x: fp.redBox.x,
-      y: fp.redBox.y,
-      size: fp.redBox.fontSize || 10,
-      font
-    });
-  }
+  const { x, y, lineHeight, fontSize } = fp.redBox;
+  const size = fontSize || 11;
+  const lh = lineHeight || 22;
+  let cy = y;
 
-  // 파란 박스: 세대주 정보
-  if (fp.blueBox) {
-    const { x, y, lineHeight, fontSize } = fp.blueBox;
-    const size = fontSize || 11;
-    const lh = lineHeight || 22;
-    let cy = y;
-    page.drawText(`단지명: ${complex}`, { x, y: cy, size, font });
-    cy -= lh;
-    page.drawText(`동/호: ${dong}동 ${ho}호`, { x, y: cy, size, font });
-    cy -= lh;
-    page.drawText(`세대주: ${name}`, { x, y: cy, size, font });
-  }
+  const d = reportData.created_at ? new Date(reportData.created_at) : new Date();
+  const dateStr = `${d.getFullYear()}. ${String(d.getMonth() + 1).padStart(2, '0')}. ${String(d.getDate()).padStart(2, '0')}`;
+
+  page.drawText(`점검일자: ${dateStr}`, { x, y: cy, size, font });
+  cy -= lh;
+  page.drawText(`단지명: ${complex}`, { x, y: cy, size, font });
+  cy -= lh;
+  page.drawText(`동/호: ${dong}동 ${ho}호`, { x, y: cy, size, font });
+  cy -= lh;
+  page.drawText(`세대주: ${name}`, { x, y: cy, size, font });
 }
 
 /** 표 한 페이지 그리기: 제목, 동/호, 헤더 행, 데이터 행(빨간 박스 단위). getCellValue(item, field) => string */
