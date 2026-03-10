@@ -92,32 +92,63 @@ async function embedCustomFont(pdfDoc) {
   return await pdfDoc.embedFont(StandardFonts.Helvetica);
 }
 
-/** 첫 페이지: 빨간 점선 박스 안에 점검일자·세대주 정보만 그리기. 박스 아래 담당소장·팀장 표는 템플릿 그대로 유지. */
+/** 첫 페이지: 빨간 점선 박스 안에 성명/아파트명/동호수/전화번호만 채움. 템플릿 값 비움. 박스 아래 담당소장·팀장 서명란. */
 function drawFirstPageHouseholdInfo(page, reportData, font) {
   if (!page || !font) return;
   const fp = LAYOUT.FIRST_PAGE;
   if (!fp || !fp.redBox) return;
 
+  const name = safeText(reportData.name);
   const complex = safeText(reportData.complex);
   const dong = reportData.dong != null && reportData.dong !== '' ? String(reportData.dong) : '-';
   const ho = reportData.ho != null && reportData.ho !== '' ? String(reportData.ho) : '-';
-  const name = safeText(reportData.name);
+  const dongho = `${dong}동 ${ho}호`;
+  const phone = safeText(reportData.phone);
 
-  const { x, y, lineHeight, fontSize } = fp.redBox;
+  const { x, y, width, height, lineHeight, fontSize } = fp.redBox;
   const size = fontSize || 11;
   const lh = lineHeight || 22;
+
+  // 빨간 박스 영역 템플릿 값 비우기 (흰색 덮기)
+  const boxW = width || 400;
+  const boxH = height || 90;
+  page.drawRectangle({
+    x,
+    y: y - boxH,
+    width: boxW,
+    height: boxH,
+    color: rgb(1, 1, 1)
+  });
+
+  // 빨간 박스 안: 성명 / 아파트명 / 동호수 / 전화번호
   let cy = y;
+  page.drawText(`성명: ${name}`, { x, y: cy, size, font });
+  cy -= lh;
+  page.drawText(`아파트명: ${complex}`, { x, y: cy, size, font });
+  cy -= lh;
+  page.drawText(`동호수: ${dongho}`, { x, y: cy, size, font });
+  cy -= lh;
+  page.drawText(`전화번호: ${phone}`, { x, y: cy, size, font });
 
-  const d = reportData.created_at ? new Date(reportData.created_at) : new Date();
-  const dateStr = `${d.getFullYear()}. ${String(d.getMonth() + 1).padStart(2, '0')}. ${String(d.getDate()).padStart(2, '0')}`;
-
-  page.drawText(`점검일자: ${dateStr}`, { x, y: cy, size, font });
-  cy -= lh;
-  page.drawText(`단지명: ${complex}`, { x, y: cy, size, font });
-  cy -= lh;
-  page.drawText(`동/호: ${dong}동 ${ho}호`, { x, y: cy, size, font });
-  cy -= lh;
-  page.drawText(`세대주: ${name}`, { x, y: cy, size, font });
+  // 담당소장 / 팀장 서명란
+  const sig = fp.signature;
+  if (sig) {
+    const sigSize = sig.fontSize || 10;
+    const lineLen = sig.lineLength || 120;
+    const drawSig = (label, pos) => {
+      if (!pos) return;
+      page.drawText(label, { x: pos.x, y: pos.y, size: sigSize, font });
+      const lineY = pos.y - sig.lineYOffset;
+      page.drawLine({
+        start: { x: pos.x, y: lineY },
+        end: { x: pos.x + lineLen, y: lineY },
+        thickness: 0.5,
+        color: rgb(0, 0, 0)
+      });
+    };
+    drawSig('담당소장', sig.담당소장);
+    drawSig('팀장', sig.팀장);
+  }
 }
 
 /** 표 한 페이지 그리기: 제목, 동/호, 헤더 행, 데이터 행(빨간 박스 단위). getCellValue(item, field) => string */

@@ -152,6 +152,7 @@ router.post('/generate', authenticateToken, async (req, res) => {
       dong: data.dong || '',
       ho: data.ho || '',
       name: data.name || '',
+      phone: data.phone || '',
       type: '종합점검',
       created_at: data.defects.length > 0 ? data.defects[0].case_created_at : new Date(),
       generated_at: new Date().toISOString(),
@@ -591,7 +592,7 @@ async function loadHouseholdInspectionsForReport(householdId) {
 // 사용자(세대) 기준 보고서 데이터: 해당 세대의 모든 하자 + 하자별 점검내용(inspection_item by defect_id)
 async function loadHouseholdReportData(householdId) {
   const householdResult = await pool.query(
-    `SELECT h.dong, h.ho, h.resident_name, h.resident_name_encrypted, c.name as complex_name
+    `SELECT h.dong, h.ho, h.resident_name, h.resident_name_encrypted, h.phone, h.phone_encrypted, c.name as complex_name
      FROM household h JOIN complex c ON h.complex_id = c.id WHERE h.id = $1`,
     [householdId]
   );
@@ -603,6 +604,9 @@ async function loadHouseholdReportData(householdId) {
   const name = household.resident_name_encrypted
     ? decrypt(household.resident_name_encrypted)
     : (household.resident_name || '');
+  const phone = household.phone_encrypted
+    ? decrypt(household.phone_encrypted)
+    : (household.phone || '');
 
   const defectsResult = await pool.query(
     `SELECT d.id, d.case_id, d.location, d.trade, d.content, d.memo, d.created_at,
@@ -738,6 +742,7 @@ async function loadHouseholdReportData(householdId) {
     dong,
     ho,
     name,
+    phone,
     defects,
     total_defects: defects.length,
     total_thermal: totalThermal,
