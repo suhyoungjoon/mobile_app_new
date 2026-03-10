@@ -309,6 +309,35 @@ class APIClient {
     return { success: true, filename };
   }
 
+  /** 점검원용: 점검결과 내보내기 (엑셀 + 사진 ZIP) — blob 다운로드 */
+  async getInspectionExport(householdId) {
+    const url = `${this.baseURL}/reports/inspection-export?household_id=${encodeURIComponent(householdId)}`;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${this.token}` }
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || err.error || `HTTP ${response.status}`);
+    }
+    const blob = await response.blob();
+    const disposition = response.headers.get('Content-Disposition');
+    let filename = '점검결과.zip';
+    if (disposition) {
+      const match = disposition.match(/filename\*?=(?:UTF-8'')?([^;]+)/i);
+      if (match) filename = decodeURIComponent(match[1].replace(/^["']|["']$/g, '').trim());
+    }
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(downloadUrl);
+    return { success: true, filename };
+  }
+
   // SMS
   async sendSMS(to, message) {
     return await this.request('/sms/send', {

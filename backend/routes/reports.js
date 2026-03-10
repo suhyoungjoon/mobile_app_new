@@ -5,6 +5,7 @@ const { authenticateToken } = require('../middleware/auth');
 // PDF 생성기: pdfmake 사용 (한글 폰트 지원, 보고서는 PDF 전용)
 const pdfGenerator = require('../utils/pdfmakeGenerator');
 const finalReportGenerator = require('../utils/finalReportGenerator');
+const { buildInspectionExportZip } = require('../utils/inspectionExport');
 const smsService = require('../utils/smsService');
 const { decrypt } = require('../utils/encryption');
 const fs = require('fs');
@@ -428,6 +429,40 @@ router.get('/download/:filename', authenticateToken, async (req, res) => {
       success: false,
       error: 'Failed to download PDF',
       message: error.message 
+    });
+  }
+});
+
+// 점검결과 내보내기 (엑셀 + 사진 ZIP, 점검구분별 폴더)
+router.get('/inspection-export', authenticateToken, async (req, res) => {
+  try {
+    const householdId = await getReportTargetHouseholdId(req);
+    if (!householdId) {
+      return res.status(400).json({ error: '세대를 지정해 주세요.' });
+    }
+
+    const hResult = await pool.query(
+      'SELECT h.dong, h.ho FROM household h WHERE h.id = $1',
+      [householdId]
+    );
+    const dong = (hResult.rows[0] && hResult.rows[0].dong) != null ? String(hResult.rows[0].dong) : '';
+    const ho = (hResult.rows[0] && hResult.rows[0].ho) != null ? String(hResult.rows[0].ho) : '';
+
+    const data = await loadHouseholdInspectionsForReport(householdId);
+    const zipBuffer = await buildInspectionExportZip(data, dong, ho);
+
+    const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 12);
+    const filename = `점검결과_${dong}동_${ho}호_${timestamp}.zip`;
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
+    res.send(zipBuffer);
+  } catch (error) {
+    console.error('Inspection export error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to export inspection data',
+      message: error.message
     });
   }
 });

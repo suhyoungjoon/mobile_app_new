@@ -1804,6 +1804,31 @@ async function downloadFinalReportAsPdf() {
   }
 }
 
+// 점검결과 다운로드 (엑셀 + 사진 ZIP, 점검구분별 폴더)
+async function downloadInspectionExport() {
+  if (!InspectorState.session) {
+    toast('로그인이 필요합니다', 'error');
+    return;
+  }
+  const householdId = InspectorState.selectedHouseholdId;
+  if (!householdId) {
+    toast('대상 세대를 먼저 선택해주세요', 'error');
+    return;
+  }
+
+  setLoading(true);
+  try {
+    toast('점검결과 압축 중...', 'info');
+    await api.getInspectionExport(householdId);
+    toast('점검결과 다운로드가 완료되었습니다', 'success');
+  } catch (error) {
+    console.error('점검결과 다운로드 오류:', error);
+    toast(error.message || '점검결과 다운로드에 실패했습니다', 'error');
+  } finally {
+    setLoading(false);
+  }
+}
+
 // 최종보고서-수치중심 다운로드 (공기질/레벨기 리스트형 + 사진 하단)
 async function downloadFinalReportValuesAsPdf() {
   if (!InspectorState.session) {
