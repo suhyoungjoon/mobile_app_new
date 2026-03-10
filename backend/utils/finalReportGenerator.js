@@ -92,11 +92,12 @@ async function embedCustomFont(pdfDoc) {
   return await pdfDoc.embedFont(StandardFonts.Helvetica);
 }
 
-/** 첫 페이지: 빨간 점선 박스 안에 성명/아파트명/동호수/전화번호만 채움. 템플릿 값 비움. 박스 아래 담당소장·팀장 서명란. */
+/** 첫 페이지: 맨 아래 "인싸이트아이 고객센터" 줄 위에 성명/아파트명/동호수/전화번호 + 담당소장·팀장 서명란만 추가 (흰색 덮기 없음) */
 function drawFirstPageHouseholdInfo(page, reportData, font) {
   if (!page || !font) return;
   const fp = LAYOUT.FIRST_PAGE;
-  if (!fp || !fp.redBox) return;
+  const block = fp && fp.footerBlock;
+  if (!block) return;
 
   const name = safeText(reportData.name);
   const complex = safeText(reportData.complex);
@@ -105,23 +106,12 @@ function drawFirstPageHouseholdInfo(page, reportData, font) {
   const dongho = `${dong}동 ${ho}호`;
   const phone = safeText(reportData.phone);
 
-  const { x, y, width, height, lineHeight, fontSize } = fp.redBox;
-  const size = fontSize || 11;
-  const lh = lineHeight || 22;
+  const x = block.x || 95;
+  const size = block.fontSize || 11;
+  const lh = block.lineHeight || 22;
+  let cy = block.firstLineY || 185;
 
-  // 빨간 박스 영역 템플릿 값 비우기 (흰색 덮기)
-  const boxW = width || 400;
-  const boxH = height || 90;
-  page.drawRectangle({
-    x,
-    y: y - boxH,
-    width: boxW,
-    height: boxH,
-    color: rgb(1, 1, 1)
-  });
-
-  // 빨간 박스 안: 성명 / 아파트명 / 동호수 / 전화번호
-  let cy = y;
+  // 고객센터 줄 위에 그대로 출력 (흰색 덮기 없음)
   page.drawText(`성명: ${name}`, { x, y: cy, size, font });
   cy -= lh;
   page.drawText(`아파트명: ${complex}`, { x, y: cy, size, font });

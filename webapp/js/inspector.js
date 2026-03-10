@@ -247,7 +247,7 @@ async function loadUserList() {
           <button class="button button-cta" onclick="event.stopPropagation(); selectUser(${u.household_id})">하자목록 보기</button>
           <button class="button success button-cta" onclick="event.stopPropagation(); openInspectionForHousehold(${u.household_id})">점검결과 입력</button>
           <button class="button button-cta" onclick="event.stopPropagation(); previewReportForUser(${u.household_id})">보고서 선택</button>
-          <button class="button button-cta" onclick="event.stopPropagation(); downloadReportForUser(${u.household_id})">최종보고서 다운로드</button>
+          <button class="button button-cta" onclick="event.stopPropagation(); downloadReportForUser(${u.household_id})">최종보고서</button>
         </div>
       </div>
     `).join('');
