@@ -246,8 +246,8 @@ async function loadUserList() {
         <div class="defect-card-actions">
           <button class="button button-cta" onclick="event.stopPropagation(); selectUser(${u.household_id})">하자목록 보기</button>
           <button class="button success button-cta" onclick="event.stopPropagation(); openInspectionForHousehold(${u.household_id})">점검결과 입력</button>
-          <button class="button button-cta" onclick="event.stopPropagation(); previewReportForUser(${u.household_id})">보고서 미리보기</button>
-          <button class="button button-cta" onclick="event.stopPropagation(); downloadReportForUser(${u.household_id})">보고서 다운로드</button>
+          <button class="button button-cta" onclick="event.stopPropagation(); previewReportForUser(${u.household_id})">보고서 선택</button>
+          <button class="button button-cta" onclick="event.stopPropagation(); downloadReportForUser(${u.household_id})">최종보고서 다운로드</button>
         </div>
       </div>
     `).join('');
@@ -320,14 +320,14 @@ async function previewReportForUser(householdId) {
     if (buttonGroup) buttonGroup.style.display = 'flex';
     cont.innerHTML = `
       <div class="card" style="text-align: center; padding: 40px;">
-        <div style="color: #666;">보고서 미리보기</div>
-        <div style="color: #999; font-size: 12px; margin-top: 10px;">아래 버튼으로 PDF 미리보기·다운로드를 이용할 수 있습니다.</div>
+        <div style="color: #666;">보고서 선택</div>
+        <div style="color: #999; font-size: 12px; margin-top: 10px;">아래 버튼으로 PDF 다운로드를 이용할 수 있습니다.</div>
       </div>
     `;
     route('report');
   } catch (error) {
-    console.error('보고서 미리보기 오류:', error);
-    toast(error.message || '보고서 미리보기에 실패했습니다', 'error');
+    console.error('보고서 선택 오류:', error);
+    toast(error.message || '보고서 선택에 실패했습니다', 'error');
   } finally {
     setLoading(false);
   }
@@ -361,8 +361,8 @@ async function downloadReportForUser(householdId) {
     await api.downloadReport(generateResult.filename);
     toast('최종보고서 다운로드가 완료되었습니다', 'success');
   } catch (error) {
-    console.error('보고서 다운로드 오류:', error);
-    toast(error.message || '보고서 다운로드에 실패했습니다', 'error');
+    console.error('최종보고서 다운로드 오류:', error);
+    toast(error.message || '최종보고서 다운로드에 실패했습니다', 'error');
   } finally {
     setLoading(false);
   }
@@ -1696,15 +1696,15 @@ async function onPreviewReport() {
     if (buttonGroup) buttonGroup.style.display = 'flex';
     cont.innerHTML = `
       <div class="card" style="text-align: center; padding: 40px;">
-        <div style="color: #666;">보고서 미리보기</div>
-        <div style="color: #999; font-size: 12px; margin-top: 10px;">아래 버튼으로 PDF 미리보기·다운로드를 이용할 수 있습니다.</div>
+        <div style="color: #666;">보고서 선택</div>
+        <div style="color: #999; font-size: 12px; margin-top: 10px;">아래 버튼으로 PDF 다운로드를 이용할 수 있습니다.</div>
       </div>
     `;
     route('report');
     
   } catch (error) {
-    console.error('보고서 미리보기 오류:', error);
-    toast(error.message || '보고서 미리보기에 실패했습니다', 'error');
+    console.error('보고서 선택 오류:', error);
+    toast(error.message || '보고서 선택에 실패했습니다', 'error');
   } finally {
     setLoading(false);
   }
